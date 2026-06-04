@@ -1,6 +1,7 @@
 import { jsonError } from "@/lib/api";
 import { cacheKey, getJsonCache, setJsonCache, withRedisLock } from "@/lib/cache";
 import { normalizeCompanySnapshot } from "@/lib/financial-analysis";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n";
 import { generateResearchMemo } from "@/lib/memo";
 import {
   findCompanyByTicker,
@@ -87,13 +88,16 @@ export async function getStoredSnapshotForTicker(ticker: string) {
   return fetchAndPersistSnapshot(ticker);
 }
 
-export async function getResearchMemoForTicker(ticker: string): Promise<{
+export async function getResearchMemoForTicker(
+  ticker: string,
+  locale: Locale = DEFAULT_LOCALE,
+): Promise<{
   memo: ResearchMemo;
   memoId: string;
   snapshotId: string;
 }> {
   const snapshot = await getStoredSnapshotForTicker(ticker);
-  const existing = await getStoredMemo(snapshot);
+  const existing = await getStoredMemo(snapshot, locale);
   if (existing) {
     return {
       memo: existing.memo,
@@ -102,8 +106,8 @@ export async function getResearchMemoForTicker(ticker: string): Promise<{
     };
   }
 
-  const memo = await generateResearchMemo(snapshot.snapshot);
-  const stored = await persistMemo(snapshot, memo);
+  const memo = await generateResearchMemo(snapshot.snapshot, locale);
+  const stored = await persistMemo(snapshot, memo, locale);
   return {
     memo: stored.memo,
     memoId: stored.memoId,

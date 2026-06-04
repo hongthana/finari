@@ -1,5 +1,5 @@
-import { FinariApp } from "@/components/finari-app";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return <FinariApp />;
+  redirect("/en");
 }

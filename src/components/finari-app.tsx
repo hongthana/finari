@@ -10,6 +10,7 @@ import {
   Database,
   Download,
   FileText,
+  Languages,
   Loader2,
   LockKeyhole,
   RefreshCw,
@@ -19,7 +20,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -38,6 +39,13 @@ import {
   formatMetricValue,
   formatPercent,
 } from "@/lib/format";
+import {
+  getAlternateLocale,
+  getDictionary,
+  translateCaveat,
+  type Dictionary,
+  type Locale,
+} from "@/lib/i18n";
 import type {
   CompanyIdentity,
   CompanySnapshot,
@@ -50,6 +58,7 @@ type LoadState = "idle" | "loading" | "ready" | "error";
 type MemoState = "idle" | "loading" | "ready" | "error";
 
 const STARTER_TICKERS = ["AAPL", "MSFT", "NVDA", "AMZN", "META"];
+const DEFAULT_TICKER = "AAPL";
 
 function signalClasses(signal: TrendSignal): string {
   if (signal === "positive") {
@@ -99,61 +108,61 @@ function hasNumber(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-function describeChange(label: string, value: number | null): string {
+function describeChange(label: string, value: number | null, t: Dictionary): string {
   if (!hasNumber(value)) {
-    return `${label} did not have a comparable prior-year figure in the normalized filing data`;
+    return t.advisor.noComparable(label);
   }
 
   if (Math.abs(value) < 0.005) {
-    return `${label} was roughly flat year over year`;
+    return t.advisor.flat(label);
   }
 
-  const direction = value > 0 ? "increased" : "declined";
-  return `${label} ${direction} ${formatPercent(Math.abs(value))} year over year`;
+  const direction = value > 0 ? t.advisor.increased : t.advisor.declined;
+  return t.advisor.changed(label, direction, formatPercent(Math.abs(value)));
 }
 
-function qualityRead(snapshot: CompanySnapshot): string {
+function qualityRead(snapshot: CompanySnapshot, t: Dictionary): string {
   const grossMargin = metricValue(snapshot, "gross-margin");
   const operatingMargin = metricValue(snapshot, "operating-margin");
   const fcfMargin = metricValue(snapshot, "free-cash-flow-margin");
 
   const marginParts = [
-    hasNumber(grossMargin) ? `gross margin was ${formatPercent(grossMargin)}` : null,
+    hasNumber(grossMargin) ? t.advisor.grossMargin(formatPercent(grossMargin)) : null,
     hasNumber(operatingMargin)
-      ? `operating margin was ${formatPercent(operatingMargin)}`
+      ? t.advisor.operatingMargin(formatPercent(operatingMargin))
       : null,
   ].filter(Boolean);
 
-  let cashRead = "free-cash-flow conversion needs more review";
+  let cashRead = t.advisor.cashNeedsReview;
   if (hasNumber(fcfMargin)) {
     if (fcfMargin >= 0.15) {
-      cashRead = `free-cash-flow conversion was strong at ${formatPercent(fcfMargin)} of revenue`;
+      cashRead = t.advisor.cashStrong(formatPercent(fcfMargin));
     } else if (fcfMargin >= 0.05) {
-      cashRead = `free-cash-flow conversion was positive at ${formatPercent(fcfMargin)} of revenue`;
+      cashRead = t.advisor.cashPositive(formatPercent(fcfMargin));
     } else if (fcfMargin >= 0) {
-      cashRead = `free-cash-flow conversion was thin at ${formatPercent(fcfMargin)} of revenue`;
+      cashRead = t.advisor.cashThin(formatPercent(fcfMargin));
     } else {
-      cashRead = `free cash flow was negative at ${formatPercent(fcfMargin)} of revenue`;
+      cashRead = t.advisor.cashNegative(formatPercent(fcfMargin));
     }
   }
 
-  return `${marginParts.length ? `${marginParts.join(" and ")}; ` : ""}${cashRead}.`;
+  return `${marginParts.length ? `${marginParts.join(t.advisor.marginJoiner)}; ` : ""}${cashRead}.`;
 }
 
-function balanceSheetRead(snapshot: CompanySnapshot): string {
+function balanceSheetRead(snapshot: CompanySnapshot, t: Dictionary): string {
   const debtToEquity = metricValue(snapshot, "debt-to-equity");
   const liabilitiesToAssets = metricValue(snapshot, "liabilities-to-assets");
 
   if (!hasNumber(debtToEquity) && !hasNumber(liabilitiesToAssets)) {
-    return "Balance-sheet leverage was not fully available from standard SEC tags.";
+    return t.advisor.leverageUnavailable;
   }
 
   const leverageText = [
     hasNumber(debtToEquity)
-      ? `debt/equity was ${formatMetricValue(debtToEquity, "ratio")}`
+      ? t.advisor.debtToEquity(formatMetricValue(debtToEquity, "ratio"))
       : null,
     hasNumber(liabilitiesToAssets)
-      ? `liabilities/assets was ${formatPercent(liabilitiesToAssets)}`
+      ? t.advisor.liabilitiesToAssets(formatPercent(liabilitiesToAssets))
       : null,
   ].filter(Boolean);
 
@@ -161,14 +170,12 @@ function balanceSheetRead(snapshot: CompanySnapshot): string {
     (hasNumber(debtToEquity) && debtToEquity > 1) ||
     (hasNumber(liabilitiesToAssets) && liabilitiesToAssets > 0.7);
 
-  return `${leverageText.join(" and ")}; ${
-    elevated
-      ? "an advisor would ask how much flexibility the balance sheet provides if demand weakens."
-      : "the balance sheet does not screen as the first concern from these filing metrics."
+  return `${leverageText.join(t.advisor.leverageJoiner)}; ${
+    elevated ? t.advisor.leverageElevated : t.advisor.leverageManageable
   }`;
 }
 
-function advisorQuestions(snapshot: CompanySnapshot): string[] {
+function advisorQuestions(snapshot: CompanySnapshot, t: Dictionary): string[] {
   const revenueGrowth = metricValue(snapshot, "revenue-growth");
   const netIncomeGrowth = metricValue(snapshot, "net-income-growth");
   const operatingMargin = metricValue(snapshot, "operating-margin");
@@ -176,21 +183,21 @@ function advisorQuestions(snapshot: CompanySnapshot): string[] {
 
   const questions = [
     hasNumber(revenueGrowth) && revenueGrowth < -0.005
-      ? "What evidence could reverse the latest revenue decline?"
-      : "Can revenue growth continue without weakening margins?",
+      ? t.advisor.questions.revenueDecline
+      : t.advisor.questions.revenueContinue,
     hasNumber(netIncomeGrowth) && netIncomeGrowth < -0.005
-      ? "Is lower net income temporary, or is profitability structurally softer?"
-      : "Are earnings gains backed by durable operations rather than one-time items?",
+      ? t.advisor.questions.netIncomeLower
+      : t.advisor.questions.earningsDurable,
     hasNumber(operatingMargin) && operatingMargin > 0.15
-      ? "How defensible are these operating margins against competition and pricing pressure?"
-      : "What operating leverage could improve margins from here?",
+      ? t.advisor.questions.marginsDefensible
+      : t.advisor.questions.operatingLeverage,
   ];
 
   if (hasNumber(liabilitiesToAssets) && liabilitiesToAssets > 0.7) {
-    questions.push("Does the company have enough balance-sheet flexibility for a downturn?");
+    questions.push(t.advisor.questions.balanceFlex);
   }
 
-  questions.push("Does the current market price already reflect these fundamentals?");
+  questions.push(t.advisor.questions.priceReflect);
   return questions.slice(0, 4);
 }
 
@@ -210,11 +217,17 @@ function makeChartRows(snapshot: CompanySnapshot | null) {
   );
 }
 
-function AdvisorSummary({ snapshot }: { snapshot: CompanySnapshot }) {
+function AdvisorSummary({
+  snapshot,
+  t,
+}: {
+  snapshot: CompanySnapshot;
+  t: Dictionary;
+}) {
   const latest = snapshot.periods[0];
   const revenueGrowth = metricValue(snapshot, "revenue-growth");
   const netIncomeGrowth = metricValue(snapshot, "net-income-growth");
-  const questions = advisorQuestions(snapshot);
+  const questions = advisorQuestions(snapshot, t);
 
   return (
     <section className="min-w-0 max-w-full rounded-md border border-zinc-200 bg-white p-4 sm:p-5">
@@ -222,27 +235,33 @@ function AdvisorSummary({ snapshot }: { snapshot: CompanySnapshot }) {
         <div className="min-w-0 max-w-full xl:max-w-3xl">
           <div className="inline-flex items-center gap-2 rounded-md border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800">
             <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-            Advisor summary
+            {t.advisor.badge}
           </div>
           <h3 className="mt-3 text-base font-semibold text-zinc-950">
-            What the latest filing says
+            {t.advisor.heading}
           </h3>
           <p className="mt-2 break-words text-sm leading-6 text-zinc-700">
-            A financial advisor would separate business quality from stock price.
-            {` ${snapshot.identity.name} generated ${compactCurrency(latest?.revenue)} of revenue, ${compactCurrency(latest?.netIncome)} of net income, and ${compactCurrency(latest?.freeCashFlow)} of free cash flow in FY ${latest?.fiscalYear ?? "the latest annual period"}. `}
-            {describeChange("Revenue", revenueGrowth)} and{" "}
-            {describeChange("net income", netIncomeGrowth)}.
+            {t.advisor.intro}{" "}
+            {t.advisor.latestFacts(
+              snapshot.identity.name,
+              compactCurrency(latest?.revenue),
+              compactCurrency(latest?.netIncome),
+              compactCurrency(latest?.freeCashFlow),
+              latest?.fiscalYear ? String(latest.fiscalYear) : t.advisor.latestPeriod,
+            )}{" "}
+            {describeChange(t.advisor.labels.revenue, revenueGrowth, t)}{" "}
+            {t.advisor.and}{" "}
+            {describeChange(t.advisor.labels.netIncome, netIncomeGrowth, t)}.
           </p>
           <p className="mt-2 break-words text-sm leading-6 text-zinc-700">
-            {qualityRead(snapshot)} {balanceSheetRead(snapshot)} This is a
-            research starting point, not a buy/sell recommendation; valuation,
-            risk tolerance, and portfolio fit still need separate review.
+            {qualityRead(snapshot, t)} {balanceSheetRead(snapshot, t)}{" "}
+            {t.advisor.closing}
           </p>
         </div>
 
         <div className="min-w-0 max-w-full rounded-md border border-zinc-200 bg-zinc-50 p-4 xl:w-80 xl:shrink-0">
           <h4 className="text-sm font-semibold text-zinc-950">
-            Investor questions
+            {t.advisor.questionsTitle}
           </h4>
           <ul className="mt-3 space-y-2 text-sm leading-5 text-zinc-700">
             {questions.map((question) => (
@@ -259,20 +278,29 @@ function AdvisorSummary({ snapshot }: { snapshot: CompanySnapshot }) {
 }
 
 function ResearchToolbar({
+  locale,
+  t,
   query,
   setQuery,
   results,
   loading,
+  activeTicker,
   onSelectTicker,
   onSubmit,
 }: {
+  locale: Locale;
+  t: Dictionary;
   query: string;
   setQuery: (value: string) => void;
   results: CompanyIdentity[];
   loading: boolean;
+  activeTicker: string;
   onSelectTicker: (ticker: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const alternateLocale = getAlternateLocale(locale);
+  const languageHref = `/${alternateLocale}?ticker=${encodeURIComponent(activeTicker)}`;
+
   return (
     <section className="border-b border-zinc-200 bg-white">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
@@ -284,26 +312,34 @@ function ResearchToolbar({
               </div>
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.14em] text-teal-700">
-                  Finari
+                  {t.toolbar.product}
                 </p>
                 <h1 className="text-xl font-semibold tracking-normal text-zinc-950 sm:text-2xl">
-                  Institutional-grade equity research for retail investors
+                  {t.toolbar.headline}
                 </h1>
               </div>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-zinc-600">
+            <Link
+              href={languageHref}
+              aria-label={t.toolbar.languageLabel}
+              className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 font-semibold text-zinc-800 transition hover:border-teal-500 hover:text-teal-700"
+            >
+              <Languages className="h-3.5 w-3.5 text-teal-700" aria-hidden="true" />
+              {locale === "en" ? t.toolbar.thai : t.toolbar.english}
+            </Link>
             <span className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1.5">
               <Database className="h-3.5 w-3.5 text-sky-700" aria-hidden="true" />
-              SEC-backed
+              {t.toolbar.secBacked}
             </span>
             <span className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1.5">
               <ShieldCheck
                 className="h-3.5 w-3.5 text-emerald-700"
                 aria-hidden="true"
               />
-              Education only
+              {t.toolbar.educationOnly}
             </span>
           </div>
         </div>
@@ -317,7 +353,7 @@ function ResearchToolbar({
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search ticker or company, e.g. AAPL"
+              placeholder={t.toolbar.placeholder}
               className="h-12 w-full rounded-md border border-zinc-300 bg-white pl-10 pr-28 text-base font-medium text-zinc-950 outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
             />
             <button
@@ -329,7 +365,7 @@ function ResearchToolbar({
               ) : (
                 <Search className="h-4 w-4" aria-hidden="true" />
               )}
-              Research
+              {t.toolbar.research}
             </button>
 
             {results.length > 0 && (
@@ -382,18 +418,22 @@ function SnapshotHeader({
   loading,
   error,
   onRefresh,
+  t,
+  locale,
 }: {
   snapshot: CompanySnapshot | null;
   loading: boolean;
   error: string | null;
   onRefresh: () => void;
+  t: Dictionary;
+  locale: Locale;
 }) {
   if (loading && !snapshot) {
     return (
       <section className="rounded-md border border-zinc-200 bg-white p-5">
         <div className="flex items-center gap-3 text-zinc-600">
           <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-          Loading SEC filings and normalized company facts...
+          {t.snapshot.loading}
         </div>
       </section>
     );
@@ -405,7 +445,7 @@ function SnapshotHeader({
         <div className="flex items-start gap-3">
           <AlertTriangle className="mt-0.5 h-5 w-5" aria-hidden="true" />
           <div>
-            <h2 className="font-semibold">Research unavailable</h2>
+            <h2 className="font-semibold">{t.snapshot.unavailableTitle}</h2>
             <p className="mt-1 text-sm">{error}</p>
           </div>
         </div>
@@ -426,7 +466,7 @@ function SnapshotHeader({
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-2 rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-800">
               <Building2 className="h-3.5 w-3.5" aria-hidden="true" />
-              {snapshot.identity.exchange || "US listed"}
+              {snapshot.identity.exchange || t.snapshot.usListed}
             </span>
             {snapshot.identity.sicDescription && (
               <span className="rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium text-zinc-600">
@@ -439,31 +479,33 @@ function SnapshotHeader({
           </h2>
           <p className="mt-1 text-sm font-medium text-zinc-500">
             {snapshot.identity.ticker} · CIK {snapshot.identity.cik}
-            {latest?.fiscalYear ? ` · FY ${latest.fiscalYear}` : ""}
+            {latest?.fiscalYear
+              ? ` · ${t.snapshot.fiscalYear} ${latest.fiscalYear}`
+              : ""}
           </p>
         </div>
 
         <div className="grid min-w-0 max-w-full grid-cols-2 gap-3 sm:grid-cols-4 xl:w-[520px] xl:shrink-0">
           <div className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3">
-            <p className="text-xs font-medium text-zinc-500">Revenue</p>
+            <p className="text-xs font-medium text-zinc-500">{t.snapshot.revenue}</p>
             <p className="mt-1 break-words text-lg font-semibold text-zinc-950">
               {compactCurrency(latest?.revenue)}
             </p>
           </div>
           <div className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3">
-            <p className="text-xs font-medium text-zinc-500">Net income</p>
+            <p className="text-xs font-medium text-zinc-500">{t.snapshot.netIncome}</p>
             <p className="mt-1 break-words text-lg font-semibold text-zinc-950">
               {compactCurrency(latest?.netIncome)}
             </p>
           </div>
           <div className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3">
-            <p className="text-xs font-medium text-zinc-500">FCF</p>
+            <p className="text-xs font-medium text-zinc-500">{t.snapshot.fcf}</p>
             <p className="mt-1 break-words text-lg font-semibold text-zinc-950">
               {compactCurrency(latest?.freeCashFlow)}
             </p>
           </div>
           <div className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3">
-            <p className="text-xs font-medium text-zinc-500">Assets</p>
+            <p className="text-xs font-medium text-zinc-500">{t.snapshot.assets}</p>
             <p className="mt-1 break-words text-lg font-semibold text-zinc-950">
               {compactCurrency(latest?.assets)}
             </p>
@@ -478,7 +520,7 @@ function SnapshotHeader({
           className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 font-semibold text-zinc-700 transition hover:border-teal-500 hover:text-teal-700"
         >
           <RefreshCw className="h-4 w-4" aria-hidden="true" />
-          Refresh
+          {t.snapshot.refresh}
         </button>
         {snapshot.latestFiling?.url && (
           <a
@@ -488,18 +530,21 @@ function SnapshotHeader({
             className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 font-semibold text-zinc-700 transition hover:border-sky-500 hover:text-sky-700"
           >
             <FileText className="h-4 w-4" aria-hidden="true" />
-            Latest filing
+            {t.snapshot.latestFiling}
           </a>
         )}
         <span className="text-xs font-medium text-zinc-500">
-          Generated {new Date(snapshot.generatedAt).toLocaleString()}
+          {t.snapshot.generated}{" "}
+          {new Date(snapshot.generatedAt).toLocaleString(
+            locale === "th" ? "th-TH" : "en-US",
+          )}
         </span>
       </div>
     </section>
   );
 }
 
-function MetricGrid({ metrics }: { metrics: FinancialMetric[] }) {
+function MetricGrid({ metrics, t }: { metrics: FinancialMetric[]; t: Dictionary }) {
   return (
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       {metrics.slice(0, 10).map((metric) => (
@@ -509,7 +554,9 @@ function MetricGrid({ metrics }: { metrics: FinancialMetric[] }) {
         >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-medium text-zinc-500">{metric.label}</p>
+              <p className="text-xs font-medium text-zinc-500">
+                {t.metrics[metric.id as keyof typeof t.metrics]?.label ?? metric.label}
+              </p>
               <p className={`mt-2 text-xl font-semibold ${metricTone(metric)}`}>
                 {formatMetricValue(metric.value, metric.unit)}
               </p>
@@ -522,7 +569,8 @@ function MetricGrid({ metrics }: { metrics: FinancialMetric[] }) {
             </span>
           </div>
           <p className="mt-3 text-xs leading-5 text-zinc-500">
-            {metric.description}
+            {t.metrics[metric.id as keyof typeof t.metrics]?.description ??
+              metric.description}
           </p>
         </article>
       ))}
@@ -530,7 +578,13 @@ function MetricGrid({ metrics }: { metrics: FinancialMetric[] }) {
   );
 }
 
-function FinancialCharts({ snapshot }: { snapshot: CompanySnapshot }) {
+function FinancialCharts({
+  snapshot,
+  t,
+}: {
+  snapshot: CompanySnapshot;
+  t: Dictionary;
+}) {
   const chartRows = useMemo(() => makeChartRows(snapshot), [snapshot]);
 
   return (
@@ -539,10 +593,10 @@ function FinancialCharts({ snapshot }: { snapshot: CompanySnapshot }) {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold text-zinc-950">
-              Revenue and net income
+              {t.charts.revenueNetIncome}
             </h3>
             <p className="text-sm text-zinc-500">
-              Annual SEC XBRL facts by fiscal year
+              {t.charts.annualFacts}
             </p>
           </div>
         </div>
@@ -569,7 +623,7 @@ function FinancialCharts({ snapshot }: { snapshot: CompanySnapshot }) {
                 stroke="#0f766e"
                 strokeWidth={2}
                 fill="url(#revenue)"
-                name="Revenue"
+                name={t.charts.revenue}
               />
               <Area
                 type="monotone"
@@ -577,7 +631,7 @@ function FinancialCharts({ snapshot }: { snapshot: CompanySnapshot }) {
                 stroke="#ea580c"
                 strokeWidth={2}
                 fill="transparent"
-                name="Net income"
+                name={t.charts.netIncome}
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -587,10 +641,10 @@ function FinancialCharts({ snapshot }: { snapshot: CompanySnapshot }) {
       <article className="rounded-md border border-zinc-200 bg-white p-5">
         <div>
           <h3 className="text-base font-semibold text-zinc-950">
-            Cash flow and balance sheet
+            {t.charts.cashBalance}
           </h3>
           <p className="text-sm text-zinc-500">
-            Free cash flow, assets, and liabilities
+            {t.charts.cashBalanceSubtitle}
           </p>
         </div>
         <div className="mt-5 h-72">
@@ -605,8 +659,8 @@ function FinancialCharts({ snapshot }: { snapshot: CompanySnapshot }) {
               />
               <Tooltip formatter={(value) => compactCurrency(Number(value))} />
               <Bar dataKey="freeCashFlow" fill="#2563eb" name="FCF" radius={3} />
-              <Bar dataKey="liabilities" fill="#f59e0b" name="Liabilities" radius={3} />
-              <Bar dataKey="assets" fill="#71717a" name="Assets" radius={3} />
+              <Bar dataKey="liabilities" fill="#f59e0b" name={t.charts.liabilities} radius={3} />
+              <Bar dataKey="assets" fill="#71717a" name={t.charts.assets} radius={3} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -615,29 +669,35 @@ function FinancialCharts({ snapshot }: { snapshot: CompanySnapshot }) {
   );
 }
 
-function FinancialTable({ snapshot }: { snapshot: CompanySnapshot }) {
+function FinancialTable({
+  snapshot,
+  t,
+}: {
+  snapshot: CompanySnapshot;
+  t: Dictionary;
+}) {
   return (
     <section className="overflow-hidden rounded-md border border-zinc-200 bg-white">
       <div className="border-b border-zinc-200 px-5 py-4">
         <h3 className="text-base font-semibold text-zinc-950">
-          Annual statement screen
+          {t.table.title}
         </h3>
         <p className="text-sm text-zinc-500">
-          Values are normalized from standard SEC XBRL tags.
+          {t.table.subtitle}
         </p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[820px] border-collapse text-sm">
           <thead className="bg-zinc-50 text-left text-xs uppercase tracking-[0.08em] text-zinc-500">
             <tr>
-              <th className="px-5 py-3 font-semibold">FY</th>
-              <th className="px-5 py-3 font-semibold">Revenue</th>
-              <th className="px-5 py-3 font-semibold">Gross margin</th>
-              <th className="px-5 py-3 font-semibold">Op margin</th>
-              <th className="px-5 py-3 font-semibold">Net income</th>
-              <th className="px-5 py-3 font-semibold">FCF</th>
-              <th className="px-5 py-3 font-semibold">Debt</th>
-              <th className="px-5 py-3 font-semibold">EPS</th>
+              <th className="px-5 py-3 font-semibold">{t.table.fy}</th>
+              <th className="px-5 py-3 font-semibold">{t.table.revenue}</th>
+              <th className="px-5 py-3 font-semibold">{t.table.grossMargin}</th>
+              <th className="px-5 py-3 font-semibold">{t.table.operatingMargin}</th>
+              <th className="px-5 py-3 font-semibold">{t.table.netIncome}</th>
+              <th className="px-5 py-3 font-semibold">{t.table.fcf}</th>
+              <th className="px-5 py-3 font-semibold">{t.table.debt}</th>
+              <th className="px-5 py-3 font-semibold">{t.table.eps}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100">
@@ -690,12 +750,14 @@ function MemoPanel({
   memoState,
   error,
   onGenerate,
+  t,
 }: {
   snapshot: CompanySnapshot | null;
   memo: ResearchMemo | null;
   memoState: MemoState;
   error: string | null;
   onGenerate: () => void;
+  t: Dictionary;
 }) {
   return (
     <section className="rounded-md border border-zinc-200 bg-white p-5">
@@ -703,13 +765,13 @@ function MemoPanel({
         <div>
           <div className="inline-flex items-center gap-2 rounded-md border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800">
             <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-            Filing-backed memo
+            {t.memo.badge}
           </div>
           <h3 className="mt-3 text-base font-semibold text-zinc-950">
-            Analyst memo
+            {t.memo.title}
           </h3>
           <p className="mt-1 text-sm text-zinc-500">
-            Grounded in normalized SEC facts and source links.
+            {t.memo.subtitle}
           </p>
         </div>
         <button
@@ -723,7 +785,7 @@ function MemoPanel({
           ) : (
             <Sparkles className="h-4 w-4" aria-hidden="true" />
           )}
-          Generate memo
+          {t.memo.generate}
         </button>
       </div>
 
@@ -737,7 +799,7 @@ function MemoPanel({
         <div className="mt-5 space-y-3">
           {memo.mode === "fallback" && (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              Deterministic memo shown because AI is not configured or is unavailable.
+              {t.memo.fallbackNotice}
             </div>
           )}
           {memo.sections.map((section) => (
@@ -764,7 +826,7 @@ function MemoPanel({
         </div>
       ) : (
         <div className="mt-5 rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm leading-6 text-zinc-600">
-          Select a company and generate a memo to see the research narrative.
+          {t.memo.empty}
         </div>
       )}
     </section>
@@ -774,13 +836,17 @@ function MemoPanel({
 function WaitlistPanel({
   snapshot,
   memo,
+  locale,
+  t,
 }: {
   snapshot: CompanySnapshot | null;
   memo: ResearchMemo | null;
+  locale: Locale;
+  t: Dictionary;
 }) {
   const [email, setEmail] = useState("");
-  const [investorProfile, setInvestorProfile] = useState("Long-term individual investor");
-  const [interestArea, setInterestArea] = useState("Saved research and alerts");
+  const [investorProfile, setInvestorProfile] = useState(t.waitlist.profiles[0]);
+  const [interestArea, setInterestArea] = useState(t.waitlist.interests[0]);
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">(
     "idle",
   );
@@ -789,6 +855,12 @@ function WaitlistPanel({
   );
   const [message, setMessage] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const workspaceTools = [
+    { Icon: Bookmark, label: t.waitlist.tools[0] },
+    { Icon: Bell, label: t.waitlist.tools[1] },
+    { Icon: Download, label: t.waitlist.tools[2] },
+    { Icon: LockKeyhole, label: t.waitlist.tools[3] },
+  ];
 
   async function saveResearch() {
     if (!snapshot) {
@@ -805,13 +877,14 @@ function WaitlistPanel({
         body: JSON.stringify({
           ticker: snapshot.identity.ticker,
           includeMemo: Boolean(memo),
+          locale,
           title: `${snapshot.identity.ticker} research - ${new Date().toISOString().slice(0, 10)}`,
         }),
       });
 
       if (response.status === 401) {
         setSaveState("error");
-        setSaveMessage("Sign in with email to save this research.");
+        setSaveMessage(t.waitlist.signInToSave);
         return;
       }
 
@@ -820,10 +893,10 @@ function WaitlistPanel({
       }
 
       setSaveState("ready");
-      setSaveMessage("Research saved to your Finari workspace.");
+      setSaveMessage(t.waitlist.saved);
     } catch {
       setSaveState("error");
-      setSaveMessage("This research could not be saved right now.");
+      setSaveMessage(t.waitlist.saveFailed);
     }
   }
 
@@ -849,11 +922,11 @@ function WaitlistPanel({
       }
 
       setStatus("ready");
-      setMessage("You are on the Finari early-access list.");
+      setMessage(t.waitlist.joined);
       setEmail("");
     } catch {
       setStatus("error");
-      setMessage("That email could not be saved. Check it and try again.");
+      setMessage(t.waitlist.joinFailed);
     }
   }
 
@@ -862,10 +935,10 @@ function WaitlistPanel({
       <section className="rounded-md border border-zinc-200 bg-white p-5">
         <div className="inline-flex items-center gap-2 rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-800">
           <Bookmark className="h-3.5 w-3.5" aria-hidden="true" />
-          Workspace
+          {t.waitlist.workspaceBadge}
         </div>
         <h3 className="mt-3 text-base font-semibold text-zinc-950">
-          Save company research
+          {t.waitlist.saveResearchTitle}
         </h3>
         <div className="mt-4 grid gap-2">
           <Link
@@ -873,7 +946,7 @@ function WaitlistPanel({
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-4 text-sm font-semibold text-zinc-800 transition hover:border-teal-500 hover:text-teal-700"
           >
             <LockKeyhole className="h-4 w-4" aria-hidden="true" />
-            Sign in
+            {t.waitlist.signIn}
           </Link>
           <button
             type="button"
@@ -886,7 +959,7 @@ function WaitlistPanel({
             ) : (
               <Bookmark className="h-4 w-4" aria-hidden="true" />
             )}
-            Save research
+            {t.waitlist.saveResearch}
           </button>
         </div>
         {saveMessage && (
@@ -905,10 +978,10 @@ function WaitlistPanel({
       <section className="rounded-md border border-zinc-200 bg-white p-5">
         <div className="inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-700">
           <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />
-          Early access
+          {t.waitlist.earlyAccessBadge}
         </div>
         <h3 className="mt-3 text-base font-semibold text-zinc-950">
-          Save research, alerts, and exports
+          {t.waitlist.earlyAccessTitle}
         </h3>
         <form onSubmit={submitWaitlist} className="mt-4 space-y-3">
           <input
@@ -916,7 +989,7 @@ function WaitlistPanel({
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@example.com"
+            placeholder={t.waitlist.emailPlaceholder}
             className="h-10 w-full rounded-md border border-zinc-300 px-3 text-sm outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
           />
           <select
@@ -924,20 +997,18 @@ function WaitlistPanel({
             onChange={(event) => setInvestorProfile(event.target.value)}
             className="h-10 w-full rounded-md border border-zinc-300 px-3 text-sm outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
           >
-            <option>Long-term individual investor</option>
-            <option>Active retail investor</option>
-            <option>Student or learner</option>
-            <option>Advisor or analyst</option>
+            {t.waitlist.profiles.map((profile) => (
+              <option key={profile}>{profile}</option>
+            ))}
           </select>
           <select
             value={interestArea}
             onChange={(event) => setInterestArea(event.target.value)}
             className="h-10 w-full rounded-md border border-zinc-300 px-3 text-sm outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
           >
-            <option>Saved research and alerts</option>
-            <option>Memo exports</option>
-            <option>Advanced valuation</option>
-            <option>Portfolio watchlist</option>
+            {t.waitlist.interests.map((interest) => (
+              <option key={interest}>{interest}</option>
+            ))}
           </select>
           <button
             type="submit"
@@ -949,7 +1020,7 @@ function WaitlistPanel({
             ) : (
               <Sparkles className="h-4 w-4" aria-hidden="true" />
             )}
-            Join waitlist
+            {t.waitlist.join}
           </button>
         </form>
         {message && (
@@ -966,19 +1037,16 @@ function WaitlistPanel({
       </section>
 
       <section className="rounded-md border border-zinc-200 bg-white p-5">
-        <h3 className="text-base font-semibold text-zinc-950">Workspace tools</h3>
+        <h3 className="text-base font-semibold text-zinc-950">
+          {t.waitlist.toolsTitle}
+        </h3>
         <div className="mt-4 space-y-3">
-          {[
-            [Bookmark, "Saved company research"],
-            [Bell, "Filing and metric alerts"],
-            [Download, "Exportable investment memos"],
-            [LockKeyhole, "Valuation provider integration"],
-          ].map(([Icon, label]) => (
-            <div key={label as string} className="flex items-center gap-3 text-sm">
+          {workspaceTools.map(({ Icon, label }) => (
+            <div key={label} className="flex items-center gap-3 text-sm">
               <span className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-100 text-zinc-700">
                 <Icon className="h-4 w-4" aria-hidden="true" />
               </span>
-              <span className="font-medium text-zinc-700">{label as string}</span>
+              <span className="font-medium text-zinc-700">{label}</span>
             </div>
           ))}
         </div>
@@ -987,11 +1055,19 @@ function WaitlistPanel({
   );
 }
 
-function SourcesAndCaveats({ snapshot }: { snapshot: CompanySnapshot }) {
+function SourcesAndCaveats({
+  snapshot,
+  locale,
+  t,
+}: {
+  snapshot: CompanySnapshot;
+  locale: Locale;
+  t: Dictionary;
+}) {
   return (
     <section className="grid gap-4 lg:grid-cols-2">
       <article className="rounded-md border border-zinc-200 bg-white p-5">
-        <h3 className="text-base font-semibold text-zinc-950">Source links</h3>
+        <h3 className="text-base font-semibold text-zinc-950">{t.sources.title}</h3>
         <div className="mt-4 space-y-3">
           {snapshot.citations.map((citation) => (
             <a
@@ -1020,7 +1096,7 @@ function SourcesAndCaveats({ snapshot }: { snapshot: CompanySnapshot }) {
 
       <article className="rounded-md border border-zinc-200 bg-white p-5">
         <h3 className="text-base font-semibold text-zinc-950">
-          Normalization caveats
+          {t.sources.caveatsTitle}
         </h3>
         <div className="mt-4 space-y-3">
           {snapshot.caveats.length ? (
@@ -1033,7 +1109,7 @@ function SourcesAndCaveats({ snapshot }: { snapshot: CompanySnapshot }) {
                   className="mt-0.5 h-4 w-4 shrink-0"
                   aria-hidden="true"
                 />
-                <span>{caveat}</span>
+                <span>{translateCaveat(caveat, locale)}</span>
               </div>
             ))
           ) : (
@@ -1042,7 +1118,7 @@ function SourcesAndCaveats({ snapshot }: { snapshot: CompanySnapshot }) {
                 className="mt-0.5 h-4 w-4 shrink-0"
                 aria-hidden="true"
               />
-              <span>Core annual facts were available in standard SEC tags.</span>
+              <span>{t.sources.coreFactsAvailable}</span>
             </div>
           )}
         </div>
@@ -1051,13 +1127,21 @@ function SourcesAndCaveats({ snapshot }: { snapshot: CompanySnapshot }) {
   );
 }
 
-export function FinariApp() {
-  const [query, setQuery] = useState("AAPL");
+export function FinariApp({
+  locale,
+  initialTicker = DEFAULT_TICKER,
+}: {
+  locale: Locale;
+  initialTicker?: string;
+}) {
+  const t = getDictionary(locale);
+  const normalizedInitialTicker = initialTicker.trim().toUpperCase() || DEFAULT_TICKER;
+  const [query, setQuery] = useState(normalizedInitialTicker);
   const [results, setResults] = useState<CompanyIdentity[]>([]);
   const [snapshot, setSnapshot] = useState<CompanySnapshot | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [activeTicker, setActiveTicker] = useState("AAPL");
+  const [activeTicker, setActiveTicker] = useState(normalizedInitialTicker);
   const [memo, setMemo] = useState<ResearchMemo | null>(null);
   const [memoState, setMemoState] = useState<MemoState>("idle");
   const [memoError, setMemoError] = useState<string | null>(null);
@@ -1067,7 +1151,7 @@ export function FinariApp() {
     query.trim().length > 0 && query.trim().toUpperCase() !== activeTicker;
   const visibleResults = showSearchResults ? results : [];
 
-  async function loadCompany(ticker: string) {
+  const loadCompany = useCallback(async (ticker: string) => {
     const normalized = ticker.trim().toUpperCase();
     if (!normalized) {
       return;
@@ -1090,20 +1174,21 @@ export function FinariApp() {
       };
 
       if (!response.ok || !payload.snapshot) {
-        throw new Error(payload.error || "Unable to load company");
+        throw new Error(payload.error || t.errors.loadCompany);
       }
 
       setSnapshot(payload.snapshot);
       setLoadState("ready");
+      window.history.replaceState(null, "", `/${locale}?ticker=${normalized}`);
     } catch (error) {
       setLoadState("error");
       setLoadError(
         error instanceof Error
           ? error.message
-          : "Unable to load SEC company facts right now",
+          : t.errors.loadFacts,
       );
     }
-  }
+  }, [locale, t.errors.loadCompany, t.errors.loadFacts]);
 
   async function generateMemo() {
     if (!snapshot) {
@@ -1115,7 +1200,7 @@ export function FinariApp() {
 
     try {
       const response = await fetch(
-        `/api/company/${encodeURIComponent(snapshot.identity.ticker)}/memo`,
+        `/api/company/${encodeURIComponent(snapshot.identity.ticker)}/memo?locale=${locale}`,
         { method: "POST" },
       );
       const payload = (await response.json()) as {
@@ -1124,7 +1209,7 @@ export function FinariApp() {
       };
 
       if (!response.ok || !payload.memo) {
-        throw new Error(payload.error || "Unable to generate memo");
+        throw new Error(payload.error || t.errors.generateMemo);
       }
 
       setMemo(payload.memo);
@@ -1134,18 +1219,18 @@ export function FinariApp() {
       setMemoError(
         error instanceof Error
           ? error.message
-          : "Unable to generate a research memo right now",
+          : t.memo.error,
       );
     }
   }
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      void loadCompany("AAPL");
+      void loadCompany(normalizedInitialTicker);
     }, 0);
 
     return () => window.clearTimeout(timeout);
-  }, []);
+  }, [loadCompany, normalizedInitialTicker]);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -1185,10 +1270,13 @@ export function FinariApp() {
   return (
     <div className="min-h-screen overflow-x-hidden bg-zinc-100 text-zinc-950">
       <ResearchToolbar
+        locale={locale}
+        t={t}
         query={query}
         setQuery={setQuery}
         results={visibleResults}
         loading={loading}
+        activeTicker={activeTicker}
         onSelectTicker={(ticker) => void loadCompany(ticker)}
         onSubmit={submitSearch}
       />
@@ -1200,28 +1288,31 @@ export function FinariApp() {
             loading={loading}
             error={loadError}
             onRefresh={() => void loadCompany(snapshot?.identity.ticker ?? activeTicker)}
+            t={t}
+            locale={locale}
           />
 
           {snapshot && (
             <>
-              <AdvisorSummary snapshot={snapshot} />
-              <MetricGrid metrics={snapshot.metrics} />
-              <FinancialCharts snapshot={snapshot} />
-              <FinancialTable snapshot={snapshot} />
+              <AdvisorSummary snapshot={snapshot} t={t} />
+              <MetricGrid metrics={snapshot.metrics} t={t} />
+              <FinancialCharts snapshot={snapshot} t={t} />
+              <FinancialTable snapshot={snapshot} t={t} />
               <MemoPanel
                 snapshot={snapshot}
                 memo={memo}
                 memoState={memoState}
                 error={memoError}
                 onGenerate={() => void generateMemo()}
+                t={t}
               />
-              <SourcesAndCaveats snapshot={snapshot} />
+              <SourcesAndCaveats snapshot={snapshot} locale={locale} t={t} />
             </>
           )}
         </div>
 
         <div className="min-w-0">
-          <WaitlistPanel snapshot={snapshot} memo={memo} />
+          <WaitlistPanel snapshot={snapshot} memo={memo} locale={locale} t={t} />
         </div>
       </main>
     </div>

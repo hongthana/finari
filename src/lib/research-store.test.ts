@@ -29,6 +29,9 @@ describe("research store", () => {
     expect(computeMemoPromptHash(fixtureSnapshot)).toEqual(
       computeMemoPromptHash(fixtureSnapshot),
     );
+    expect(computeMemoPromptHash(fixtureSnapshot, "th")).not.toEqual(
+      computeMemoPromptHash(fixtureSnapshot, "en"),
+    );
   });
 
   it("stores and retrieves a fresh snapshot from the memory fallback", async () => {
@@ -52,7 +55,7 @@ describe("research store", () => {
     expect(isSnapshotExpired(expired)).toBe(true);
   });
 
-  it("reuses a memo by snapshot, model, and prompt hash", async () => {
+  it("reuses a memo by snapshot, locale, model, and prompt hash", async () => {
     const snapshot = await persistSnapshot(fixtureSnapshot);
     const memo = {
       company: fixtureSnapshot.identity,
@@ -63,9 +66,10 @@ describe("research store", () => {
       citations: fixtureSnapshot.citations,
     };
 
-    const stored = await persistMemo(snapshot, memo);
-    const fetched = await getStoredMemo(snapshot);
+    const stored = await persistMemo(snapshot, memo, "en");
+    const fetched = await getStoredMemo(snapshot, "en");
 
     expect(fetched).toEqual(stored);
+    expect(await getStoredMemo(snapshot, "th")).toBeNull();
   });
 });

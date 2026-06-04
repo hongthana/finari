@@ -1,6 +1,12 @@
 import { getOpenAiModel } from "@/lib/env";
 import { compactCurrency, formatMetricValue } from "@/lib/format";
 import { summarizeMetricSignal } from "@/lib/financial-analysis";
+import {
+  DEFAULT_LOCALE,
+  getDictionary,
+  translateCaveat,
+  type Locale,
+} from "@/lib/i18n";
 import type {
   CompanySnapshot,
   MemoSection,
@@ -8,70 +14,97 @@ import type {
   TrendSignal,
 } from "@/lib/types";
 
-const DISCLAIMER =
-  "Finari is educational research software. It does not provide personalized investment advice, buy/sell recommendations, price targets, or suitability analysis.";
+function sentenceForSignal(signal: TrendSignal, locale: Locale): string {
+  const t = getDictionary(locale);
 
-function sentenceForSignal(signal: TrendSignal): string {
   if (signal === "positive") {
-    return "The current filing profile screens as constructive, but it still needs valuation and business-quality review.";
+    return t.memo.signal.positive;
   }
 
   if (signal === "negative") {
-    return "The current filing profile contains pressure points that deserve extra diligence before any investment decision.";
+    return t.memo.signal.negative;
   }
 
   if (signal === "neutral") {
-    return "The current filing profile is mixed, so the next step is understanding the business drivers behind the numbers.";
+    return t.memo.signal.neutral;
   }
 
-  return "There is not enough standardized filing data to form a strong filing-based view.";
+  return t.memo.signal.unknown;
 }
 
-function fallbackSections(snapshot: CompanySnapshot): MemoSection[] {
+function fallbackSections(
+  snapshot: CompanySnapshot,
+  locale: Locale,
+): MemoSection[] {
+  const t = getDictionary(locale);
   const latest = snapshot.periods[0];
   const prior = snapshot.periods[1];
   const signal = summarizeMetricSignal(snapshot.metrics);
   const metricHighlights = snapshot.metrics
     .slice(0, 6)
-    .map((metric) => `${metric.label}: ${formatMetricValue(metric.value, metric.unit)}`)
+    .map((metric) => {
+      const metricText = t.metrics[metric.id as keyof typeof t.metrics];
+      return `${metricText?.label ?? metric.label}: ${formatMetricValue(
+        metric.value,
+        metric.unit,
+      )}`;
+    })
     .join("; ");
+  const translatedCaveats = snapshot.caveats
+    .map((caveat) => translateCaveat(caveat, locale))
+    .join(" ");
 
   return [
     {
-      title: "Institutional read",
+      title: t.memo.sections.institutionalRead,
       signal,
-      body: `${snapshot.identity.name} (${snapshot.identity.ticker}) is analyzed from SEC standardized financial-statement facts. ${sentenceForSignal(signal)}`,
+      body: t.memo.fallback.intro(
+        snapshot.identity.name,
+        snapshot.identity.ticker,
+        sentenceForSignal(signal, locale),
+      ),
     },
     {
-      title: "Financial trajectory",
+      title: t.memo.sections.trajectory,
       signal:
         latest?.revenue && prior?.revenue && latest.revenue > prior.revenue
           ? "positive"
           : "neutral",
       body: latest
-        ? `Latest annual revenue was ${compactCurrency(latest.revenue)} and net income was ${compactCurrency(latest.netIncome)} for fiscal ${latest.fiscalYear}. ${metricHighlights || "Several core metrics were unavailable in standard SEC tags."}`
-        : "Finari could not identify a comparable latest annual period from standard SEC tags.",
+        ? t.memo.fallback.trajectory(
+            compactCurrency(latest.revenue),
+            compactCurrency(latest.netIncome),
+            latest.fiscalYear,
+            metricHighlights || t.memo.fallback.metricsUnavailable,
+          )
+        : t.memo.fallback.trajectoryUnavailable,
     },
     {
-      title: "Balance sheet and cash flow",
+      title: t.memo.sections.balanceSheet,
       signal:
         latest?.freeCashFlow && latest.freeCashFlow > 0 ? "positive" : "neutral",
       body: latest
-        ? `Reported assets were ${compactCurrency(latest.assets)}, liabilities were ${compactCurrency(latest.liabilities)}, cash was ${compactCurrency(latest.cash)}, and free cash flow was ${compactCurrency(latest.freeCashFlow)}. Treat free cash flow as a screening estimate because XBRL tag conventions can vary by issuer.`
-        : "Balance sheet and cash-flow screening is unavailable until a filing period can be normalized.",
+        ? t.memo.fallback.balanceSheet(
+            compactCurrency(latest.assets),
+            compactCurrency(latest.liabilities),
+            compactCurrency(latest.cash),
+            compactCurrency(latest.freeCashFlow),
+          )
+        : t.memo.fallback.balanceSheetUnavailable,
     },
     {
-      title: "Risk questions",
+      title: t.memo.sections.riskQuestions,
       signal: snapshot.caveats.length ? "negative" : "neutral",
       body:
         snapshot.caveats.length > 0
-          ? `Review these before relying on the memo: ${snapshot.caveats.join(" ")}`
-          : "Key next questions: what drives margins, how durable is growth, what risks management highlights in the latest 10-K, and whether the current market price compensates for those risks.",
+          ? t.memo.fallback.reviewCaveats(translatedCaveats)
+          : t.memo.fallback.defaultQuestions,
     },
   ];
 }
 
-function buildPrompt(snapshot: CompanySnapshot): string {
+function buildPrompt(snapshot: CompanySnapshot, locale: Locale): string {
+  const t = getDictionary(locale);
   const latest = snapshot.periods[0];
   const periods = snapshot.periods.map((period) => ({
     fiscalYear: period.fiscalYear,
@@ -92,8 +125,8 @@ function buildPrompt(snapshot: CompanySnapshot): string {
 
   return JSON.stringify(
     {
-      instruction:
-        "Write a concise institutional-grade equity research memo for retail investors. Use only the supplied SEC-derived facts and caveats. Do not include buy/sell recommendations, price targets, or personalized investment advice. Return strict JSON with sections: [{title, body, signal}] where signal is positive, neutral, negative, or unknown.",
+      instruction: t.memo.aiInstruction,
+      locale,
       company: snapshot.identity,
       latestFiscalYear: latest?.fiscalYear,
       periods,
@@ -187,7 +220,10 @@ function extractOutputText(responseJson: unknown): string | null {
   return null;
 }
 
-async function generateAiSections(snapshot: CompanySnapshot): Promise<MemoSection[]> {
+async function generateAiSections(
+  snapshot: CompanySnapshot,
+  locale: Locale,
+): Promise<MemoSection[]> {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
 
   if (!apiKey) {
@@ -202,7 +238,7 @@ async function generateAiSections(snapshot: CompanySnapshot): Promise<MemoSectio
     },
     body: JSON.stringify({
       model: getOpenAiModel(),
-      input: buildPrompt(snapshot),
+      input: buildPrompt(snapshot, locale),
       text: {
         format: {
           type: "json_schema",
@@ -261,14 +297,17 @@ async function generateAiSections(snapshot: CompanySnapshot): Promise<MemoSectio
 
 export async function generateResearchMemo(
   snapshot: CompanySnapshot,
+  locale: Locale = DEFAULT_LOCALE,
 ): Promise<ResearchMemo> {
+  const t = getDictionary(locale);
+
   try {
-    const sections = await generateAiSections(snapshot);
+    const sections = await generateAiSections(snapshot, locale);
     return {
       company: snapshot.identity,
       generatedAt: new Date().toISOString(),
       mode: "ai",
-      disclaimer: DISCLAIMER,
+      disclaimer: t.memo.disclaimer,
       sections,
       citations: snapshot.citations,
     };
@@ -277,8 +316,8 @@ export async function generateResearchMemo(
       company: snapshot.identity,
       generatedAt: new Date().toISOString(),
       mode: "fallback",
-      disclaimer: DISCLAIMER,
-      sections: fallbackSections(snapshot),
+      disclaimer: t.memo.disclaimer,
+      sections: fallbackSections(snapshot, locale),
       citations: snapshot.citations,
     };
   }

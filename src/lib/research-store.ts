@@ -17,6 +17,7 @@ import {
 } from "@/db/schema";
 import { stableHash } from "@/lib/cache";
 import { getOpenAiModel } from "@/lib/env";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n";
 import type {
   CompanyIdentity,
   CompanySnapshot,
@@ -26,7 +27,7 @@ import type {
 } from "@/lib/types";
 
 const SNAPSHOT_TTL_MS = 24 * 60 * 60 * 1000;
-const MEMO_PROMPT_VERSION = "finari_memo_v1";
+const MEMO_PROMPT_VERSION = "finari_memo_v2";
 
 type StoredSnapshot = {
   snapshotId: string;
@@ -113,9 +114,13 @@ export function computeSnapshotSourceHash(snapshot: CompanySnapshot): string {
   });
 }
 
-export function computeMemoPromptHash(snapshot: CompanySnapshot): string {
+export function computeMemoPromptHash(
+  snapshot: CompanySnapshot,
+  locale: Locale = DEFAULT_LOCALE,
+): string {
   return stableHash({
     version: MEMO_PROMPT_VERSION,
+    locale,
     model: getOpenAiModel(),
     sourceHash: computeSnapshotSourceHash(snapshot),
     identity: snapshot.identity,
@@ -444,11 +449,15 @@ export async function persistSnapshot(snapshot: CompanySnapshot): Promise<Stored
 
 export async function getStoredMemo(
   snapshot: StoredSnapshot,
+  locale: Locale = DEFAULT_LOCALE,
   model = getOpenAiModel(),
 ): Promise<StoredMemo | null> {
-  const promptHash = computeMemoPromptHash(snapshot.snapshot);
+  const promptHash = computeMemoPromptHash(snapshot.snapshot, locale);
   if (!hasDatabase()) {
-    return getMemoMemory().get(`${snapshot.snapshotId}:${model}:${promptHash}`) ?? null;
+    return (
+      getMemoMemory().get(`${snapshot.snapshotId}:${locale}:${model}:${promptHash}`) ??
+      null
+    );
   }
 
   const db = getDb();
@@ -490,16 +499,17 @@ export async function getStoredMemo(
 export async function persistMemo(
   snapshot: StoredSnapshot,
   memo: ResearchMemo,
+  locale: Locale = DEFAULT_LOCALE,
   model = getOpenAiModel(),
 ): Promise<StoredMemo> {
-  const promptHash = computeMemoPromptHash(snapshot.snapshot);
+  const promptHash = computeMemoPromptHash(snapshot.snapshot, locale);
 
   if (!hasDatabase()) {
     const stored = {
-      memoId: stableHash({ snapshotId: snapshot.snapshotId, model, promptHash }),
+      memoId: stableHash({ snapshotId: snapshot.snapshotId, locale, model, promptHash }),
       memo,
     };
-    getMemoMemory().set(`${snapshot.snapshotId}:${model}:${promptHash}`, stored);
+    getMemoMemory().set(`${snapshot.snapshotId}:${locale}:${model}:${promptHash}`, stored);
     return stored;
   }
 

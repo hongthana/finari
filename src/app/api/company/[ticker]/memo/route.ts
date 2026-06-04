@@ -1,16 +1,18 @@
 import { jsonError } from "@/lib/api";
+import { normalizeLocale } from "@/lib/i18n";
 import { companyLookupError, getResearchMemoForTicker } from "@/lib/research-service";
 
 export const runtime = "nodejs";
 
 export async function POST(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ ticker: string }> },
 ) {
   const { ticker } = await context.params;
+  const locale = normalizeLocale(new URL(request.url).searchParams.get("locale"));
 
   try {
-    const { memo, memoId, snapshotId } = await getResearchMemoForTicker(ticker);
+    const { memo, memoId, snapshotId } = await getResearchMemoForTicker(ticker, locale);
 
     return Response.json({ memo, memoId, snapshotId });
   } catch (error) {
