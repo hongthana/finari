@@ -217,9 +217,9 @@ function AdvisorSummary({ snapshot }: { snapshot: CompanySnapshot }) {
   const questions = advisorQuestions(snapshot);
 
   return (
-    <section className="rounded-md border border-zinc-200 bg-white p-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="max-w-3xl">
+    <section className="min-w-0 max-w-full rounded-md border border-zinc-200 bg-white p-4 sm:p-5">
+      <div className="flex min-w-0 max-w-full flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0 max-w-full xl:max-w-3xl">
           <div className="inline-flex items-center gap-2 rounded-md border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800">
             <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
             Advisor summary
@@ -227,28 +227,28 @@ function AdvisorSummary({ snapshot }: { snapshot: CompanySnapshot }) {
           <h3 className="mt-3 text-base font-semibold text-zinc-950">
             What the latest filing says
           </h3>
-          <p className="mt-2 text-sm leading-6 text-zinc-700">
+          <p className="mt-2 break-words text-sm leading-6 text-zinc-700">
             A financial advisor would separate business quality from stock price.
             {` ${snapshot.identity.name} generated ${compactCurrency(latest?.revenue)} of revenue, ${compactCurrency(latest?.netIncome)} of net income, and ${compactCurrency(latest?.freeCashFlow)} of free cash flow in FY ${latest?.fiscalYear ?? "the latest annual period"}. `}
             {describeChange("Revenue", revenueGrowth)} and{" "}
             {describeChange("net income", netIncomeGrowth)}.
           </p>
-          <p className="mt-2 text-sm leading-6 text-zinc-700">
+          <p className="mt-2 break-words text-sm leading-6 text-zinc-700">
             {qualityRead(snapshot)} {balanceSheetRead(snapshot)} This is a
             research starting point, not a buy/sell recommendation; valuation,
             risk tolerance, and portfolio fit still need separate review.
           </p>
         </div>
 
-        <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4 lg:w-80">
+        <div className="min-w-0 max-w-full rounded-md border border-zinc-200 bg-zinc-50 p-4 xl:w-80 xl:shrink-0">
           <h4 className="text-sm font-semibold text-zinc-950">
             Investor questions
           </h4>
           <ul className="mt-3 space-y-2 text-sm leading-5 text-zinc-700">
             {questions.map((question) => (
-              <li key={question} className="flex gap-2">
+              <li key={question} className="flex min-w-0 gap-2">
                 <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-700" />
-                <span>{question}</span>
+                <span className="min-w-0 break-words">{question}</span>
               </li>
             ))}
           </ul>
@@ -420,8 +420,8 @@ function SnapshotHeader({
   const latest = snapshot.periods[0];
 
   return (
-    <section className="rounded-md border border-zinc-200 bg-white p-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <section className="min-w-0 max-w-full rounded-md border border-zinc-200 bg-white p-4 sm:p-5">
+      <div className="flex min-w-0 max-w-full flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-2 rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-800">
@@ -443,28 +443,28 @@ function SnapshotHeader({
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:min-w-[520px]">
-          <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+        <div className="grid min-w-0 max-w-full grid-cols-2 gap-3 sm:grid-cols-4 xl:w-[520px] xl:shrink-0">
+          <div className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3">
             <p className="text-xs font-medium text-zinc-500">Revenue</p>
-            <p className="mt-1 text-lg font-semibold text-zinc-950">
+            <p className="mt-1 break-words text-lg font-semibold text-zinc-950">
               {compactCurrency(latest?.revenue)}
             </p>
           </div>
-          <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+          <div className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3">
             <p className="text-xs font-medium text-zinc-500">Net income</p>
-            <p className="mt-1 text-lg font-semibold text-zinc-950">
+            <p className="mt-1 break-words text-lg font-semibold text-zinc-950">
               {compactCurrency(latest?.netIncome)}
             </p>
           </div>
-          <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+          <div className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3">
             <p className="text-xs font-medium text-zinc-500">FCF</p>
-            <p className="mt-1 text-lg font-semibold text-zinc-950">
+            <p className="mt-1 break-words text-lg font-semibold text-zinc-950">
               {compactCurrency(latest?.freeCashFlow)}
             </p>
           </div>
-          <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+          <div className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3">
             <p className="text-xs font-medium text-zinc-500">Assets</p>
-            <p className="mt-1 text-lg font-semibold text-zinc-950">
+            <p className="mt-1 break-words text-lg font-semibold text-zinc-950">
               {compactCurrency(latest?.assets)}
             </p>
           </div>
@@ -1183,7 +1183,7 @@ export function FinariApp() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-100 text-zinc-950">
+    <div className="min-h-screen overflow-x-hidden bg-zinc-100 text-zinc-950">
       <ResearchToolbar
         query={query}
         setQuery={setQuery}
@@ -1193,8 +1193,8 @@ export function FinariApp() {
         onSubmit={submitSearch}
       />
 
-      <main className="mx-auto grid w-full max-w-7xl gap-4 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-8">
-        <div className="space-y-4">
+      <main className="mx-auto grid min-w-0 w-full max-w-7xl gap-4 px-4 py-5 sm:px-6 lg:px-8 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 space-y-4">
           <SnapshotHeader
             snapshot={snapshot}
             loading={loading}
@@ -1220,7 +1220,9 @@ export function FinariApp() {
           )}
         </div>
 
-        <WaitlistPanel snapshot={snapshot} memo={memo} />
+        <div className="min-w-0">
+          <WaitlistPanel snapshot={snapshot} memo={memo} />
+        </div>
       </main>
     </div>
   );
