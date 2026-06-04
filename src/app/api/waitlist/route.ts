@@ -1,0 +1,16 @@
+import { validationError } from "@/lib/api";
+import { saveWaitlistLead, waitlistLeadSchema } from "@/lib/waitlist";
+
+export const runtime = "nodejs";
+
+export async function POST(request: Request) {
+  try {
+    const body = (await request.json()) as unknown;
+    const lead = waitlistLeadSchema.parse(body);
+    const saved = saveWaitlistLead(lead);
+
+    return Response.json({ lead: saved }, { status: 201 });
+  } catch (error) {
+    return validationError(error);
+  }
+}
