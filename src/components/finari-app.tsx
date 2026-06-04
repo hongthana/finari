@@ -91,6 +91,109 @@ function metricTone(metric: FinancialMetric): string {
   return "text-zinc-800";
 }
 
+function metricValue(snapshot: CompanySnapshot, id: string): number | null {
+  return snapshot.metrics.find((metric) => metric.id === id)?.value ?? null;
+}
+
+function hasNumber(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function describeChange(label: string, value: number | null): string {
+  if (!hasNumber(value)) {
+    return `${label} did not have a comparable prior-year figure in the normalized filing data`;
+  }
+
+  if (Math.abs(value) < 0.005) {
+    return `${label} was roughly flat year over year`;
+  }
+
+  const direction = value > 0 ? "increased" : "declined";
+  return `${label} ${direction} ${formatPercent(Math.abs(value))} year over year`;
+}
+
+function qualityRead(snapshot: CompanySnapshot): string {
+  const grossMargin = metricValue(snapshot, "gross-margin");
+  const operatingMargin = metricValue(snapshot, "operating-margin");
+  const fcfMargin = metricValue(snapshot, "free-cash-flow-margin");
+
+  const marginParts = [
+    hasNumber(grossMargin) ? `gross margin was ${formatPercent(grossMargin)}` : null,
+    hasNumber(operatingMargin)
+      ? `operating margin was ${formatPercent(operatingMargin)}`
+      : null,
+  ].filter(Boolean);
+
+  let cashRead = "free-cash-flow conversion needs more review";
+  if (hasNumber(fcfMargin)) {
+    if (fcfMargin >= 0.15) {
+      cashRead = `free-cash-flow conversion was strong at ${formatPercent(fcfMargin)} of revenue`;
+    } else if (fcfMargin >= 0.05) {
+      cashRead = `free-cash-flow conversion was positive at ${formatPercent(fcfMargin)} of revenue`;
+    } else if (fcfMargin >= 0) {
+      cashRead = `free-cash-flow conversion was thin at ${formatPercent(fcfMargin)} of revenue`;
+    } else {
+      cashRead = `free cash flow was negative at ${formatPercent(fcfMargin)} of revenue`;
+    }
+  }
+
+  return `${marginParts.length ? `${marginParts.join(" and ")}; ` : ""}${cashRead}.`;
+}
+
+function balanceSheetRead(snapshot: CompanySnapshot): string {
+  const debtToEquity = metricValue(snapshot, "debt-to-equity");
+  const liabilitiesToAssets = metricValue(snapshot, "liabilities-to-assets");
+
+  if (!hasNumber(debtToEquity) && !hasNumber(liabilitiesToAssets)) {
+    return "Balance-sheet leverage was not fully available from standard SEC tags.";
+  }
+
+  const leverageText = [
+    hasNumber(debtToEquity)
+      ? `debt/equity was ${formatMetricValue(debtToEquity, "ratio")}`
+      : null,
+    hasNumber(liabilitiesToAssets)
+      ? `liabilities/assets was ${formatPercent(liabilitiesToAssets)}`
+      : null,
+  ].filter(Boolean);
+
+  const elevated =
+    (hasNumber(debtToEquity) && debtToEquity > 1) ||
+    (hasNumber(liabilitiesToAssets) && liabilitiesToAssets > 0.7);
+
+  return `${leverageText.join(" and ")}; ${
+    elevated
+      ? "an advisor would ask how much flexibility the balance sheet provides if demand weakens."
+      : "the balance sheet does not screen as the first concern from these filing metrics."
+  }`;
+}
+
+function advisorQuestions(snapshot: CompanySnapshot): string[] {
+  const revenueGrowth = metricValue(snapshot, "revenue-growth");
+  const netIncomeGrowth = metricValue(snapshot, "net-income-growth");
+  const operatingMargin = metricValue(snapshot, "operating-margin");
+  const liabilitiesToAssets = metricValue(snapshot, "liabilities-to-assets");
+
+  const questions = [
+    hasNumber(revenueGrowth) && revenueGrowth < -0.005
+      ? "What evidence could reverse the latest revenue decline?"
+      : "Can revenue growth continue without weakening margins?",
+    hasNumber(netIncomeGrowth) && netIncomeGrowth < -0.005
+      ? "Is lower net income temporary, or is profitability structurally softer?"
+      : "Are earnings gains backed by durable operations rather than one-time items?",
+    hasNumber(operatingMargin) && operatingMargin > 0.15
+      ? "How defensible are these operating margins against competition and pricing pressure?"
+      : "What operating leverage could improve margins from here?",
+  ];
+
+  if (hasNumber(liabilitiesToAssets) && liabilitiesToAssets > 0.7) {
+    questions.push("Does the company have enough balance-sheet flexibility for a downturn?");
+  }
+
+  questions.push("Does the current market price already reflect these fundamentals?");
+  return questions.slice(0, 4);
+}
+
 function makeChartRows(snapshot: CompanySnapshot | null) {
   return (
     snapshot?.periods
@@ -104,6 +207,54 @@ function makeChartRows(snapshot: CompanySnapshot | null) {
         assets: period.assets ?? 0,
         liabilities: period.liabilities ?? 0,
       })) ?? []
+  );
+}
+
+function AdvisorSummary({ snapshot }: { snapshot: CompanySnapshot }) {
+  const latest = snapshot.periods[0];
+  const revenueGrowth = metricValue(snapshot, "revenue-growth");
+  const netIncomeGrowth = metricValue(snapshot, "net-income-growth");
+  const questions = advisorQuestions(snapshot);
+
+  return (
+    <section className="rounded-md border border-zinc-200 bg-white p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="max-w-3xl">
+          <div className="inline-flex items-center gap-2 rounded-md border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800">
+            <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+            Advisor summary
+          </div>
+          <h3 className="mt-3 text-base font-semibold text-zinc-950">
+            What the latest filing says
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-zinc-700">
+            A financial advisor would separate business quality from stock price.
+            {` ${snapshot.identity.name} generated ${compactCurrency(latest?.revenue)} of revenue, ${compactCurrency(latest?.netIncome)} of net income, and ${compactCurrency(latest?.freeCashFlow)} of free cash flow in FY ${latest?.fiscalYear ?? "the latest annual period"}. `}
+            {describeChange("Revenue", revenueGrowth)} and{" "}
+            {describeChange("net income", netIncomeGrowth)}.
+          </p>
+          <p className="mt-2 text-sm leading-6 text-zinc-700">
+            {qualityRead(snapshot)} {balanceSheetRead(snapshot)} This is a
+            research starting point, not a buy/sell recommendation; valuation,
+            risk tolerance, and portfolio fit still need separate review.
+          </p>
+        </div>
+
+        <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4 lg:w-80">
+          <h4 className="text-sm font-semibold text-zinc-950">
+            Investor questions
+          </h4>
+          <ul className="mt-3 space-y-2 text-sm leading-5 text-zinc-700">
+            {questions.map((question) => (
+              <li key={question} className="flex gap-2">
+                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-700" />
+                <span>{question}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1053,6 +1204,7 @@ export function FinariApp() {
 
           {snapshot && (
             <>
+              <AdvisorSummary snapshot={snapshot} />
               <MetricGrid metrics={snapshot.metrics} />
               <FinancialCharts snapshot={snapshot} />
               <FinancialTable snapshot={snapshot} />

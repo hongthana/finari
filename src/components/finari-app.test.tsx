@@ -32,6 +32,8 @@ describe("FinariApp", () => {
     await waitFor(() => {
       expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
     });
+    expect(screen.getByText("Advisor summary")).toBeInTheDocument();
+    expect(screen.getByText("What the latest filing says")).toBeInTheDocument();
     expect(screen.getByText("Revenue growth")).toBeInTheDocument();
     expect(screen.getByText("Join waitlist")).toBeInTheDocument();
   });
