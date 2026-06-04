@@ -1,4 +1,5 @@
 import { getSecUserAgent } from "@/lib/env";
+import { getJsonCache, setJsonCache, stableHash } from "@/lib/cache";
 import type { CompanyIdentity, FilingSummary } from "@/lib/types";
 
 const SEC_DATA_BASE = "https://data.sec.gov";
@@ -67,6 +68,16 @@ async function fetchSecJson<T>(url: string, ttlMs: number): Promise<T> {
     return cached.value;
   }
 
+  const redisKey = `sec:url:${stableHash(url)}`;
+  const redisCached = await getJsonCache<T>(redisKey);
+  if (redisCached) {
+    state.cache.set(url, {
+      value: redisCached,
+      expiresAt: Date.now() + ttlMs,
+    });
+    return redisCached;
+  }
+
   await waitForSecTurn();
 
   const response = await fetch(url, {
@@ -86,6 +97,7 @@ async function fetchSecJson<T>(url: string, ttlMs: number): Promise<T> {
     value,
     expiresAt: Date.now() + ttlMs,
   });
+  await setJsonCache(redisKey, value, Math.max(60, Math.floor(ttlMs / 1000)));
 
   return value;
 }

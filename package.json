@@ -9,17 +9,27 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
   },
   "engines": {
     "node": ">=24.0.0"
   },
   "dependencies": {
+    "@auth/drizzle-adapter": "^1.11.2",
+    "drizzle-orm": "^0.45.2",
+    "ioredis": "^5.11.0",
     "lucide-react": "^1.17.0",
     "next": "16.2.7",
+    "next-auth": "^4.24.14",
+    "nodemailer": "^7.0.13",
+    "postgres": "^3.4.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^3.8.1",
+    "resend": "^6.12.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -31,6 +41,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.0.2",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.7",
     "jsdom": "^29.1.1",

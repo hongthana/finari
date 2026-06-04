@@ -1,6 +1,5 @@
 import { jsonError } from "@/lib/api";
-import { normalizeCompanySnapshot } from "@/lib/financial-analysis";
-import { findCompanyByTicker, getCompanyFacts, getSubmissions } from "@/lib/sec";
+import { companyLookupError, getCompanySnapshotForTicker } from "@/lib/research-service";
 
 export const runtime = "nodejs";
 
@@ -9,21 +8,15 @@ export async function GET(
   context: { params: Promise<{ ticker: string }> },
 ) {
   const { ticker } = await context.params;
-  const identity = await findCompanyByTicker(ticker);
-
-  if (!identity) {
-    return jsonError(`Unknown ticker: ${ticker.toUpperCase()}`, 404);
-  }
 
   try {
-    const [submissions, facts] = await Promise.all([
-      getSubmissions(identity.cik),
-      getCompanyFacts(identity.cik),
-    ]);
-    const snapshot = normalizeCompanySnapshot(identity, submissions, facts);
-
+    const snapshot = await getCompanySnapshotForTicker(ticker);
     return Response.json({ snapshot });
-  } catch {
+  } catch (error) {
+    const lookupError = companyLookupError(error, ticker);
+    if (lookupError) {
+      return lookupError;
+    }
     return jsonError("Unable to load SEC company facts right now", 502);
   }
 }

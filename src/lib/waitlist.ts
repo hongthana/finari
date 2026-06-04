@@ -1,16 +1,14 @@
-import { existsSync, mkdirSync } from "node:fs";
-import { createRequire } from "node:module";
-import { dirname, resolve } from "node:path";
-import type { DatabaseSync as DatabaseSyncType } from "node:sqlite";
+import crypto from "node:crypto";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { getDatabasePath } from "@/lib/env";
+import { getDb, hasDatabase } from "@/db/client";
+import { waitlistLeads } from "@/db/schema";
 import type { WaitlistLead, WaitlistLeadRecord } from "@/lib/types";
 
 const waitlistState = globalThis as typeof globalThis & {
-  __finariWaitlistDb?: DatabaseSyncType;
+  __finariWaitlistLeads?: Map<string, WaitlistLeadRecord>;
 };
-const nodeRequire = createRequire(import.meta.url);
 
 export const waitlistLeadSchema = z.object({
   email: z.string().trim().email().max(254),
@@ -24,90 +22,69 @@ export const waitlistLeadSchema = z.object({
     .transform((value) => (value ? value.toUpperCase() : undefined)),
 });
 
-function resolveDatabasePath(): string {
-  const configuredPath = getDatabasePath();
-  return configuredPath === ":memory:" ? configuredPath : resolve(configuredPath);
-}
-
-function getDatabase(): DatabaseSyncType {
-  if (waitlistState.__finariWaitlistDb) {
-    return waitlistState.__finariWaitlistDb;
-  }
-
-  const databasePath = resolveDatabasePath();
-  if (databasePath !== ":memory:") {
-    const dir = dirname(databasePath);
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
-    }
-  }
-
-  const { DatabaseSync } = nodeRequire("node:sqlite") as typeof import("node:sqlite");
-  const db = new DatabaseSync(databasePath);
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS waitlist_leads (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      email TEXT NOT NULL UNIQUE,
-      investor_profile TEXT NOT NULL,
-      interest_area TEXT NOT NULL,
-      source_ticker TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-  `);
-
-  waitlistState.__finariWaitlistDb = db;
-  return db;
+function getMemoryLeads(): Map<string, WaitlistLeadRecord> {
+  waitlistState.__finariWaitlistLeads ??= new Map();
+  return waitlistState.__finariWaitlistLeads;
 }
 
 export function closeWaitlistDatabase(): void {
-  waitlistState.__finariWaitlistDb?.close();
-  waitlistState.__finariWaitlistDb = undefined;
+  waitlistState.__finariWaitlistLeads = new Map();
 }
 
-export function saveWaitlistLead(lead: WaitlistLead): WaitlistLeadRecord {
+export async function saveWaitlistLead(lead: WaitlistLead): Promise<WaitlistLeadRecord> {
   const parsed = waitlistLeadSchema.parse(lead);
-  const db = getDatabase();
+  const email = parsed.email.toLowerCase();
 
-  db.prepare(
-    `
-      INSERT INTO waitlist_leads (
-        email,
-        investor_profile,
-        interest_area,
-        source_ticker
-      )
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(email) DO UPDATE SET
-        investor_profile = excluded.investor_profile,
-        interest_area = excluded.interest_area,
-        source_ticker = excluded.source_ticker
-    `,
-  ).run(
-    parsed.email.toLowerCase(),
-    parsed.investorProfile,
-    parsed.interestArea,
-    parsed.sourceTicker ?? null,
-  );
+  if (!hasDatabase()) {
+    const existing = getMemoryLeads().get(email);
+    const record: WaitlistLeadRecord = {
+      id: existing?.id ?? crypto.randomUUID(),
+      email,
+      investorProfile: parsed.investorProfile,
+      interestArea: parsed.interestArea,
+      sourceTicker: parsed.sourceTicker,
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    getMemoryLeads().set(email, record);
+    return record;
+  }
 
-  const row = db
-    .prepare(
-      `
-        SELECT
-          id,
-          email,
-          investor_profile AS investorProfile,
-          interest_area AS interestArea,
-          source_ticker AS sourceTicker,
-          created_at AS createdAt
-        FROM waitlist_leads
-        WHERE email = ?
-      `,
-    )
-    .get(parsed.email.toLowerCase()) as WaitlistLeadRecord | undefined;
+  await getDb()
+    .insert(waitlistLeads)
+    .values({
+      email,
+      investorProfile: parsed.investorProfile,
+      interestArea: parsed.interestArea,
+      sourceTicker: parsed.sourceTicker,
+    })
+    .onConflictDoUpdate({
+      target: waitlistLeads.email,
+      set: {
+        investorProfile: parsed.investorProfile,
+        interestArea: parsed.interestArea,
+        sourceTicker: parsed.sourceTicker,
+        updatedAt: new Date(),
+      },
+    });
+
+  const [row] = await getDb()
+    .select()
+    .from(waitlistLeads)
+    .where(eq(waitlistLeads.email, email))
+    .limit(1);
 
   if (!row) {
     throw new Error("Waitlist lead was not saved");
   }
 
-  return row;
+  return {
+    id: row.id,
+    email: row.email,
+    investorProfile: row.investorProfile,
+    interestArea: row.interestArea,
+    sourceTicker: row.sourceTicker ?? undefined,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }

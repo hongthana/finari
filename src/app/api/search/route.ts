@@ -1,5 +1,5 @@
 import { jsonError } from "@/lib/api";
-import { searchCompanies } from "@/lib/sec";
+import { searchCompaniesWithCache } from "@/lib/research-service";
 
 export const runtime = "nodejs";
 
@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   const query = searchParams.get("q") ?? "";
 
   try {
-    const results = await searchCompanies(query);
+    const results = await searchCompaniesWithCache(query);
     return Response.json({ results });
   } catch {
     return jsonError("Unable to search SEC ticker directory right now", 502);

@@ -92,6 +92,7 @@ export interface WaitlistLead {
 }
 
 export interface WaitlistLeadRecord extends WaitlistLead {
-  id: number;
+  id: string;
   createdAt: string;
+  updatedAt: string;
 }

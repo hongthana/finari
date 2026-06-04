@@ -18,6 +18,7 @@ import {
   Sparkles,
   TrendingUp,
 } from "lucide-react";
+import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   Area,
@@ -619,14 +620,61 @@ function MemoPanel({
   );
 }
 
-function WaitlistPanel({ ticker }: { ticker?: string }) {
+function WaitlistPanel({
+  snapshot,
+  memo,
+}: {
+  snapshot: CompanySnapshot | null;
+  memo: ResearchMemo | null;
+}) {
   const [email, setEmail] = useState("");
   const [investorProfile, setInvestorProfile] = useState("Long-term individual investor");
   const [interestArea, setInterestArea] = useState("Saved research and alerts");
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">(
     "idle",
   );
+  const [saveState, setSaveState] = useState<"idle" | "loading" | "ready" | "error">(
+    "idle",
+  );
   const [message, setMessage] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
+  async function saveResearch() {
+    if (!snapshot) {
+      return;
+    }
+
+    setSaveState("loading");
+    setSaveMessage(null);
+
+    try {
+      const response = await fetch("/api/research/saved", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticker: snapshot.identity.ticker,
+          includeMemo: Boolean(memo),
+          title: `${snapshot.identity.ticker} research - ${new Date().toISOString().slice(0, 10)}`,
+        }),
+      });
+
+      if (response.status === 401) {
+        setSaveState("error");
+        setSaveMessage("Sign in with email to save this research.");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("Unable to save research");
+      }
+
+      setSaveState("ready");
+      setSaveMessage("Research saved to your Finari workspace.");
+    } catch {
+      setSaveState("error");
+      setSaveMessage("This research could not be saved right now.");
+    }
+  }
 
   async function submitWaitlist(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -641,7 +689,7 @@ function WaitlistPanel({ ticker }: { ticker?: string }) {
           email,
           investorProfile,
           interestArea,
-          sourceTicker: ticker,
+          sourceTicker: snapshot?.identity.ticker,
         }),
       });
 
@@ -660,6 +708,49 @@ function WaitlistPanel({ ticker }: { ticker?: string }) {
 
   return (
     <aside className="space-y-4">
+      <section className="rounded-md border border-zinc-200 bg-white p-5">
+        <div className="inline-flex items-center gap-2 rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-800">
+          <Bookmark className="h-3.5 w-3.5" aria-hidden="true" />
+          Workspace
+        </div>
+        <h3 className="mt-3 text-base font-semibold text-zinc-950">
+          Save company research
+        </h3>
+        <div className="mt-4 grid gap-2">
+          <Link
+            href="/api/auth/signin"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-4 text-sm font-semibold text-zinc-800 transition hover:border-teal-500 hover:text-teal-700"
+          >
+            <LockKeyhole className="h-4 w-4" aria-hidden="true" />
+            Sign in
+          </Link>
+          <button
+            type="button"
+            disabled={!snapshot || saveState === "loading"}
+            onClick={() => void saveResearch()}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
+          >
+            {saveState === "loading" ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Bookmark className="h-4 w-4" aria-hidden="true" />
+            )}
+            Save research
+          </button>
+        </div>
+        {saveMessage && (
+          <p
+            className={`mt-3 rounded-md px-3 py-2 text-sm ${
+              saveState === "error"
+                ? "bg-amber-50 text-amber-900"
+                : "bg-emerald-50 text-emerald-800"
+            }`}
+          >
+            {saveMessage}
+          </p>
+        )}
+      </section>
+
       <section className="rounded-md border border-zinc-200 bg-white p-5">
         <div className="inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-700">
           <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />
@@ -724,7 +815,7 @@ function WaitlistPanel({ ticker }: { ticker?: string }) {
       </section>
 
       <section className="rounded-md border border-zinc-200 bg-white p-5">
-        <h3 className="text-base font-semibold text-zinc-950">Coming next</h3>
+        <h3 className="text-base font-semibold text-zinc-950">Workspace tools</h3>
         <div className="mt-4 space-y-3">
           {[
             [Bookmark, "Saved company research"],
@@ -977,7 +1068,7 @@ export function FinariApp() {
           )}
         </div>
 
-        <WaitlistPanel ticker={snapshot?.identity.ticker} />
+        <WaitlistPanel snapshot={snapshot} memo={memo} />
       </main>
     </div>
   );

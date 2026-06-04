@@ -12,3 +12,20 @@ export function getOpenAiModel(): string {
 export function getDatabasePath(): string {
   return process.env.FINARI_DB_PATH?.trim() || ".data/finari.sqlite";
 }
+
+export function getAuthSecret(): string {
+  return process.env.AUTH_SECRET?.trim() || process.env.NEXTAUTH_SECRET?.trim() || "";
+}
+
+export function getAuthUrl(): string {
+  return (
+    process.env.AUTH_URL?.trim() ||
+    process.env.NEXTAUTH_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    ""
+  );
+}
+
+export function getEmailFrom(): string {
+  return process.env.EMAIL_FROM?.trim() || "Finari <research@finari.local>";
+}

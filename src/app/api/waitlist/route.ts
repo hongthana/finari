@@ -7,7 +7,7 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as unknown;
     const lead = waitlistLeadSchema.parse(body);
-    const saved = saveWaitlistLead(lead);
+    const saved = await saveWaitlistLead(lead);
 
     return Response.json({ lead: saved }, { status: 201 });
   } catch (error) {

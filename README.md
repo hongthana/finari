@@ -9,7 +9,8 @@ Finari is a Next.js MVP that helps retail investors analyze US-listed companies 
 - Next.js App Router, TypeScript, Tailwind CSS
 - Recharts for statement visualizations
 - SEC EDGAR JSON APIs for ticker mapping, submissions, and company facts
-- Node built-in SQLite for local waitlist storage
+- Railway Postgres with Drizzle migrations for durable research, accounts, watchlists, saved research, and waitlist storage
+- Railway Redis for short-lived SEC/search cache and refresh locks
 - Vitest and Testing Library for unit, API, and UI smoke tests
 
 ## Environment
@@ -18,17 +19,24 @@ Copy `.env.example` to `.env.local` and set:
 
 ```bash
 SEC_USER_AGENT="Finari/0.1 (research app; contact=you@example.com)"
-FINARI_DB_PATH=".data/finari.sqlite"
+DATABASE_URL="postgres://user:password@localhost:5432/finari"
+REDIS_URL="redis://localhost:6379"
+AUTH_SECRET="replace-with-a-long-random-secret"
+AUTH_URL="http://localhost:3000"
+EMAIL_FROM="Finari <research@example.com>"
+RESEND_API_KEY=""
 OPENAI_API_KEY=""
 OPENAI_MODEL="gpt-4.1-mini"
 ```
 
 `OPENAI_API_KEY` is optional. Without it, Finari returns a deterministic filing-backed memo fallback.
+`RESEND_API_KEY` is required for production magic-link email delivery.
 
 ## Development
 
 ```bash
 pnpm install
+pnpm db:migrate
 pnpm dev
 ```
 
@@ -42,6 +50,18 @@ pnpm typecheck
 pnpm test
 pnpm build
 ```
+
+## Database
+
+Finari stores durable product data in Postgres and uses Redis only for short-lived cache/locks. The database schema is managed by Drizzle:
+
+```bash
+pnpm db:generate
+pnpm db:migrate
+pnpm db:studio
+```
+
+On Railway, set `DATABASE_URL` to `${{Postgres.DATABASE_URL}}` and `REDIS_URL` to `${{Redis.REDIS_URL}}`, then run `pnpm db:migrate` as the web service pre-deploy command.
 
 ## Data Scope
 
