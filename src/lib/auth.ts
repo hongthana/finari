@@ -28,10 +28,6 @@ export function getAuthOptions(): NextAuthOptions {
         return session;
       },
     },
-    pages: {
-      signIn: "/api/auth/signin",
-      verifyRequest: "/api/auth/verify-request",
-    },
     providers: [
       EmailProvider({
         from: getEmailFrom(),
