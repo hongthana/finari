@@ -357,6 +357,71 @@ const en = {
         "Data confidence explains whether missing or incomplete SEC tags should limit reliance on the screen.",
     },
   },
+  events: {
+    title: "Latest events and potential financial impact",
+    subtitle:
+      "Recent company, industry, macro, legal/regulatory, and filing-related events translated into the financial drivers investors should watch.",
+    badge: "Event impact",
+    badgeTooltip:
+      "Event impact is a conservative, source-linked screen. It does not predict stock price.",
+    loading: "Loading latest events...",
+    unavailable: "Latest events are unavailable right now.",
+    empty:
+      "No recent source-linked events were available. Use the filing analysis below as the primary research base.",
+    whatHappened: "What happened",
+    eventType: "Event type",
+    potentialDrivers: "Potential financial drivers",
+    likelyImpact: "Likely impact",
+    horizon: "Time frame",
+    watchNext: "Watch in the next filing",
+    confidence: "Confidence",
+    source: "Source",
+    generated: "Generated",
+    sourceNote:
+      "Headlines are interpreted with deterministic rules and should be verified with the source and next filing. This is not a buy/sell recommendation.",
+    typeLabels: {
+      "company-specific": "Company-specific",
+      industry: "Industry",
+      macro: "Macro",
+      "legal-regulatory": "Legal/regulatory",
+      "filing-related": "Filing-related",
+    },
+    driverLabels: {
+      revenue: "Revenue",
+      margin: "Margin",
+      "cash-flow": "Cash flow",
+      debt: "Debt",
+      capex: "Capex",
+      "valuation-risk": "Valuation risk",
+    },
+    impactLabels: {
+      positive: "Positive",
+      neutral: "Mixed",
+      negative: "Negative",
+      unknown: "Uncertain",
+    },
+    horizonLabels: {
+      "short-term": "Short-term sentiment",
+      "long-term": "Long-term fundamentals",
+      both: "Sentiment and fundamentals",
+      uncertain: "Uncertain",
+    },
+    confidenceLabels: {
+      High: "High",
+      Medium: "Medium",
+      Low: "Low",
+    },
+    watchMetrics: {
+      "revenue-growth": "Revenue growth",
+      "gross-margin": "Gross margin",
+      "free-cash-flow": "Free cash flow",
+      "debt-and-liabilities": "Debt and liabilities/assets",
+      capex: "Capex and cash flow",
+      "risk-disclosure": "Risk disclosures and management commentary",
+    },
+    investorMeaning: (impact: string, drivers: string, horizon: string) =>
+      `Investor meaning: treat this as a ${impact.toLowerCase()} signal for ${drivers}. It may affect ${horizon.toLowerCase()}, so confirm the effect in future filings before relying on it.`,
+  },
   advisor: {
     badge: "Plain-English summary",
     badgeTooltip:
@@ -1028,6 +1093,71 @@ const th: Dictionary = {
       dataQuality:
         "Data confidence บอกว่าข้อมูล SEC tags ที่ขาดหรือไม่ครบควรจำกัดการใช้ screen แค่ไหน",
     },
+  },
+  events: {
+    title: "เหตุการณ์ล่าสุดและผลกระทบทางการเงินที่อาจเกิดขึ้น",
+    subtitle:
+      "แปลงเหตุการณ์ล่าสุดของบริษัท อุตสาหกรรม macro กฎหมาย/กฎเกณฑ์ และ filing ให้เป็น driver ทางการเงินที่นักลงทุนควรติดตาม",
+    badge: "ผลกระทบจากเหตุการณ์",
+    badgeTooltip:
+      "Event impact เป็น screen แบบระมัดระวังและมี source link ไม่ใช่การทำนายราคาหุ้น",
+    loading: "กำลังโหลดเหตุการณ์ล่าสุด...",
+    unavailable: "ยังโหลดเหตุการณ์ล่าสุดไม่ได้ในตอนนี้",
+    empty:
+      "ยังไม่มีเหตุการณ์ล่าสุดที่มี source link ใช้การวิเคราะห์ filing ด้านล่างเป็นฐานวิจัยหลัก",
+    whatHappened: "เกิดอะไรขึ้น",
+    eventType: "ประเภทเหตุการณ์",
+    potentialDrivers: "Driver ทางการเงินที่อาจได้รับผลกระทบ",
+    likelyImpact: "ผลกระทบที่น่าจะเป็น",
+    horizon: "กรอบเวลา",
+    watchNext: "สิ่งที่ควรดูใน filing ถัดไป",
+    confidence: "ความมั่นใจ",
+    source: "Source",
+    generated: "สร้างเมื่อ",
+    sourceNote:
+      "Headline ถูกตีความด้วย rule แบบ deterministic และควรตรวจสอบกับ source และ filing ถัดไป นี่ไม่ใช่คำแนะนำให้ซื้อหรือขาย",
+    typeLabels: {
+      "company-specific": "เฉพาะบริษัท",
+      industry: "อุตสาหกรรม",
+      macro: "Macro",
+      "legal-regulatory": "กฎหมาย/กฎเกณฑ์",
+      "filing-related": "เกี่ยวกับ filing",
+    },
+    driverLabels: {
+      revenue: "Revenue",
+      margin: "Margin",
+      "cash-flow": "Cash flow",
+      debt: "Debt",
+      capex: "Capex",
+      "valuation-risk": "Valuation risk",
+    },
+    impactLabels: {
+      positive: "บวก",
+      neutral: "ผสม",
+      negative: "ลบ",
+      unknown: "ยังไม่ชัด",
+    },
+    horizonLabels: {
+      "short-term": "Sentiment ระยะสั้น",
+      "long-term": "ปัจจัยพื้นฐานระยะยาว",
+      both: "ทั้ง sentiment และ fundamentals",
+      uncertain: "ยังไม่ชัด",
+    },
+    confidenceLabels: {
+      High: "สูง",
+      Medium: "ปานกลาง",
+      Low: "ต่ำ",
+    },
+    watchMetrics: {
+      "revenue-growth": "Revenue growth",
+      "gross-margin": "Gross margin",
+      "free-cash-flow": "Free cash flow",
+      "debt-and-liabilities": "Debt และ liabilities/assets",
+      capex: "Capex และ cash flow",
+      "risk-disclosure": "Risk disclosure และคำอธิบายของผู้บริหาร",
+    },
+    investorMeaning: (impact: string, drivers: string, horizon: string) =>
+      `ความหมายสำหรับนักลงทุน: มองเป็นสัญญาณ${impact}ต่อ ${drivers} และอาจกระทบ ${horizon} จึงควรยืนยันผลจริงใน filing ถัดไปก่อนใช้ตัดสินใจ`,
   },
   advisor: {
     badge: "สรุปให้อ่านง่าย",

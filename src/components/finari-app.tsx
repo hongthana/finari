@@ -7,6 +7,7 @@ import {
   Bookmark,
   Building2,
   CheckCircle2,
+  Clock3,
   CircleHelp,
   Database,
   DollarSign,
@@ -16,6 +17,7 @@ import {
   Loader2,
   LockKeyhole,
   Minus,
+  Newspaper,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -64,6 +66,7 @@ import type {
   BusinessDriver,
   ChangeItem,
   CompanyIdentity,
+  CompanyEventImpact,
   CompanySnapshot,
   DataQualityCheck,
   FinancialMetric,
@@ -653,6 +656,192 @@ function AdvisorSummary({
           </div>
         </div>
       </div>
+    </section>
+  );
+}
+
+function EventImpactCard({
+  event,
+  locale,
+  t,
+}: {
+  event: CompanyEventImpact;
+  locale: Locale;
+  t: Dictionary;
+}) {
+  const eventType = recordValue(t.events.typeLabels, event.eventType, event.eventType);
+  const impact = recordValue(t.events.impactLabels, event.impact, event.impact);
+  const horizon = recordValue(t.events.horizonLabels, event.horizon, event.horizon);
+  const confidence = recordValue(
+    t.events.confidenceLabels,
+    event.confidence,
+    event.confidence,
+  );
+  const watchMetric = recordValue(
+    t.events.watchMetrics,
+    event.watchMetric,
+    event.watchMetric,
+  );
+  const driverLabels = event.drivers.map((driver) =>
+    recordValue(t.events.driverLabels, driver, driver),
+  );
+  const publishedAt = new Date(event.publishedAt).toLocaleString(
+    locale === "th" ? "th-TH" : "en-US",
+  );
+
+  return (
+    <article className="min-w-0 rounded-md border border-zinc-200 bg-white p-4">
+      <div className="flex items-start gap-3">
+        <SignalBadge
+          signal={event.impact}
+          label={`${event.title}: ${impact}`}
+          t={t}
+          className="mt-0.5 p-1.5"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
+            {t.events.whatHappened}
+          </p>
+          <h4 className="mt-1 break-words text-sm font-semibold leading-6 text-zinc-950">
+            {event.title}
+          </h4>
+          {event.summary && (
+            <p className="mt-1 break-words text-sm leading-6 text-zinc-600">
+              {event.summary}
+            </p>
+          )}
+
+          <dl className="mt-4 grid gap-3 text-xs text-zinc-600 md:grid-cols-2">
+            <div>
+              <dt className="font-semibold text-zinc-500">{t.events.eventType}</dt>
+              <dd className="mt-1 font-semibold text-zinc-900">{eventType}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-zinc-500">{t.events.likelyImpact}</dt>
+              <dd className="mt-1 font-semibold text-zinc-900">{impact}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-zinc-500">{t.events.horizon}</dt>
+              <dd className="mt-1 font-semibold text-zinc-900">{horizon}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-zinc-500">{t.events.confidence}</dt>
+              <dd className="mt-1 font-semibold text-zinc-900">{confidence}</dd>
+            </div>
+            <div className="md:col-span-2">
+              <dt className="font-semibold text-zinc-500">
+                {t.events.potentialDrivers}
+              </dt>
+              <dd className="mt-2 flex flex-wrap gap-2">
+                {driverLabels.map((driver) => (
+                  <span
+                    key={driver}
+                    className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 font-semibold text-zinc-700"
+                  >
+                    {driver}
+                  </span>
+                ))}
+              </dd>
+            </div>
+            <div className="md:col-span-2">
+              <dt className="font-semibold text-zinc-500">{t.events.watchNext}</dt>
+              <dd className="mt-1 font-semibold text-zinc-900">{watchMetric}</dd>
+            </div>
+          </dl>
+
+          <p className="mt-3 break-words text-sm leading-6 text-zinc-700">
+            {t.events.investorMeaning(impact, driverLabels.join(", "), horizon)}
+          </p>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-zinc-100 pt-3 text-xs font-medium text-zinc-500">
+            <span className="inline-flex items-center gap-1">
+              <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+              {publishedAt}
+            </span>
+            <a
+              href={event.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-w-0 items-center gap-1 font-semibold text-teal-700 hover:text-teal-900"
+            >
+              <span className="truncate">
+                {t.events.source}: {event.sourceName}
+              </span>
+              <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            </a>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function EventImpactPanel({
+  events,
+  state,
+  error,
+  locale,
+  t,
+}: {
+  events: CompanyEventImpact[];
+  state: LoadState;
+  error: string | null;
+  locale: Locale;
+  t: Dictionary;
+}) {
+  return (
+    <section className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <MeaningPill
+            Icon={Newspaper}
+            label={t.events.badge}
+            tooltip={t.events.badgeTooltip}
+            tone="sky"
+          />
+          <h3 className="mt-3 text-base font-semibold text-zinc-950">
+            {t.events.title}
+          </h3>
+          <p className="mt-1 break-words text-sm leading-6 text-zinc-600">
+            {t.events.subtitle}
+          </p>
+        </div>
+      </div>
+
+      {state === "loading" && (
+        <p className="mt-4 rounded-md border border-zinc-200 bg-white p-4 text-sm text-zinc-600">
+          {t.events.loading}
+        </p>
+      )}
+
+      {state === "error" && (
+        <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+          {error || t.events.unavailable}
+        </p>
+      )}
+
+      {state !== "loading" && state !== "error" && events.length === 0 && (
+        <p className="mt-4 rounded-md border border-zinc-200 bg-white p-4 text-sm leading-6 text-zinc-600">
+          {t.events.empty}
+        </p>
+      )}
+
+      {events.length > 0 && (
+        <div className="mt-4 space-y-3">
+          {events.map((event) => (
+            <EventImpactCard
+              key={event.id}
+              event={event}
+              locale={locale}
+              t={t}
+            />
+          ))}
+        </div>
+      )}
+
+      <p className="mt-4 break-words text-xs leading-5 text-zinc-500">
+        {t.events.sourceNote}
+      </p>
     </section>
   );
 }
@@ -2564,6 +2753,9 @@ export function FinariApp({
   const [snapshot, setSnapshot] = useState<CompanySnapshot | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [events, setEvents] = useState<CompanyEventImpact[]>([]);
+  const [eventsState, setEventsState] = useState<LoadState>("idle");
+  const [eventsError, setEventsError] = useState<string | null>(null);
   const [activeTicker, setActiveTicker] = useState(normalizedInitialTicker);
   const [memo, setMemo] = useState<ResearchMemo | null>(null);
   const [memoState, setMemoState] = useState<MemoState>("idle");
@@ -2576,6 +2768,38 @@ export function FinariApp({
   const showSearchResults =
     query.trim().length > 0 && query.trim().toUpperCase() !== activeTicker;
   const visibleResults = showSearchResults ? results : [];
+
+  const loadEvents = useCallback(async (ticker: string) => {
+    const normalized = ticker.trim().toUpperCase();
+    if (!normalized) {
+      return;
+    }
+
+    setEvents([]);
+    setEventsState("loading");
+    setEventsError(null);
+
+    try {
+      const response = await fetch(
+        `/api/company/${encodeURIComponent(normalized)}/events?locale=${locale}`,
+      );
+      const payload = (await response.json()) as {
+        events?: CompanyEventImpact[];
+        error?: string;
+      };
+
+      if (!response.ok || !payload.events) {
+        throw new Error(payload.error || t.events.unavailable);
+      }
+
+      setEvents(payload.events);
+      setEventsState("ready");
+    } catch (error) {
+      setEvents([]);
+      setEventsState("error");
+      setEventsError(error instanceof Error ? error.message : t.events.unavailable);
+    }
+  }, [locale, t.events.unavailable]);
 
   const loadCompany = useCallback(async (ticker: string) => {
     const normalized = ticker.trim().toUpperCase();
@@ -2591,6 +2815,9 @@ export function FinariApp({
     setAdminMemoState("idle");
     setMemoError(null);
     setAdminMemoError(null);
+    setEvents([]);
+    setEventsState("idle");
+    setEventsError(null);
     setLoadState("loading");
     setLoadError(null);
 
@@ -2608,15 +2835,18 @@ export function FinariApp({
       setSnapshot(payload.snapshot);
       setLoadState("ready");
       window.history.replaceState(null, "", `/${locale}?ticker=${normalized}`);
+      void loadEvents(normalized);
     } catch (error) {
       setLoadState("error");
+      setEvents([]);
+      setEventsState("idle");
       setLoadError(
         error instanceof Error
           ? error.message
           : t.errors.loadFacts,
       );
     }
-  }, [locale, t.errors.loadCompany, t.errors.loadFacts]);
+  }, [loadEvents, locale, t.errors.loadCompany, t.errors.loadFacts]);
 
   async function generateMemo() {
     if (!snapshot) {
@@ -2785,6 +3015,13 @@ export function FinariApp({
             <>
               <DecisionScreen snapshot={snapshot} t={t} />
               <AdvisorSummary snapshot={snapshot} t={t} />
+              <EventImpactPanel
+                events={events}
+                state={eventsState}
+                error={eventsError}
+                locale={locale}
+                t={t}
+              />
               <QuarterlyTrendPanel snapshot={snapshot} t={t} />
               <ChangeAnalysisPanel snapshot={snapshot} locale={locale} t={t} />
               <BusinessDriversPanel snapshot={snapshot} t={t} />

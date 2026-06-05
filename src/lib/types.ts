@@ -29,6 +29,40 @@ export interface SourceCitation {
   accessionNumber?: string;
 }
 
+export type CompanyEventType =
+  | "company-specific"
+  | "industry"
+  | "macro"
+  | "legal-regulatory"
+  | "filing-related";
+
+export type EventImpactDriver =
+  | "revenue"
+  | "margin"
+  | "cash-flow"
+  | "debt"
+  | "capex"
+  | "valuation-risk";
+
+export type EventHorizon = "short-term" | "long-term" | "both" | "uncertain";
+export type EventConfidence = "High" | "Medium" | "Low";
+
+export interface CompanyEventImpact {
+  id: string;
+  ticker: string;
+  title: string;
+  summary?: string;
+  url: string;
+  sourceName: string;
+  publishedAt: string;
+  eventType: CompanyEventType;
+  drivers: EventImpactDriver[];
+  impact: TrendSignal;
+  horizon: EventHorizon;
+  watchMetric: string;
+  confidence: EventConfidence;
+}
+
 export interface FinancialPeriod {
   periodType?: PeriodType;
   fiscalYear: number;
