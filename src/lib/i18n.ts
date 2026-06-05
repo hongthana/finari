@@ -94,10 +94,10 @@ const en = {
     fiscalYear: "FY",
   },
   advisor: {
-    badge: "Advisor summary",
-    heading: "What the latest filing says",
+    badge: "Plain-English summary",
+    heading: "What the latest filing means",
     intro:
-      "A financial advisor would separate business quality from stock price.",
+      "Start by checking whether the business is still healthy, then compare that with the stock price.",
     latestPeriod: "the latest annual period",
     latestFacts: (
       name: string,
@@ -106,13 +106,13 @@ const en = {
       freeCashFlow: string,
       fiscalYear: string,
     ) =>
-      `${name} generated ${revenue} of revenue, ${netIncome} of net income, and ${freeCashFlow} of free cash flow in FY ${fiscalYear}.`,
+      `In FY ${fiscalYear}, ${name} reported revenue of ${revenue}, net income of ${netIncome}, and free cash flow (FCF) of ${freeCashFlow}.`,
     and: "and",
     closing:
-      "This is a research starting point, not a buy/sell recommendation; valuation, risk tolerance, and portfolio fit still need separate review.",
-    questionsTitle: "Investor questions",
+      "This summary is a starting point for understanding the business, not a buy/sell recommendation. The stock price, personal risk tolerance, and portfolio fit still need separate review.",
+    questionsTitle: "Questions to ask before investing",
     noComparable: (label: string) =>
-      `${label} did not have a comparable prior-year figure in the normalized filing data`,
+      `${label} did not have a clean prior-year comparison in the normalized filing data`,
     flat: (label: string) => `${label} was roughly flat year over year`,
     changed: (label: string, direction: string, value: string) =>
       `${label} ${direction} ${value} year over year`,
@@ -122,41 +122,41 @@ const en = {
       revenue: "Revenue",
       netIncome: "net income",
     },
-    grossMargin: (value: string) => `gross margin was ${value}`,
+    grossMargin: (value: string) => `Gross margin was ${value}`,
     operatingMargin: (value: string) => `operating margin was ${value}`,
     marginJoiner: " and ",
-    cashNeedsReview: "free-cash-flow conversion needs more review",
+    cashNeedsReview: "Free-cash-flow conversion needs more review",
     cashStrong: (value: string) =>
-      `free-cash-flow conversion was strong at ${value} of revenue`,
+      `Cash conversion was strong at ${value} of revenue`,
     cashPositive: (value: string) =>
-      `free-cash-flow conversion was positive at ${value} of revenue`,
+      `Cash conversion was positive at ${value} of revenue`,
     cashThin: (value: string) =>
-      `free-cash-flow conversion was thin at ${value} of revenue`,
+      `Free cash flow was thin at ${value} of revenue`,
     cashNegative: (value: string) =>
-      `free cash flow was negative at ${value} of revenue`,
+      `Free cash flow was negative at ${value} of revenue`,
     leverageUnavailable:
       "Balance-sheet leverage was not fully available from standard SEC tags.",
-    debtToEquity: (value: string) => `debt/equity was ${value}`,
-    liabilitiesToAssets: (value: string) => `liabilities/assets was ${value}`,
+    debtToEquity: (value: string) => `Debt to equity was ${value}`,
+    liabilitiesToAssets: (value: string) => `liabilities to assets was ${value}`,
     leverageJoiner: " and ",
     leverageElevated:
-      "an advisor would ask how much flexibility the balance sheet provides if demand weakens.",
+      "the next question is whether the balance sheet has enough flexibility if sales or demand weakens.",
     leverageManageable:
       "the balance sheet does not screen as the first concern from these filing metrics.",
     questions: {
-      revenueDecline: "What evidence could reverse the latest revenue decline?",
-      revenueContinue: "Can revenue growth continue without weakening margins?",
+      revenueDecline: "What could help revenue start growing again?",
+      revenueContinue: "Can revenue keep growing without hurting profit margins?",
       netIncomeLower:
-        "Is lower net income temporary, or is profitability structurally softer?",
+        "Is the lower net income temporary, or is the business becoming less profitable?",
       earningsDurable:
-        "Are earnings gains backed by durable operations rather than one-time items?",
+        "Are earnings gains coming from the core business, or from one-time items?",
       marginsDefensible:
-        "How defensible are these operating margins against competition and pricing pressure?",
-      operatingLeverage: "What operating leverage could improve margins from here?",
+        "Can these profit margins hold up if competition or pricing pressure increases?",
+      operatingLeverage: "What could help profit margins improve from here?",
       balanceFlex:
-        "Does the company have enough balance-sheet flexibility for a downturn?",
+        "Does the company have enough cash and balance-sheet flexibility if the economy weakens?",
       priceReflect:
-        "Does the current market price already reflect these fundamentals?",
+        "How much of these fundamentals is already reflected in the current stock price?",
     },
   },
   metrics: {
@@ -228,6 +228,17 @@ const en = {
     title: "Analyst memo",
     subtitle: "Grounded in normalized SEC facts and source links.",
     generate: "Generate memo",
+    publicTitle: "Public filing memo",
+    privateTitle: "My private analysis",
+    publicSubtitle:
+      "Public view uses admin-published analysis when available, otherwise a deterministic filing summary.",
+    privateSubtitle:
+      "Private AI analysis is generated in your Finari workspace and is not public by default.",
+    generatePublic: "View public memo",
+    generatePrivate: "Generate private analysis",
+    signInForPrivate: "Sign in to create private AI analysis",
+    publishPublic: "Publish public memo",
+    adminPublishHint: "Admin control for the canonical public ticker memo.",
     fallbackNotice:
       "Deterministic memo shown because AI is not configured or is unavailable.",
     empty: "Select a company and generate a memo to see the research narrative.",
@@ -299,7 +310,7 @@ const en = {
       "Long-term individual investor",
       "Active retail investor",
       "Student or learner",
-      "Advisor or analyst",
+      "Analyst or financial professional",
     ],
     interests: [
       "Saved research and alerts",
@@ -375,10 +386,10 @@ const th: Dictionary = {
     fiscalYear: "FY",
   },
   advisor: {
-    badge: "สรุปแบบที่ปรึกษาการเงิน",
-    heading: "สิ่งที่ filing ล่าสุดกำลังบอก",
+    badge: "สรุปให้อ่านง่าย",
+    heading: "งบล่าสุดบอกอะไรแบบสั้น ๆ",
     intro:
-      "ที่ปรึกษาการเงินมักแยกคุณภาพธุรกิจออกจากราคาหุ้นก่อนเสมอ",
+      "เริ่มจากดูว่าธุรกิจยังแข็งแรงหรือไม่ แล้วค่อยดูว่าราคาหุ้นแพงหรือถูก",
     latestPeriod: "งวดปีล่าสุด",
     latestFacts: (
       name: string,
@@ -387,11 +398,11 @@ const th: Dictionary = {
       freeCashFlow: string,
       fiscalYear: string,
     ) =>
-      `${name} ทำ revenue ${revenue}, net income ${netIncome}, และ free cash flow ${freeCashFlow} ใน FY ${fiscalYear}`,
+      `ใน FY ${fiscalYear} ${name} มีรายได้ ${revenue}, กำไรสุทธิ ${netIncome}, และเงินสดอิสระ (FCF) ${freeCashFlow}`,
     and: "และ",
     closing:
-      "นี่คือจุดเริ่มต้นของการวิจัย ไม่ใช่คำแนะนำให้ซื้อหรือขาย ยังต้องพิจารณา valuation, ความเสี่ยงที่รับได้ และความเหมาะสมกับพอร์ตแยกต่างหาก",
-    questionsTitle: "คำถามที่นักลงทุนควรถามต่อ",
+      "สรุปนี้ช่วยให้เริ่มเข้าใจธุรกิจ แต่ยังไม่ใช่คำแนะนำให้ซื้อหรือขาย ควรดูราคาหุ้น ความเสี่ยงที่รับได้ และความเหมาะสมกับพอร์ตของตัวเองเพิ่มเติม",
+    questionsTitle: "คำถามที่ควรถามต่อก่อนลงทุน",
     noComparable: (label: string) =>
       `${label} ไม่มีตัวเลขปีก่อนที่เทียบกันได้ในข้อมูล filing ที่ปรับมาตรฐาน`,
     flat: (label: string) => `${label} ทรงตัวใกล้เคียงปีก่อน`,
@@ -400,42 +411,42 @@ const th: Dictionary = {
     increased: "เพิ่มขึ้น",
     declined: "ลดลง",
     labels: {
-      revenue: "Revenue",
-      netIncome: "net income",
+      revenue: "รายได้",
+      netIncome: "กำไรสุทธิ",
     },
-    grossMargin: (value: string) => `gross margin อยู่ที่ ${value}`,
-    operatingMargin: (value: string) => `operating margin อยู่ที่ ${value}`,
+    grossMargin: (value: string) => `อัตรากำไรขั้นต้นอยู่ที่ ${value}`,
+    operatingMargin: (value: string) => `อัตรากำไรจากการดำเนินงานอยู่ที่ ${value}`,
     marginJoiner: " และ ",
-    cashNeedsReview: "ต้องตรวจสอบคุณภาพ free-cash-flow conversion เพิ่มเติม",
+    cashNeedsReview: "ต้องดูต่อว่าบริษัทเปลี่ยนยอดขายเป็นเงินสดได้ดีแค่ไหน",
     cashStrong: (value: string) =>
-      `free-cash-flow conversion แข็งแรง อยู่ที่ ${value} ของ revenue`,
+      `การเปลี่ยนยอดขายเป็นเงินสดอิสระทำได้ดี อยู่ที่ ${value} ของรายได้`,
     cashPositive: (value: string) =>
-      `free-cash-flow conversion เป็นบวก อยู่ที่ ${value} ของ revenue`,
+      `การเปลี่ยนยอดขายเป็นเงินสดอิสระเป็นบวก อยู่ที่ ${value} ของรายได้`,
     cashThin: (value: string) =>
-      `free-cash-flow conversion ค่อนข้างบาง อยู่ที่ ${value} ของ revenue`,
+      `เงินสดอิสระยังค่อนข้างบาง อยู่ที่ ${value} ของรายได้`,
     cashNegative: (value: string) =>
-      `free cash flow ติดลบ คิดเป็น ${value} ของ revenue`,
+      `เงินสดอิสระติดลบ คิดเป็น ${value} ของรายได้`,
     leverageUnavailable:
-      "ข้อมูล leverage ในงบดุลยังไม่ครบจาก standard SEC tags",
-    debtToEquity: (value: string) => `debt/equity อยู่ที่ ${value}`,
+      "ข้อมูลงบดุลเรื่องหนี้ยังไม่ครบจาก standard SEC tags",
+    debtToEquity: (value: string) => `หนี้ต่อส่วนผู้ถือหุ้นอยู่ที่ ${value}`,
     liabilitiesToAssets: (value: string) =>
-      `liabilities/assets อยู่ที่ ${value}`,
+      `หนี้สินต่อสินทรัพย์อยู่ที่ ${value}`,
     leverageJoiner: " และ ",
     leverageElevated:
-      "ที่ปรึกษาจะถามต่อว่างบดุลมีความยืดหยุ่นพอหรือไม่ หาก demand อ่อนตัว",
+      "จุดที่ควรถามต่อคือบริษัทมีงบดุลยืดหยุ่นพอหรือไม่ หากยอดขายหรือความต้องการอ่อนตัว",
     leverageManageable:
       "จากตัวเลข filing ชุดนี้ งบดุลยังไม่ใช่ความกังวลแรกที่เด่นที่สุด",
     questions: {
-      revenueDecline: "มีหลักฐานอะไรที่จะทำให้ revenue กลับมาฟื้นจากการลดลงล่าสุด?",
-      revenueContinue: "Revenue จะโตต่อได้หรือไม่โดยไม่กดดัน margin?",
+      revenueDecline: "อะไรจะช่วยให้รายได้กลับมาเติบโตอีกครั้ง?",
+      revenueContinue: "รายได้จะโตต่อได้หรือไม่โดยไม่กดดันกำไร?",
       netIncomeLower:
-        "net income ที่ลดลงเป็นเรื่องชั่วคราว หรือ profitability อ่อนลงเชิงโครงสร้าง?",
+        "กำไรสุทธิที่ลดลงเป็นเรื่องชั่วคราว หรือธุรกิจเริ่มทำกำไรยากขึ้น?",
       earningsDurable:
-        "กำไรที่ดีขึ้นมาจากธุรกิจหลักที่ยั่งยืน หรือเกิดจากรายการครั้งเดียว?",
+        "กำไรที่ดีขึ้นมาจากธุรกิจหลักที่ยั่งยืน หรือเกิดจากรายการพิเศษครั้งเดียว?",
       marginsDefensible:
-        "operating margin ระดับนี้ป้องกันได้แค่ไหนเมื่อเจอการแข่งขันและแรงกดดันด้านราคา?",
-      operatingLeverage: "มี operating leverage อะไรที่จะช่วยให้ margin ดีขึ้นจากนี้?",
-      balanceFlex: "บริษัทมีความยืดหยุ่นในงบดุลพอสำหรับภาวะถดถอยหรือไม่?",
+        "อัตรากำไรระดับนี้รักษาไว้ได้แค่ไหน หากการแข่งขันหรือแรงกดดันด้านราคาเพิ่มขึ้น?",
+      operatingLeverage: "มีอะไรที่จะช่วยให้อัตรากำไรดีขึ้นจากนี้?",
+      balanceFlex: "บริษัทมีเงินสดและงบดุลยืดหยุ่นพอหรือไม่ ถ้าเศรษฐกิจแย่ลง?",
       priceReflect: "ราคาหุ้นปัจจุบันสะท้อนพื้นฐานเหล่านี้ไปแล้วมากแค่ไหน?",
     },
   },
@@ -508,6 +519,17 @@ const th: Dictionary = {
     title: "Analyst memo",
     subtitle: "อ้างอิง normalized SEC facts และ source links",
     generate: "สร้าง memo",
+    publicTitle: "Public filing memo",
+    privateTitle: "บทวิเคราะห์ส่วนตัวของฉัน",
+    publicSubtitle:
+      "หน้าสาธารณะจะแสดงบทวิเคราะห์ที่ admin เผยแพร่ไว้ ถ้ายังไม่มีจะแสดงสรุปจาก filing แบบ deterministic",
+    privateSubtitle:
+      "บทวิเคราะห์ด้วย AI จะอยู่ใน Finari workspace ของคุณ และไม่เป็นสาธารณะโดยค่าเริ่มต้น",
+    generatePublic: "ดู public memo",
+    generatePrivate: "สร้างบทวิเคราะห์ส่วนตัว",
+    signInForPrivate: "เข้าสู่ระบบเพื่อสร้างบทวิเคราะห์ AI ส่วนตัว",
+    publishPublic: "เผยแพร่ public memo",
+    adminPublishHint: "ปุ่มสำหรับ admin เพื่อสร้าง memo สาธารณะประจำ ticker",
     fallbackNotice:
       "แสดง deterministic memo เพราะยังไม่ได้ตั้งค่า AI หรือ AI ใช้งานไม่ได้ชั่วคราว",
     empty: "เลือกบริษัทและสร้าง memo เพื่อดู narrative ของงานวิจัย",
@@ -579,7 +601,7 @@ const th: Dictionary = {
       "นักลงทุนระยะยาวรายบุคคล",
       "นักลงทุนรายย่อยที่ลงทุนสม่ำเสมอ",
       "นักเรียนหรือนักศึกษาที่กำลังเรียนรู้",
-      "ที่ปรึกษาหรือนักวิเคราะห์",
+      "นักวิเคราะห์หรือผู้เชี่ยวชาญการเงิน",
     ],
     interests: [
       "Saved research และ alerts",

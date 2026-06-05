@@ -27,9 +27,10 @@ EMAIL_FROM="Finari <research@example.com>"
 RESEND_API_KEY=""
 OPENAI_API_KEY=""
 OPENAI_MODEL="gpt-4.1-mini"
+ADMIN_EMAILS="admin@example.com"
 ```
 
-`OPENAI_API_KEY` is optional. Without it, Finari returns a deterministic filing-backed memo fallback.
+`OPENAI_API_KEY` is optional. Without it, Finari returns a deterministic filing-backed memo fallback. Set `ADMIN_EMAILS` to a comma-separated list of Finari login emails that can publish canonical public memos.
 `RESEND_API_KEY` is required for production magic-link email delivery.
 
 ## Development

@@ -2,7 +2,10 @@ import { jsonError } from "@/lib/api";
 import { cacheKey, getJsonCache, setJsonCache, withRedisLock } from "@/lib/cache";
 import { normalizeCompanySnapshot } from "@/lib/financial-analysis";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n";
-import { generateResearchMemo } from "@/lib/memo";
+import {
+  generateFallbackResearchMemo,
+  generateResearchMemoWithUsage,
+} from "@/lib/memo";
 import {
   findCompanyByTicker,
   getCompanyFacts,
@@ -12,6 +15,8 @@ import {
 import {
   getFreshStoredSnapshot,
   getStoredMemo,
+  recordAiUsageEvent,
+  computeMemoPromptHash,
   persistCompanyIdentities,
   persistMemo,
   persistSnapshot,
@@ -97,7 +102,7 @@ export async function getResearchMemoForTicker(
   snapshotId: string;
 }> {
   const snapshot = await getStoredSnapshotForTicker(ticker);
-  const existing = await getStoredMemo(snapshot, locale);
+  const existing = await getStoredMemo(snapshot, locale, { visibility: "public" });
   if (existing) {
     return {
       memo: existing.memo,
@@ -106,8 +111,105 @@ export async function getResearchMemoForTicker(
     };
   }
 
-  const memo = await generateResearchMemo(snapshot.snapshot, locale);
-  const stored = await persistMemo(snapshot, memo, locale);
+  const memo = generateFallbackResearchMemo(snapshot.snapshot, locale, "public");
+  return {
+    memo,
+    memoId: `fallback:${snapshot.snapshotId}:${locale}`,
+    snapshotId: snapshot.snapshotId,
+  };
+}
+
+export async function getPrivateResearchMemoForTicker(
+  userId: string,
+  ticker: string,
+  locale: Locale = DEFAULT_LOCALE,
+): Promise<{
+  memo: ResearchMemo;
+  memoId: string;
+  snapshotId: string;
+}> {
+  const snapshot = await getStoredSnapshotForTicker(ticker);
+  const existing = await getStoredMemo(snapshot, locale, {
+    visibility: "private",
+    ownerUserId: userId,
+  });
+  if (existing) {
+    return {
+      memo: existing.memo,
+      memoId: existing.memoId,
+      snapshotId: snapshot.snapshotId,
+    };
+  }
+
+  const generated = await generateResearchMemoWithUsage(
+    snapshot.snapshot,
+    locale,
+    "private",
+  );
+  const stored = await persistMemo(snapshot, generated.memo, locale, {
+    visibility: "private",
+    ownerUserId: userId,
+  });
+  await recordAiUsageEvent({
+    userId,
+    companyId: snapshot.companyId,
+    snapshotId: snapshot.snapshotId,
+    memoId: stored.memoId,
+    model: generated.usage.model,
+    requestId: generated.usage.requestId,
+    promptHash: computeMemoPromptHash(snapshot.snapshot, locale),
+    locale,
+    purpose: "private_memo",
+    status: generated.usage.status,
+    inputTokens: generated.usage.inputTokens,
+    outputTokens: generated.usage.outputTokens,
+    totalTokens: generated.usage.totalTokens,
+    errorMessage: generated.usage.errorMessage,
+  });
+
+  return {
+    memo: stored.memo,
+    memoId: stored.memoId,
+    snapshotId: snapshot.snapshotId,
+  };
+}
+
+export async function publishPublicResearchMemoForTicker(
+  adminUserId: string,
+  ticker: string,
+  locale: Locale = DEFAULT_LOCALE,
+): Promise<{
+  memo: ResearchMemo;
+  memoId: string;
+  snapshotId: string;
+}> {
+  const snapshot = await getStoredSnapshotForTicker(ticker);
+  const generated = await generateResearchMemoWithUsage(
+    snapshot.snapshot,
+    locale,
+    "public",
+  );
+  const stored = await persistMemo(snapshot, generated.memo, locale, {
+    visibility: "public",
+    publishedByUserId: adminUserId,
+  });
+  await recordAiUsageEvent({
+    userId: adminUserId,
+    companyId: snapshot.companyId,
+    snapshotId: snapshot.snapshotId,
+    memoId: stored.memoId,
+    model: generated.usage.model,
+    requestId: generated.usage.requestId,
+    promptHash: computeMemoPromptHash(snapshot.snapshot, locale),
+    locale,
+    purpose: "admin_public_memo",
+    status: generated.usage.status,
+    inputTokens: generated.usage.inputTokens,
+    outputTokens: generated.usage.outputTokens,
+    totalTokens: generated.usage.totalTokens,
+    errorMessage: generated.usage.errorMessage,
+  });
+
   return {
     memo: stored.memo,
     memoId: stored.memoId,

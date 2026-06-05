@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { validationError } from "@/lib/api";
 import {
-  getResearchMemoForTicker,
+  getPrivateResearchMemoForTicker,
   getStoredSnapshotForTicker,
 } from "@/lib/research-service";
 import { normalizeLocale } from "@/lib/i18n";
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     const snapshot = await getStoredSnapshotForTicker(body.ticker);
     const locale = normalizeLocale(body.locale);
     const memo = body.includeMemo
-      ? await getResearchMemoForTicker(body.ticker, locale)
+      ? await getPrivateResearchMemoForTicker(userId, body.ticker, locale)
       : null;
     const saved = await saveResearchForUser({
       userId,

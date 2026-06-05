@@ -9,6 +9,20 @@ export function getOpenAiModel(): string {
   return process.env.OPENAI_MODEL?.trim() || "gpt-4.1-mini";
 }
 
+export function getAdminEmails(): string[] {
+  return (process.env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function isAdminEmail(email?: string | null): boolean {
+  if (!email) {
+    return false;
+  }
+  return getAdminEmails().includes(email.trim().toLowerCase());
+}
+
 export function getDatabasePath(): string {
   return process.env.FINARI_DB_PATH?.trim() || ".data/finari.sqlite";
 }

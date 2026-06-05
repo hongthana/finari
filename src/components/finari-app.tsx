@@ -20,7 +20,15 @@ import {
   TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Area,
   AreaChart,
@@ -56,6 +64,11 @@ import type {
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type MemoState = "idle" | "loading" | "ready" | "error";
+type Viewer = {
+  id: string;
+  email?: string | null;
+  isAdmin: boolean;
+};
 
 const STARTER_TICKERS = ["AAPL", "MSFT", "NVDA", "AMZN", "META"];
 const DEFAULT_TICKER = "AAPL";
@@ -578,6 +591,37 @@ function MetricGrid({ metrics, t }: { metrics: FinancialMetric[]; t: Dictionary 
   );
 }
 
+function ChartFrame({ children }: { children: ReactNode }) {
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) {
+      return;
+    }
+
+    function updateReady() {
+      setReady((frameRef.current?.getBoundingClientRect().width ?? 0) > 0);
+    }
+
+    updateReady();
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(updateReady);
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={frameRef} className="mt-5 h-72 min-w-0">
+      {ready ? children : null}
+    </div>
+  );
+}
+
 function FinancialCharts({
   snapshot,
   t,
@@ -588,8 +632,8 @@ function FinancialCharts({
   const chartRows = useMemo(() => makeChartRows(snapshot), [snapshot]);
 
   return (
-    <section className="grid gap-4 xl:grid-cols-2">
-      <article className="rounded-md border border-zinc-200 bg-white p-5">
+    <section className="grid min-w-0 gap-4 xl:grid-cols-2">
+      <article className="min-w-0 rounded-md border border-zinc-200 bg-white p-5">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold text-zinc-950">
@@ -600,8 +644,14 @@ function FinancialCharts({
             </p>
           </div>
         </div>
-        <div className="mt-5 h-72">
-          <ResponsiveContainer width="100%" height="100%">
+        <ChartFrame>
+          <ResponsiveContainer
+            width="100%"
+            height="100%"
+            minWidth={0}
+            minHeight={288}
+            initialDimension={{ width: 1, height: 288 }}
+          >
             <AreaChart data={chartRows} margin={{ left: 0, right: 12 }}>
               <defs>
                 <linearGradient id="revenue" x1="0" x2="0" y1="0" y2="1">
@@ -635,10 +685,10 @@ function FinancialCharts({
               />
             </AreaChart>
           </ResponsiveContainer>
-        </div>
+        </ChartFrame>
       </article>
 
-      <article className="rounded-md border border-zinc-200 bg-white p-5">
+      <article className="min-w-0 rounded-md border border-zinc-200 bg-white p-5">
         <div>
           <h3 className="text-base font-semibold text-zinc-950">
             {t.charts.cashBalance}
@@ -647,8 +697,14 @@ function FinancialCharts({
             {t.charts.cashBalanceSubtitle}
           </p>
         </div>
-        <div className="mt-5 h-72">
-          <ResponsiveContainer width="100%" height="100%">
+        <ChartFrame>
+          <ResponsiveContainer
+            width="100%"
+            height="100%"
+            minWidth={0}
+            minHeight={288}
+            initialDimension={{ width: 1, height: 288 }}
+          >
             <BarChart data={chartRows} margin={{ left: 0, right: 12 }}>
               <CartesianGrid stroke="#e4e4e7" strokeDasharray="4 4" />
               <XAxis dataKey="year" tickLine={false} axisLine={false} />
@@ -663,7 +719,7 @@ function FinancialCharts({
               <Bar dataKey="assets" fill="#71717a" name={t.charts.assets} radius={3} />
             </BarChart>
           </ResponsiveContainer>
-        </div>
+        </ChartFrame>
       </article>
     </section>
   );
@@ -748,17 +804,31 @@ function MemoPanel({
   snapshot,
   memo,
   memoState,
+  adminMemoState,
   error,
+  adminError,
   onGenerate,
+  onPublishPublic,
+  viewer,
   t,
 }: {
   snapshot: CompanySnapshot | null;
   memo: ResearchMemo | null;
   memoState: MemoState;
+  adminMemoState: MemoState;
   error: string | null;
+  adminError: string | null;
   onGenerate: () => void;
+  onPublishPublic: () => void;
+  viewer: Viewer | null;
   t: Dictionary;
 }) {
+  const signedIn = Boolean(viewer);
+  const isAdmin = Boolean(viewer?.isAdmin);
+  const title = signedIn ? t.memo.privateTitle : t.memo.publicTitle;
+  const subtitle = signedIn ? t.memo.privateSubtitle : t.memo.publicSubtitle;
+  const generateLabel = signedIn ? t.memo.generatePrivate : t.memo.generatePublic;
+
   return (
     <section className="rounded-md border border-zinc-200 bg-white p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -768,30 +838,66 @@ function MemoPanel({
             {t.memo.badge}
           </div>
           <h3 className="mt-3 text-base font-semibold text-zinc-950">
-            {t.memo.title}
+            {title}
           </h3>
           <p className="mt-1 text-sm text-zinc-500">
-            {t.memo.subtitle}
+            {subtitle}
           </p>
         </div>
-        <button
-          type="button"
-          disabled={!snapshot || memoState === "loading"}
-          onClick={onGenerate}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
-        >
-          {memoState === "loading" ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <Sparkles className="h-4 w-4" aria-hidden="true" />
+        <div className="flex flex-col gap-2 sm:items-end">
+          <button
+            type="button"
+            disabled={!snapshot || memoState === "loading"}
+            onClick={onGenerate}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
+          >
+            {memoState === "loading" ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+            )}
+            {generateLabel}
+          </button>
+          {!signedIn && (
+            <Link
+              href="/api/auth/signin"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-3 text-xs font-semibold text-zinc-700 transition hover:border-teal-500 hover:text-teal-700"
+            >
+              <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />
+              {t.memo.signInForPrivate}
+            </Link>
           )}
-          {t.memo.generate}
-        </button>
+          {isAdmin && (
+            <button
+              type="button"
+              disabled={!snapshot || adminMemoState === "loading"}
+              onClick={onPublishPublic}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-900 transition hover:border-amber-500 disabled:cursor-not-allowed disabled:border-zinc-200 disabled:bg-zinc-100 disabled:text-zinc-400"
+            >
+              {adminMemoState === "loading" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              {t.memo.publishPublic}
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
         <p className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
           {error}
+        </p>
+      )}
+      {isAdmin && (
+        <p className="mt-3 text-xs leading-5 text-zinc-500">
+          {t.memo.adminPublishHint}
+        </p>
+      )}
+      {adminError && (
+        <p className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+          {adminError}
         </p>
       )}
 
@@ -1144,7 +1250,10 @@ export function FinariApp({
   const [activeTicker, setActiveTicker] = useState(normalizedInitialTicker);
   const [memo, setMemo] = useState<ResearchMemo | null>(null);
   const [memoState, setMemoState] = useState<MemoState>("idle");
+  const [adminMemoState, setAdminMemoState] = useState<MemoState>("idle");
   const [memoError, setMemoError] = useState<string | null>(null);
+  const [adminMemoError, setAdminMemoError] = useState<string | null>(null);
+  const [viewer, setViewer] = useState<Viewer | null>(null);
 
   const loading = loadState === "loading";
   const showSearchResults =
@@ -1162,7 +1271,9 @@ export function FinariApp({
     setResults([]);
     setMemo(null);
     setMemoState("idle");
+    setAdminMemoState("idle");
     setMemoError(null);
+    setAdminMemoError(null);
     setLoadState("loading");
     setLoadError(null);
 
@@ -1199,8 +1310,11 @@ export function FinariApp({
     setMemoError(null);
 
     try {
+      const memoEndpoint = viewer
+        ? `/api/me/company/${encodeURIComponent(snapshot.identity.ticker)}/memo?locale=${locale}`
+        : `/api/company/${encodeURIComponent(snapshot.identity.ticker)}/memo?locale=${locale}`;
       const response = await fetch(
-        `/api/company/${encodeURIComponent(snapshot.identity.ticker)}/memo?locale=${locale}`,
+        memoEndpoint,
         { method: "POST" },
       );
       const payload = (await response.json()) as {
@@ -1223,6 +1337,64 @@ export function FinariApp({
       );
     }
   }
+
+  async function publishPublicMemo() {
+    if (!snapshot || !viewer?.isAdmin) {
+      return;
+    }
+
+    setAdminMemoState("loading");
+    setAdminMemoError(null);
+
+    try {
+      const response = await fetch(
+        `/api/admin/company/${encodeURIComponent(snapshot.identity.ticker)}/memo?locale=${locale}`,
+        { method: "POST" },
+      );
+      const payload = (await response.json()) as {
+        memo?: ResearchMemo;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.memo) {
+        throw new Error(payload.error || t.errors.generateMemo);
+      }
+
+      setMemo(payload.memo);
+      setAdminMemoState("ready");
+    } catch (error) {
+      setAdminMemoState("error");
+      setAdminMemoError(
+        error instanceof Error
+          ? error.message
+          : t.memo.error,
+      );
+    }
+  }
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadViewer() {
+      try {
+        const response = await fetch("/api/me");
+        const payload = (await response.json()) as { user?: Viewer | null };
+        if (mounted) {
+          setViewer(payload.user ?? null);
+        }
+      } catch {
+        if (mounted) {
+          setViewer(null);
+        }
+      }
+    }
+
+    void loadViewer();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -1302,8 +1474,12 @@ export function FinariApp({
                 snapshot={snapshot}
                 memo={memo}
                 memoState={memoState}
+                adminMemoState={adminMemoState}
                 error={memoError}
+                adminError={adminMemoError}
                 onGenerate={() => void generateMemo()}
+                onPublishPublic={() => void publishPublicMemo()}
+                viewer={viewer}
                 t={t}
               />
               <SourcesAndCaveats snapshot={snapshot} locale={locale} t={t} />

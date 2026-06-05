@@ -258,20 +258,67 @@ export const researchMemos = pgTable(
     mode: text("mode").notNull(),
     model: text("model").notNull(),
     promptHash: text("prompt_hash").notNull(),
+    locale: text("locale").default("en").notNull(),
+    ownerUserId: text("owner_user_id").references(() => users.id, { onDelete: "cascade" }),
+    visibility: text("visibility").default("public").notNull(),
     sectionsJson: jsonb("sections_json").$type<Record<string, unknown>[]>().notNull(),
     disclaimer: text("disclaimer").notNull(),
     generatedAt: timestamp("generated_at", { withTimezone: true }).defaultNow().notNull(),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    publishedByUserId: text("published_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
   },
   (table) => ({
-    memoCacheIdx: uniqueIndex("research_memos_snapshot_model_prompt_idx").on(
-      table.snapshotId,
-      table.model,
-      table.promptHash,
-    ),
+    publicMemoCacheIdx: uniqueIndex("research_memos_public_cache_idx")
+      .on(table.snapshotId, table.model, table.promptHash, table.locale)
+      .where(sql`${table.visibility} = 'public'`),
+    privateMemoCacheIdx: uniqueIndex("research_memos_private_cache_idx")
+      .on(
+        table.snapshotId,
+        table.model,
+        table.promptHash,
+        table.locale,
+        table.ownerUserId,
+      )
+      .where(sql`${table.visibility} = 'private' and ${table.ownerUserId} is not null`),
+    ownerIdx: index("research_memos_owner_user_id_idx").on(table.ownerUserId),
     companyGeneratedIdx: index("research_memos_company_generated_idx").on(
       table.companyId,
       table.generatedAt,
     ),
+  }),
+);
+
+export const aiUsageEvents = pgTable(
+  "ai_usage_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    companyId: uuid("company_id").references(() => companies.id, { onDelete: "set null" }),
+    snapshotId: uuid("snapshot_id").references(() => researchSnapshots.id, {
+      onDelete: "set null",
+    }),
+    memoId: uuid("memo_id").references(() => researchMemos.id, { onDelete: "set null" }),
+    model: text("model").notNull(),
+    requestId: text("request_id"),
+    promptHash: text("prompt_hash").notNull(),
+    locale: text("locale").notNull(),
+    purpose: text("purpose").notNull(),
+    status: text("status").notNull(),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    totalTokens: integer("total_tokens"),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userCreatedIdx: index("ai_usage_events_user_created_idx").on(table.userId, table.createdAt),
+    companyCreatedIdx: index("ai_usage_events_company_created_idx").on(
+      table.companyId,
+      table.createdAt,
+    ),
+    memoIdx: index("ai_usage_events_memo_id_idx").on(table.memoId),
   }),
 );
 

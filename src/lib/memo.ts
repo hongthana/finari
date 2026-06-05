@@ -14,6 +14,21 @@ import type {
   TrendSignal,
 } from "@/lib/types";
 
+export type AiGenerationUsage = {
+  model: string;
+  status: "success" | "fallback";
+  requestId?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  errorMessage?: string;
+};
+
+export type GeneratedResearchMemo = {
+  memo: ResearchMemo;
+  usage: AiGenerationUsage;
+};
+
 function sentenceForSignal(signal: TrendSignal, locale: Locale): string {
   const t = getDictionary(locale);
 
@@ -220,10 +235,38 @@ function extractOutputText(responseJson: unknown): string | null {
   return null;
 }
 
+function numberField(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function extractTokenUsage(responseJson: unknown) {
+  if (!responseJson || typeof responseJson !== "object") {
+    return {};
+  }
+
+  const usage = (responseJson as { usage?: unknown }).usage;
+  if (!usage || typeof usage !== "object") {
+    return {};
+  }
+
+  const inputTokens = numberField((usage as { input_tokens?: unknown }).input_tokens);
+  const outputTokens = numberField((usage as { output_tokens?: unknown }).output_tokens);
+  const totalTokens =
+    numberField((usage as { total_tokens?: unknown }).total_tokens) ??
+    (inputTokens !== undefined && outputTokens !== undefined
+      ? inputTokens + outputTokens
+      : undefined);
+
+  return { inputTokens, outputTokens, totalTokens };
+}
+
 async function generateAiSections(
   snapshot: CompanySnapshot,
   locale: Locale,
-): Promise<MemoSection[]> {
+): Promise<{
+  sections: MemoSection[];
+  usage: Omit<AiGenerationUsage, "model" | "status" | "errorMessage">;
+}> {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
 
   if (!apiKey) {
@@ -292,33 +335,75 @@ async function generateAiSections(
     throw new Error("OpenAI memo response did not match expected sections");
   }
 
-  return sections;
+  return {
+    sections,
+    usage: {
+      requestId: response.headers.get("x-request-id") ?? undefined,
+      ...extractTokenUsage(json),
+    },
+  };
+}
+
+export function generateFallbackResearchMemo(
+  snapshot: CompanySnapshot,
+  locale: Locale = DEFAULT_LOCALE,
+  visibility: "public" | "private" = "public",
+): ResearchMemo {
+  const t = getDictionary(locale);
+
+  return {
+    company: snapshot.identity,
+    generatedAt: new Date().toISOString(),
+    mode: "fallback",
+    visibility,
+    disclaimer: t.memo.disclaimer,
+    sections: fallbackSections(snapshot, locale),
+    citations: snapshot.citations,
+  };
+}
+
+export async function generateResearchMemoWithUsage(
+  snapshot: CompanySnapshot,
+  locale: Locale = DEFAULT_LOCALE,
+  visibility: "public" | "private" = "private",
+): Promise<GeneratedResearchMemo> {
+  const t = getDictionary(locale);
+  const model = getOpenAiModel();
+
+  try {
+    const result = await generateAiSections(snapshot, locale);
+    return {
+      memo: {
+        company: snapshot.identity,
+        generatedAt: new Date().toISOString(),
+        mode: "ai",
+        visibility,
+        disclaimer: t.memo.disclaimer,
+        sections: result.sections,
+        citations: snapshot.citations,
+      },
+      usage: {
+        model,
+        status: "success",
+        ...result.usage,
+      },
+    };
+  } catch (error) {
+    return {
+      memo: generateFallbackResearchMemo(snapshot, locale, visibility),
+      usage: {
+        model,
+        status: "fallback",
+        errorMessage:
+          error instanceof Error ? error.message : "OpenAI memo request failed",
+      },
+    };
+  }
 }
 
 export async function generateResearchMemo(
   snapshot: CompanySnapshot,
   locale: Locale = DEFAULT_LOCALE,
 ): Promise<ResearchMemo> {
-  const t = getDictionary(locale);
-
-  try {
-    const sections = await generateAiSections(snapshot, locale);
-    return {
-      company: snapshot.identity,
-      generatedAt: new Date().toISOString(),
-      mode: "ai",
-      disclaimer: t.memo.disclaimer,
-      sections,
-      citations: snapshot.citations,
-    };
-  } catch {
-    return {
-      company: snapshot.identity,
-      generatedAt: new Date().toISOString(),
-      mode: "fallback",
-      disclaimer: t.memo.disclaimer,
-      sections: fallbackSections(snapshot, locale),
-      citations: snapshot.citations,
-    };
-  }
+  return (await generateResearchMemoWithUsage(snapshot, locale, "public")).memo;
 }

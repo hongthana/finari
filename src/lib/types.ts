@@ -79,6 +79,7 @@ export interface ResearchMemo {
   company: CompanyIdentity;
   generatedAt: string;
   mode: "ai" | "fallback";
+  visibility?: "public" | "private";
   disclaimer: string;
   sections: MemoSection[];
   citations: SourceCitation[];

@@ -8,6 +8,13 @@
       "when": 1780545913314,
       "tag": "0000_lowly_puck",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1780623754013,
+      "tag": "0001_wild_zaran",
+      "breakpoints": true
     }
   ]
 }

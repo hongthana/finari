@@ -1,8 +1,9 @@
 import crypto from "node:crypto";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 import { getDb, hasDatabase } from "@/db/client";
 import {
+  aiUsageEvents,
   companies,
   companyTickers,
   filings,
@@ -41,6 +42,31 @@ type StoredMemo = {
   memo: ResearchMemo;
 };
 
+export type MemoVisibility = "public" | "private";
+
+type MemoScopeInput = {
+  visibility?: MemoVisibility;
+  ownerUserId?: string | null;
+  publishedByUserId?: string | null;
+};
+
+export type AiUsageEventInput = {
+  userId?: string | null;
+  companyId: string;
+  snapshotId: string;
+  memoId?: string | null;
+  model: string;
+  requestId?: string;
+  promptHash: string;
+  locale: Locale;
+  purpose: "private_memo" | "admin_public_memo";
+  status: "success" | "fallback" | "error";
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  errorMessage?: string;
+};
+
 type SaveResearchInput = {
   userId: string;
   snapshot: StoredSnapshot;
@@ -57,6 +83,7 @@ type WatchlistInput = {
 const memoryState = globalThis as typeof globalThis & {
   __finariSnapshots?: Map<string, StoredSnapshot>;
   __finariMemos?: Map<string, StoredMemo>;
+  __finariAiUsageEvents?: Array<Record<string, unknown>>;
   __finariSavedResearch?: Array<Record<string, unknown>>;
   __finariWatchlists?: Array<Record<string, unknown>>;
   __finariWatchlistItems?: Array<Record<string, unknown>>;
@@ -70,6 +97,11 @@ function getSnapshotMemory() {
 function getMemoMemory() {
   memoryState.__finariMemos ??= new Map();
   return memoryState.__finariMemos;
+}
+
+function getAiUsageEventMemory() {
+  memoryState.__finariAiUsageEvents ??= [];
+  return memoryState.__finariAiUsageEvents;
 }
 
 function getSavedResearchMemory() {
@@ -129,6 +161,39 @@ export function computeMemoPromptHash(
     caveats: snapshot.caveats,
     citations: snapshot.citations,
   });
+}
+
+function normalizeMemoScope(scope: MemoScopeInput = {}) {
+  const visibility = scope.visibility ?? "public";
+  const ownerUserId = visibility === "private" ? scope.ownerUserId : null;
+
+  if (visibility === "private" && !ownerUserId) {
+    throw new Error("Private memos require an owner user id");
+  }
+
+  return {
+    visibility,
+    ownerUserId,
+    publishedByUserId:
+      visibility === "public" ? (scope.publishedByUserId ?? null) : null,
+  };
+}
+
+function memoMemoryKey(
+  snapshotId: string,
+  locale: Locale,
+  model: string,
+  promptHash: string,
+  scope: ReturnType<typeof normalizeMemoScope>,
+) {
+  return [
+    snapshotId,
+    locale,
+    model,
+    promptHash,
+    scope.visibility,
+    scope.ownerUserId ?? "public",
+  ].join(":");
 }
 
 export function isSnapshotExpired(snapshot: CompanySnapshot, now = new Date()): boolean {
@@ -450,21 +515,25 @@ export async function persistSnapshot(snapshot: CompanySnapshot): Promise<Stored
 export async function getStoredMemo(
   snapshot: StoredSnapshot,
   locale: Locale = DEFAULT_LOCALE,
+  scopeInput: MemoScopeInput = {},
   model = getOpenAiModel(),
 ): Promise<StoredMemo | null> {
   const promptHash = computeMemoPromptHash(snapshot.snapshot, locale);
+  const scope = normalizeMemoScope(scopeInput);
   if (!hasDatabase()) {
-    return (
-      getMemoMemory().get(`${snapshot.snapshotId}:${locale}:${model}:${promptHash}`) ??
-      null
-    );
+    return getMemoMemory().get(memoMemoryKey(snapshot.snapshotId, locale, model, promptHash, scope)) ?? null;
   }
 
   const db = getDb();
+  const ownerPredicate =
+    scope.visibility === "private"
+      ? eq(researchMemos.ownerUserId, scope.ownerUserId as string)
+      : isNull(researchMemos.ownerUserId);
   const [row] = await db
     .select({
       id: researchMemos.id,
       mode: researchMemos.mode,
+      visibility: researchMemos.visibility,
       disclaimer: researchMemos.disclaimer,
       sectionsJson: researchMemos.sectionsJson,
       generatedAt: researchMemos.generatedAt,
@@ -475,6 +544,9 @@ export async function getStoredMemo(
         eq(researchMemos.snapshotId, snapshot.snapshotId),
         eq(researchMemos.model, model),
         eq(researchMemos.promptHash, promptHash),
+        eq(researchMemos.locale, locale),
+        eq(researchMemos.visibility, scope.visibility),
+        ownerPredicate,
       ),
     )
     .limit(1);
@@ -489,6 +561,7 @@ export async function getStoredMemo(
       company: snapshot.snapshot.identity,
       generatedAt: row.generatedAt.toISOString(),
       mode: row.mode === "ai" ? "ai" : "fallback",
+      visibility: row.visibility === "private" ? "private" : "public",
       disclaimer: row.disclaimer,
       sections: row.sectionsJson as unknown as ResearchMemo["sections"],
       citations: snapshot.snapshot.citations,
@@ -500,43 +573,134 @@ export async function persistMemo(
   snapshot: StoredSnapshot,
   memo: ResearchMemo,
   locale: Locale = DEFAULT_LOCALE,
+  scopeInput: MemoScopeInput = {},
   model = getOpenAiModel(),
 ): Promise<StoredMemo> {
   const promptHash = computeMemoPromptHash(snapshot.snapshot, locale);
+  const scope = normalizeMemoScope(scopeInput);
+  const memoWithVisibility: ResearchMemo = {
+    ...memo,
+    visibility: scope.visibility,
+  };
 
   if (!hasDatabase()) {
     const stored = {
-      memoId: stableHash({ snapshotId: snapshot.snapshotId, locale, model, promptHash }),
-      memo,
+      memoId: stableHash({
+        snapshotId: snapshot.snapshotId,
+        locale,
+        model,
+        promptHash,
+        visibility: scope.visibility,
+        ownerUserId: scope.ownerUserId,
+      }),
+      memo: memoWithVisibility,
     };
-    getMemoMemory().set(`${snapshot.snapshotId}:${locale}:${model}:${promptHash}`, stored);
+    getMemoMemory().set(
+      memoMemoryKey(snapshot.snapshotId, locale, model, promptHash, scope),
+      stored,
+    );
     return stored;
   }
 
   const db = getDb();
+  const values = {
+    snapshotId: snapshot.snapshotId,
+    companyId: snapshot.companyId,
+    mode: memo.mode,
+    model,
+    promptHash,
+    locale,
+    ownerUserId: scope.ownerUserId,
+    visibility: scope.visibility,
+    sectionsJson: memo.sections as unknown as Record<string, unknown>[],
+    disclaimer: memo.disclaimer,
+    generatedAt: new Date(memo.generatedAt),
+    publishedAt:
+      scope.visibility === "public" ? new Date(memo.generatedAt) : null,
+    publishedByUserId: scope.publishedByUserId,
+  };
+  const setValues = {
+    mode: memo.mode,
+    sectionsJson: memo.sections as unknown as Record<string, unknown>[],
+    disclaimer: memo.disclaimer,
+    generatedAt: new Date(memo.generatedAt),
+    publishedAt:
+      scope.visibility === "public" ? new Date(memo.generatedAt) : null,
+    publishedByUserId: scope.publishedByUserId,
+  };
+
+  if (scope.visibility === "private") {
+    const [row] = await db
+      .insert(researchMemos)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [
+          researchMemos.snapshotId,
+          researchMemos.model,
+          researchMemos.promptHash,
+          researchMemos.locale,
+          researchMemos.ownerUserId,
+        ],
+        targetWhere: sql`${researchMemos.visibility} = 'private' and ${researchMemos.ownerUserId} is not null`,
+        set: setValues,
+      })
+      .returning({ id: researchMemos.id });
+
+    return { memoId: row.id, memo: memoWithVisibility };
+  }
+
   const [row] = await db
     .insert(researchMemos)
-    .values({
-      snapshotId: snapshot.snapshotId,
-      companyId: snapshot.companyId,
-      mode: memo.mode,
-      model,
-      promptHash,
-      sectionsJson: memo.sections as unknown as Record<string, unknown>[],
-      disclaimer: memo.disclaimer,
-      generatedAt: new Date(memo.generatedAt),
-    })
+    .values(values)
     .onConflictDoUpdate({
-      target: [researchMemos.snapshotId, researchMemos.model, researchMemos.promptHash],
-      set: {
-        mode: memo.mode,
-        sectionsJson: memo.sections as unknown as Record<string, unknown>[],
-        disclaimer: memo.disclaimer,
-      },
+      target: [
+        researchMemos.snapshotId,
+        researchMemos.model,
+        researchMemos.promptHash,
+        researchMemos.locale,
+      ],
+      targetWhere: sql`${researchMemos.visibility} = 'public'`,
+      set: setValues,
     })
     .returning({ id: researchMemos.id });
 
-  return { memoId: row.id, memo };
+  return { memoId: row.id, memo: memoWithVisibility };
+}
+
+export async function recordAiUsageEvent(input: AiUsageEventInput) {
+  const record = {
+    id: crypto.randomUUID(),
+    userId: input.userId ?? null,
+    companyId: input.companyId,
+    snapshotId: input.snapshotId,
+    memoId: input.memoId ?? null,
+    model: input.model,
+    requestId: input.requestId ?? null,
+    promptHash: input.promptHash,
+    locale: input.locale,
+    purpose: input.purpose,
+    status: input.status,
+    inputTokens: input.inputTokens ?? null,
+    outputTokens: input.outputTokens ?? null,
+    totalTokens: input.totalTokens ?? null,
+    errorMessage: input.errorMessage ?? null,
+    createdAt: new Date(),
+  };
+
+  if (!hasDatabase()) {
+    const memoryRecord = {
+      ...record,
+      createdAt: record.createdAt.toISOString(),
+    };
+    getAiUsageEventMemory().push(memoryRecord);
+    return memoryRecord;
+  }
+
+  const [row] = await getDb()
+    .insert(aiUsageEvents)
+    .values(record)
+    .returning();
+  return row;
 }
 
 export async function ensureUserProfile(userId: string, email?: string | null): Promise<void> {
@@ -727,6 +891,7 @@ export async function addCompanyToWatchlist(input: {
 export function resetResearchStoreForTests(): void {
   memoryState.__finariSnapshots = new Map();
   memoryState.__finariMemos = new Map();
+  memoryState.__finariAiUsageEvents = [];
   memoryState.__finariSavedResearch = [];
   memoryState.__finariWatchlists = [];
   memoryState.__finariWatchlistItems = [];

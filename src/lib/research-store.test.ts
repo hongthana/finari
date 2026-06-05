@@ -8,6 +8,7 @@ import {
   isSnapshotExpired,
   persistMemo,
   persistSnapshot,
+  recordAiUsageEvent,
   resetResearchStoreForTests,
 } from "@/lib/research-store";
 import { fixtureSnapshot } from "@/test/fixtures";
@@ -35,15 +36,19 @@ describe("research store", () => {
   });
 
   it("stores and retrieves a fresh snapshot from the memory fallback", async () => {
-    const stored = await persistSnapshot(fixtureSnapshot);
-    const fetched = await getFreshStoredSnapshot(fixtureSnapshot.identity.ticker);
+    const freshSnapshot = {
+      ...fixtureSnapshot,
+      generatedAt: new Date().toISOString(),
+    };
+    const stored = await persistSnapshot(freshSnapshot);
+    const fetched = await getFreshStoredSnapshot(freshSnapshot.identity.ticker);
 
     expect(fetched).toMatchObject({
       snapshotId: stored.snapshotId,
       companyId: stored.companyId,
       sourceHash: stored.sourceHash,
     });
-    expect(fetched?.snapshot.identity.ticker).toBe(fixtureSnapshot.identity.ticker);
+    expect(fetched?.snapshot.identity.ticker).toBe(freshSnapshot.identity.ticker);
   });
 
   it("does not treat expired snapshots as fresh", () => {
@@ -71,5 +76,63 @@ describe("research store", () => {
 
     expect(fetched).toEqual(stored);
     expect(await getStoredMemo(snapshot, "th")).toBeNull();
+  });
+
+  it("keeps public and private memos in separate cache scopes", async () => {
+    const snapshot = await persistSnapshot(fixtureSnapshot);
+    const memo = {
+      company: fixtureSnapshot.identity,
+      generatedAt: new Date().toISOString(),
+      mode: "fallback" as const,
+      disclaimer: "Educational research only.",
+      sections: [{ title: "Business", body: "Grounded in filings.", signal: "neutral" as const }],
+      citations: fixtureSnapshot.citations,
+    };
+
+    const publicMemo = await persistMemo(snapshot, memo, "en", { visibility: "public" });
+    const privateMemo = await persistMemo(snapshot, memo, "en", {
+      visibility: "private",
+      ownerUserId: "user_1",
+    });
+
+    expect(publicMemo.memo.visibility).toBe("public");
+    expect(privateMemo.memo.visibility).toBe("private");
+    expect(privateMemo.memoId).not.toEqual(publicMemo.memoId);
+    expect(await getStoredMemo(snapshot, "en", { visibility: "public" })).toEqual(publicMemo);
+    expect(
+      await getStoredMemo(snapshot, "en", {
+        visibility: "private",
+        ownerUserId: "user_1",
+      }),
+    ).toEqual(privateMemo);
+    expect(
+      await getStoredMemo(snapshot, "en", {
+        visibility: "private",
+        ownerUserId: "user_2",
+      }),
+    ).toBeNull();
+  });
+
+  it("records AI usage events in the memory fallback", async () => {
+    const snapshot = await persistSnapshot(fixtureSnapshot);
+    const event = await recordAiUsageEvent({
+      userId: "user_1",
+      companyId: snapshot.companyId,
+      snapshotId: snapshot.snapshotId,
+      model: "gpt-4.1-mini",
+      promptHash: computeMemoPromptHash(fixtureSnapshot),
+      locale: "en",
+      purpose: "private_memo",
+      status: "fallback",
+      errorMessage: "OPENAI_API_KEY is not configured",
+    });
+
+    expect(event).toMatchObject({
+      userId: "user_1",
+      companyId: snapshot.companyId,
+      snapshotId: snapshot.snapshotId,
+      status: "fallback",
+      errorMessage: "OPENAI_API_KEY is not configured",
+    });
   });
 });

@@ -1,10 +1,8 @@
-import { getServerSession } from "next-auth";
-
-import { getAuthOptions } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  const session = await getServerSession(getAuthOptions());
-  return Response.json({ user: session?.user ?? null });
+  const user = await getCurrentUser();
+  return Response.json({ user });
 }
