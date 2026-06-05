@@ -38,7 +38,10 @@ describe("FinariApp", () => {
       expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
     });
     expect(screen.getByText("Plain-English summary")).toBeInTheDocument();
-    expect(screen.getByText("What the latest filing means")).toBeInTheDocument();
+    expect(screen.getByText("What the latest filing means for investors")).toBeInTheDocument();
+    expect(screen.getByText("Decision takeaway")).toBeInTheDocument();
+    expect(screen.getByText("Investor questions with filing-backed answers")).toBeInTheDocument();
+    expect(screen.getByText("Are earnings gains durable?")).toBeInTheDocument();
     expect(screen.getByText("Revenue growth")).toBeInTheDocument();
     expect(screen.getByText("Join waitlist")).toBeInTheDocument();
   });
@@ -71,7 +74,9 @@ describe("FinariApp", () => {
       expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
     });
     expect(screen.getByText("สรุปให้อ่านง่าย")).toBeInTheDocument();
-    expect(screen.getByText("งบล่าสุดบอกอะไรแบบสั้น ๆ")).toBeInTheDocument();
+    expect(screen.getByText("งบล่าสุดบอกอะไรสำหรับนักลงทุน")).toBeInTheDocument();
+    expect(screen.getByText("ข้อสรุปเพื่อการตัดสินใจ")).toBeInTheDocument();
+    expect(screen.getByText("คำถามนักลงทุนพร้อมคำตอบจาก filing")).toBeInTheDocument();
     expect(screen.getByText("เข้าร่วม waitlist")).toBeInTheDocument();
   });
 

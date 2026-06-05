@@ -95,9 +95,9 @@ const en = {
   },
   advisor: {
     badge: "Plain-English summary",
-    heading: "What the latest filing means",
+    heading: "What the latest filing means for investors",
     intro:
-      "Start by checking whether the business is still healthy, then compare that with the stock price.",
+      "Use this as a filing-based decision screen: first judge business quality, then decide whether the current stock price gives enough margin of safety.",
     latestPeriod: "the latest annual period",
     latestFacts: (
       name: string,
@@ -109,8 +109,14 @@ const en = {
       `In FY ${fiscalYear}, ${name} reported revenue of ${revenue}, net income of ${netIncome}, and free cash flow (FCF) of ${freeCashFlow}.`,
     and: "and",
     closing:
-      "This summary is a starting point for understanding the business, not a buy/sell recommendation. The stock price, personal risk tolerance, and portfolio fit still need separate review.",
-    questionsTitle: "Questions to ask before investing",
+      "This is educational research, not a buy/sell recommendation. A final decision still needs valuation, risk tolerance, time horizon, and portfolio fit.",
+    questionsTitle: "Investor questions with filing-backed answers",
+    readLabels: {
+      trend: "Growth and earnings",
+      quality: "Profit quality",
+      balance: "Balance-sheet risk",
+      decision: "Decision takeaway",
+    },
     noComparable: (label: string) =>
       `${label} did not have a clean prior-year comparison in the normalized filing data`,
     flat: (label: string) => `${label} was roughly flat year over year`,
@@ -122,6 +128,26 @@ const en = {
       revenue: "Revenue",
       netIncome: "net income",
     },
+    profitabilityUnavailable:
+      "Profit-quality metrics were not available in the standardized filing tags, so this part needs manual review in the filing.",
+    profitabilityStrong: (
+      grossMargin: string,
+      operatingMargin: string,
+      fcfMargin: string,
+    ) =>
+      `The filing still shows strong business quality: gross margin was ${grossMargin}, operating margin was ${operatingMargin}, and FCF margin was ${fcfMargin}. In plain English, the company kept a meaningful share of sales as operating profit and cash.`,
+    profitabilityMixed: (
+      grossMargin: string,
+      operatingMargin: string,
+      fcfMargin: string,
+    ) =>
+      `Profit quality is mixed: gross margin was ${grossMargin}, operating margin was ${operatingMargin}, and FCF margin was ${fcfMargin}. This is usable, but the next step is checking whether margins are stable or drifting lower.`,
+    profitabilityWeak: (
+      grossMargin: string,
+      operatingMargin: string,
+      fcfMargin: string,
+    ) =>
+      `Profit quality needs caution: gross margin was ${grossMargin}, operating margin was ${operatingMargin}, and FCF margin was ${fcfMargin}. Weak or negative cash conversion can make reported earnings less useful for investors.`,
     grossMargin: (value: string) => `Gross margin was ${value}`,
     operatingMargin: (value: string) => `operating margin was ${value}`,
     marginJoiner: " and ",
@@ -143,20 +169,52 @@ const en = {
       "the next question is whether the balance sheet has enough flexibility if sales or demand weakens.",
     leverageManageable:
       "the balance sheet does not screen as the first concern from these filing metrics.",
+    takeaways: {
+      qualityGrowthBalance:
+        "The filing supports a quality-business-with-growth-pressure read. For a retail investor, the key decision is whether revenue can stabilize before high liabilities or leverage reduce flexibility.",
+      qualityGrowth:
+        "The filing supports a quality-business-with-growth-pressure read. The business still converts sales into profit and cash, but the decision depends on evidence that revenue can stabilize.",
+      growthPressure:
+        "The filing says growth is the main issue. Until revenue stabilizes, the investment case depends more on downside protection, valuation, and whether margins can hold.",
+      qualityBalance:
+        "The filing shows good operating quality, but balance-sheet risk should affect position size and required return. Strong margins help, but they do not remove leverage risk.",
+      qualitySupport:
+        "The filing gives a constructive quality signal. The next decision step is valuation: how much of this quality is already priced into the stock?",
+      needsMoreEvidence:
+        "The filing does not yet give a clear high-conviction signal. Treat this as a watchlist candidate until growth, margin, cash-flow, and balance-sheet evidence improve.",
+    },
     questions: {
-      revenueDecline: "What could help revenue start growing again?",
-      revenueContinue: "Can revenue keep growing without hurting profit margins?",
+      revenueDecline: "Is the revenue decline a warning sign?",
+      revenueContinue: "Can revenue keep growing without hurting margins?",
       netIncomeLower:
-        "Is the lower net income temporary, or is the business becoming less profitable?",
+        "Is lower net income temporary or a profitability problem?",
       earningsDurable:
-        "Are earnings gains coming from the core business, or from one-time items?",
+        "Are earnings gains durable?",
       marginsDefensible:
-        "Can these profit margins hold up if competition or pricing pressure increases?",
-      operatingLeverage: "What could help profit margins improve from here?",
+        "Are these margins defensible?",
+      operatingLeverage: "What would improve profit margins?",
       balanceFlex:
-        "Does the company have enough cash and balance-sheet flexibility if the economy weakens?",
+        "Does the balance sheet have enough flexibility?",
       priceReflect:
-        "How much of these fundamentals is already reflected in the current stock price?",
+        "What would change the investment view?",
+    },
+    answers: {
+      revenueDecline: (value: string) =>
+        `Yes, it is the main item to watch. A ${value} revenue decline can be manageable when margins and FCF are strong, but conviction improves only if the next filings show demand stabilizing or returning to growth.`,
+      revenueContinue: (value: string) =>
+        `The filing shows revenue growth of ${value}. The quality of that growth depends on whether operating margin and FCF margin stay stable instead of being sacrificed for sales growth.`,
+      netIncomeLower: (value: string) =>
+        `The filing shows net income down ${value}. If the decline is close to the revenue decline, it may reflect softer demand; if it is worse than revenue, margin pressure deserves more attention.`,
+      earningsDurable: (value: string) =>
+        `The filing shows net income growth of ${value}. The next check is whether operating income and FCF moved in the same direction, because cash-backed earnings are more decision-useful than accounting profit alone.`,
+      marginsDefensible: (operatingMargin: string, fcfMargin: string) =>
+        `They screen as strong for now: operating margin was ${operatingMargin} and FCF margin was ${fcfMargin}. The risk is whether competition, pricing pressure, or cost inflation causes those margins to compress.`,
+      operatingLeverage: (operatingMargin: string) =>
+        `Operating margin was ${operatingMargin}. Improvement would usually require better pricing, lower costs, higher utilization, or a revenue mix shift toward more profitable products.`,
+      balanceFlex: (liabilitiesToAssets: string, debtToEquity: string) =>
+        `This needs caution. Liabilities were ${liabilitiesToAssets} of assets and debt/equity was ${debtToEquity}. Strong FCF can offset some risk, but high obligations reduce room for error if profits weaken.`,
+      priceReflect:
+        "The filing alone cannot answer valuation. A useful decision rule is to require a larger margin of safety when growth is slowing, leverage is elevated, or margins look vulnerable.",
     },
   },
   metrics: {
@@ -387,9 +445,9 @@ const th: Dictionary = {
   },
   advisor: {
     badge: "สรุปให้อ่านง่าย",
-    heading: "งบล่าสุดบอกอะไรแบบสั้น ๆ",
+    heading: "งบล่าสุดบอกอะไรสำหรับนักลงทุน",
     intro:
-      "เริ่มจากดูว่าธุรกิจยังแข็งแรงหรือไม่ แล้วค่อยดูว่าราคาหุ้นแพงหรือถูก",
+      "ใช้ส่วนนี้เป็นตัวกรองจาก filing: ดูคุณภาพธุรกิจก่อน แล้วค่อยตัดสินใจว่าราคาหุ้นมี margin of safety พอหรือไม่",
     latestPeriod: "งวดปีล่าสุด",
     latestFacts: (
       name: string,
@@ -401,8 +459,14 @@ const th: Dictionary = {
       `ใน FY ${fiscalYear} ${name} มีรายได้ ${revenue}, กำไรสุทธิ ${netIncome}, และเงินสดอิสระ (FCF) ${freeCashFlow}`,
     and: "และ",
     closing:
-      "สรุปนี้ช่วยให้เริ่มเข้าใจธุรกิจ แต่ยังไม่ใช่คำแนะนำให้ซื้อหรือขาย ควรดูราคาหุ้น ความเสี่ยงที่รับได้ และความเหมาะสมกับพอร์ตของตัวเองเพิ่มเติม",
-    questionsTitle: "คำถามที่ควรถามต่อก่อนลงทุน",
+      "นี่คือข้อมูลวิจัยเพื่อการศึกษา ไม่ใช่คำแนะนำให้ซื้อหรือขาย การตัดสินใจจริงยังต้องดู valuation, ความเสี่ยงที่รับได้, ระยะเวลาลงทุน, และความเหมาะสมกับพอร์ต",
+    questionsTitle: "คำถามนักลงทุนพร้อมคำตอบจาก filing",
+    readLabels: {
+      trend: "การเติบโตและกำไร",
+      quality: "คุณภาพกำไร",
+      balance: "ความเสี่ยงงบดุล",
+      decision: "ข้อสรุปเพื่อการตัดสินใจ",
+    },
     noComparable: (label: string) =>
       `${label} ไม่มีตัวเลขปีก่อนที่เทียบกันได้ในข้อมูล filing ที่ปรับมาตรฐาน`,
     flat: (label: string) => `${label} ทรงตัวใกล้เคียงปีก่อน`,
@@ -414,6 +478,26 @@ const th: Dictionary = {
       revenue: "รายได้",
       netIncome: "กำไรสุทธิ",
     },
+    profitabilityUnavailable:
+      "ยังไม่มีตัวชี้วัดคุณภาพกำไรครบจาก standardized filing tags จึงควรเปิดดูรายละเอียดใน filing เพิ่มเติม",
+    profitabilityStrong: (
+      grossMargin: string,
+      operatingMargin: string,
+      fcfMargin: string,
+    ) =>
+      `Filing ยังสะท้อนคุณภาพธุรกิจที่แข็งแรง: gross margin ${grossMargin}, operating margin ${operatingMargin}, และ FCF margin ${fcfMargin}. แปลให้ง่ายคือบริษัทเก็บยอดขายเป็นกำไรและเงินสดได้ในสัดส่วนที่มีนัยสำคัญ`,
+    profitabilityMixed: (
+      grossMargin: string,
+      operatingMargin: string,
+      fcfMargin: string,
+    ) =>
+      `คุณภาพกำไรอยู่ในระดับผสมกัน: gross margin ${grossMargin}, operating margin ${operatingMargin}, และ FCF margin ${fcfMargin}. ใช้เป็นข้อมูลเบื้องต้นได้ แต่ต้องดูต่อว่า margin ทรงตัวหรือเริ่มอ่อนลง`,
+    profitabilityWeak: (
+      grossMargin: string,
+      operatingMargin: string,
+      fcfMargin: string,
+    ) =>
+      `คุณภาพกำไรต้องระวัง: gross margin ${grossMargin}, operating margin ${operatingMargin}, และ FCF margin ${fcfMargin}. ถ้า cash conversion อ่อนหรือเป็นลบ กำไรทางบัญชีจะมีประโยชน์ต่อการตัดสินใจน้อยลง`,
     grossMargin: (value: string) => `อัตรากำไรขั้นต้นอยู่ที่ ${value}`,
     operatingMargin: (value: string) => `อัตรากำไรจากการดำเนินงานอยู่ที่ ${value}`,
     marginJoiner: " และ ",
@@ -436,18 +520,50 @@ const th: Dictionary = {
       "จุดที่ควรถามต่อคือบริษัทมีงบดุลยืดหยุ่นพอหรือไม่ หากยอดขายหรือความต้องการอ่อนตัว",
     leverageManageable:
       "จากตัวเลข filing ชุดนี้ งบดุลยังไม่ใช่ความกังวลแรกที่เด่นที่สุด",
+    takeaways: {
+      qualityGrowthBalance:
+        "Filing ชี้ไปทางธุรกิจคุณภาพดีแต่มีแรงกดดันด้านการเติบโต สำหรับนักลงทุนรายย่อย ประเด็นสำคัญคือรายได้จะกลับมาทรงตัวได้หรือไม่ ก่อนที่หนี้สินหรือ leverage สูงจะลดความยืดหยุ่น",
+      qualityGrowth:
+        "Filing ชี้ไปทางธุรกิจคุณภาพดีแต่มีแรงกดดันด้านการเติบโต ธุรกิจยังเปลี่ยนยอดขายเป็นกำไรและเงินสดได้ดี แต่การตัดสินใจขึ้นกับหลักฐานว่ารายได้จะกลับมาทรงตัวได้หรือไม่",
+      growthPressure:
+        "Filing บอกว่าการเติบโตคือประเด็นหลัก จนกว่ารายได้จะทรงตัว investment case ต้องพึ่ง downside protection, valuation, และความสามารถในการรักษา margin มากขึ้น",
+      qualityBalance:
+        "Filing แสดงคุณภาพการดำเนินงานที่ดี แต่ความเสี่ยงงบดุลควรมีผลต่อขนาดการลงทุนและผลตอบแทนที่ต้องการ Margin ที่แข็งแรงช่วยได้ แต่ไม่ได้ลบความเสี่ยงจาก leverage",
+      qualitySupport:
+        "Filing ให้สัญญาณคุณภาพธุรกิจที่สร้างสรรค์ ขั้นต่อไปคือ valuation: คุณภาพนี้ถูกสะท้อนในราคาหุ้นไปมากแค่ไหนแล้ว",
+      needsMoreEvidence:
+        "Filing ยังไม่ให้สัญญาณที่ชัดพอสำหรับความมั่นใจสูง ควรมองเป็น watchlist candidate จนกว่าหลักฐานด้าน growth, margin, cash flow, และงบดุลจะดีขึ้น",
+    },
     questions: {
-      revenueDecline: "อะไรจะช่วยให้รายได้กลับมาเติบโตอีกครั้ง?",
-      revenueContinue: "รายได้จะโตต่อได้หรือไม่โดยไม่กดดันกำไร?",
+      revenueDecline: "รายได้ที่ลดลงเป็นสัญญาณเตือนหรือไม่?",
+      revenueContinue: "รายได้จะโตต่อได้โดยไม่กดดัน margin หรือไม่?",
       netIncomeLower:
-        "กำไรสุทธิที่ลดลงเป็นเรื่องชั่วคราว หรือธุรกิจเริ่มทำกำไรยากขึ้น?",
+        "กำไรสุทธิที่ลดลงเป็นเรื่องชั่วคราวหรือเป็นปัญหาความสามารถทำกำไร?",
       earningsDurable:
-        "กำไรที่ดีขึ้นมาจากธุรกิจหลักที่ยั่งยืน หรือเกิดจากรายการพิเศษครั้งเดียว?",
+        "กำไรที่ดีขึ้นยั่งยืนแค่ไหน?",
       marginsDefensible:
-        "อัตรากำไรระดับนี้รักษาไว้ได้แค่ไหน หากการแข่งขันหรือแรงกดดันด้านราคาเพิ่มขึ้น?",
-      operatingLeverage: "มีอะไรที่จะช่วยให้อัตรากำไรดีขึ้นจากนี้?",
-      balanceFlex: "บริษัทมีเงินสดและงบดุลยืดหยุ่นพอหรือไม่ ถ้าเศรษฐกิจแย่ลง?",
-      priceReflect: "ราคาหุ้นปัจจุบันสะท้อนพื้นฐานเหล่านี้ไปแล้วมากแค่ไหน?",
+        "Margin ระดับนี้ป้องกันได้แค่ไหน?",
+      operatingLeverage: "อะไรจะช่วยให้ profit margin ดีขึ้น?",
+      balanceFlex: "งบดุลมีความยืดหยุ่นเพียงพอหรือไม่?",
+      priceReflect: "อะไรจะเปลี่ยนมุมมองการลงทุน?",
+    },
+    answers: {
+      revenueDecline: (value: string) =>
+        `ใช่ เป็นประเด็นหลักที่ต้องติดตาม รายได้ลดลง ${value} อาจยังจัดการได้ถ้า margin และ FCF แข็งแรง แต่ความมั่นใจจะเพิ่มขึ้นก็ต่อเมื่อ filing ถัดไปแสดงว่า demand เริ่มทรงตัวหรือกลับมาโต`,
+      revenueContinue: (value: string) =>
+        `Filing แสดง revenue growth ${value}. คุณภาพของการเติบโตขึ้นกับว่า operating margin และ FCF margin ยังทรงตัวหรือไม่ ไม่ใช่โตด้วยการยอมเสียกำไรมากเกินไป`,
+      netIncomeLower: (value: string) =>
+        `Filing แสดงกำไรสุทธิลดลง ${value}. ถ้าลดใกล้เคียงกับรายได้ อาจสะท้อน demand ที่อ่อนลง แต่ถ้าลดมากกว่ารายได้ ต้องให้ความสำคัญกับ margin pressure มากขึ้น`,
+      earningsDurable: (value: string) =>
+        `Filing แสดง net income growth ${value}. จุดที่ต้องดูต่อคือ operating income และ FCF ไปทิศทางเดียวกันหรือไม่ เพราะกำไรที่มีเงินสดรองรับมีประโยชน์ต่อการตัดสินใจมากกว่ากำไรทางบัญชีอย่างเดียว`,
+      marginsDefensible: (operatingMargin: string, fcfMargin: string) =>
+        `ตอนนี้ยังดูแข็งแรง: operating margin ${operatingMargin} และ FCF margin ${fcfMargin}. ความเสี่ยงคือ competition, pricing pressure, หรือต้นทุนที่สูงขึ้นอาจทำให้ margin ลดลง`,
+      operatingLeverage: (operatingMargin: string) =>
+        `Operating margin อยู่ที่ ${operatingMargin}. Margin จะดีขึ้นได้จาก pricing ที่ดีขึ้น, ต้นทุนต่ำลง, utilization สูงขึ้น, หรือ revenue mix ที่ไปทางสินค้าหรือบริการกำไรสูง`,
+      balanceFlex: (liabilitiesToAssets: string, debtToEquity: string) =>
+        `ต้องระวัง หนี้สินอยู่ที่ ${liabilitiesToAssets} ของสินทรัพย์ และ debt/equity อยู่ที่ ${debtToEquity}. FCF ที่แข็งแรงช่วยลดความเสี่ยงบางส่วน แต่ภาระสูงทำให้มี room for error น้อยลงหากกำไรอ่อนตัว`,
+      priceReflect:
+        "Filing อย่างเดียวตอบ valuation ไม่ได้ กฎใช้งานจริงคือควรต้องการ margin of safety มากขึ้นเมื่อ growth ชะลอ, leverage สูง, หรือ margin ดูเปราะบาง",
     },
   },
   metrics: {

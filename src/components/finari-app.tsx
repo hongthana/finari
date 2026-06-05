@@ -134,32 +134,51 @@ function describeChange(label: string, value: number | null, t: Dictionary): str
   return t.advisor.changed(label, direction, formatPercent(Math.abs(value)));
 }
 
+function metricSignal(snapshot: CompanySnapshot, id: string): TrendSignal {
+  return snapshot.metrics.find((metric) => metric.id === id)?.signal ?? "unknown";
+}
+
+function roundedPercentValue(value: number | null): string {
+  return hasNumber(value) ? formatPercent(value) : "n/a";
+}
+
 function qualityRead(snapshot: CompanySnapshot, t: Dictionary): string {
   const grossMargin = metricValue(snapshot, "gross-margin");
   const operatingMargin = metricValue(snapshot, "operating-margin");
   const fcfMargin = metricValue(snapshot, "free-cash-flow-margin");
 
-  const marginParts = [
-    hasNumber(grossMargin) ? t.advisor.grossMargin(formatPercent(grossMargin)) : null,
-    hasNumber(operatingMargin)
-      ? t.advisor.operatingMargin(formatPercent(operatingMargin))
-      : null,
-  ].filter(Boolean);
-
-  let cashRead = t.advisor.cashNeedsReview;
-  if (hasNumber(fcfMargin)) {
-    if (fcfMargin >= 0.15) {
-      cashRead = t.advisor.cashStrong(formatPercent(fcfMargin));
-    } else if (fcfMargin >= 0.05) {
-      cashRead = t.advisor.cashPositive(formatPercent(fcfMargin));
-    } else if (fcfMargin >= 0) {
-      cashRead = t.advisor.cashThin(formatPercent(fcfMargin));
-    } else {
-      cashRead = t.advisor.cashNegative(formatPercent(fcfMargin));
-    }
+  if (!hasNumber(grossMargin) && !hasNumber(operatingMargin) && !hasNumber(fcfMargin)) {
+    return t.advisor.profitabilityUnavailable;
   }
 
-  return `${marginParts.length ? `${marginParts.join(t.advisor.marginJoiner)}; ` : ""}${cashRead}.`;
+  const strongProfit =
+    (hasNumber(operatingMargin) && operatingMargin >= 0.15) ||
+    (hasNumber(fcfMargin) && fcfMargin >= 0.08);
+  const weakProfit =
+    (hasNumber(operatingMargin) && operatingMargin < 0.03) ||
+    (hasNumber(fcfMargin) && fcfMargin < 0);
+
+  if (strongProfit) {
+    return t.advisor.profitabilityStrong(
+      roundedPercentValue(grossMargin),
+      roundedPercentValue(operatingMargin),
+      roundedPercentValue(fcfMargin),
+    );
+  }
+
+  if (weakProfit) {
+    return t.advisor.profitabilityWeak(
+      roundedPercentValue(grossMargin),
+      roundedPercentValue(operatingMargin),
+      roundedPercentValue(fcfMargin),
+    );
+  }
+
+  return t.advisor.profitabilityMixed(
+    roundedPercentValue(grossMargin),
+    roundedPercentValue(operatingMargin),
+    roundedPercentValue(fcfMargin),
+  );
 }
 
 function balanceSheetRead(snapshot: CompanySnapshot, t: Dictionary): string {
@@ -188,30 +207,145 @@ function balanceSheetRead(snapshot: CompanySnapshot, t: Dictionary): string {
   }`;
 }
 
-function advisorQuestions(snapshot: CompanySnapshot, t: Dictionary): string[] {
+function decisionTakeaway(snapshot: CompanySnapshot, t: Dictionary): string {
+  const revenueGrowth = metricValue(snapshot, "revenue-growth");
+  const operatingMargin = metricValue(snapshot, "operating-margin");
+  const fcfMargin = metricValue(snapshot, "free-cash-flow-margin");
+  const liabilitiesToAssets = metricValue(snapshot, "liabilities-to-assets");
+  const debtToEquity = metricValue(snapshot, "debt-to-equity");
+
+  const growthPressure = hasNumber(revenueGrowth) && revenueGrowth < -0.005;
+  const qualitySupport =
+    (hasNumber(operatingMargin) && operatingMargin >= 0.15) ||
+    (hasNumber(fcfMargin) && fcfMargin >= 0.08);
+  const balanceRisk =
+    (hasNumber(liabilitiesToAssets) && liabilitiesToAssets > 0.7) ||
+    (hasNumber(debtToEquity) && debtToEquity > 1);
+
+  if (growthPressure && qualitySupport && balanceRisk) {
+    return t.advisor.takeaways.qualityGrowthBalance;
+  }
+
+  if (growthPressure && qualitySupport) {
+    return t.advisor.takeaways.qualityGrowth;
+  }
+
+  if (growthPressure) {
+    return t.advisor.takeaways.growthPressure;
+  }
+
+  if (qualitySupport && balanceRisk) {
+    return t.advisor.takeaways.qualityBalance;
+  }
+
+  if (qualitySupport) {
+    return t.advisor.takeaways.qualitySupport;
+  }
+
+  return t.advisor.takeaways.needsMoreEvidence;
+}
+
+function advisorReads(snapshot: CompanySnapshot, t: Dictionary) {
+  const latest = snapshot.periods[0];
+  const revenueGrowth = metricValue(snapshot, "revenue-growth");
+  const netIncomeGrowth = metricValue(snapshot, "net-income-growth");
+
+  return [
+    {
+      title: t.advisor.readLabels.trend,
+      body: `${t.advisor.latestFacts(
+        snapshot.identity.name,
+        compactCurrency(latest?.revenue),
+        compactCurrency(latest?.netIncome),
+        compactCurrency(latest?.freeCashFlow),
+        latest?.fiscalYear ? String(latest.fiscalYear) : t.advisor.latestPeriod,
+      )} ${describeChange(t.advisor.labels.revenue, revenueGrowth, t)} ${
+        t.advisor.and
+      } ${describeChange(t.advisor.labels.netIncome, netIncomeGrowth, t)}.`,
+      signal: metricSignal(snapshot, "revenue-growth"),
+    },
+    {
+      title: t.advisor.readLabels.quality,
+      body: qualityRead(snapshot, t),
+      signal: metricSignal(snapshot, "operating-margin"),
+    },
+    {
+      title: t.advisor.readLabels.balance,
+      body: balanceSheetRead(snapshot, t),
+      signal: metricSignal(snapshot, "liabilities-to-assets"),
+    },
+    {
+      title: t.advisor.readLabels.decision,
+      body: decisionTakeaway(snapshot, t),
+      signal: "neutral" as const,
+    },
+  ];
+}
+
+function advisorQuestionAnswers(snapshot: CompanySnapshot, t: Dictionary) {
   const revenueGrowth = metricValue(snapshot, "revenue-growth");
   const netIncomeGrowth = metricValue(snapshot, "net-income-growth");
   const operatingMargin = metricValue(snapshot, "operating-margin");
   const liabilitiesToAssets = metricValue(snapshot, "liabilities-to-assets");
+  const debtToEquity = metricValue(snapshot, "debt-to-equity");
+  const fcfMargin = metricValue(snapshot, "free-cash-flow-margin");
 
-  const questions = [
-    hasNumber(revenueGrowth) && revenueGrowth < -0.005
-      ? t.advisor.questions.revenueDecline
-      : t.advisor.questions.revenueContinue,
-    hasNumber(netIncomeGrowth) && netIncomeGrowth < -0.005
-      ? t.advisor.questions.netIncomeLower
-      : t.advisor.questions.earningsDurable,
-    hasNumber(operatingMargin) && operatingMargin > 0.15
-      ? t.advisor.questions.marginsDefensible
-      : t.advisor.questions.operatingLeverage,
+  return [
+    {
+      question:
+        hasNumber(revenueGrowth) && revenueGrowth < -0.005
+          ? t.advisor.questions.revenueDecline
+          : t.advisor.questions.revenueContinue,
+      answer:
+        hasNumber(revenueGrowth) && revenueGrowth < -0.005
+          ? t.advisor.answers.revenueDecline(formatPercent(Math.abs(revenueGrowth)))
+          : t.advisor.answers.revenueContinue(
+              hasNumber(revenueGrowth) ? formatPercent(revenueGrowth) : "n/a",
+            ),
+      signal: metricSignal(snapshot, "revenue-growth"),
+    },
+    {
+      question:
+        hasNumber(netIncomeGrowth) && netIncomeGrowth < -0.005
+          ? t.advisor.questions.netIncomeLower
+          : t.advisor.questions.earningsDurable,
+      answer:
+        hasNumber(netIncomeGrowth) && netIncomeGrowth < -0.005
+          ? t.advisor.answers.netIncomeLower(formatPercent(Math.abs(netIncomeGrowth)))
+          : t.advisor.answers.earningsDurable(
+              hasNumber(netIncomeGrowth) ? formatPercent(netIncomeGrowth) : "n/a",
+            ),
+      signal: metricSignal(snapshot, "net-income-growth"),
+    },
+    {
+      question:
+        hasNumber(operatingMargin) && operatingMargin > 0.15
+          ? t.advisor.questions.marginsDefensible
+          : t.advisor.questions.operatingLeverage,
+      answer:
+        hasNumber(operatingMargin) && operatingMargin > 0.15
+          ? t.advisor.answers.marginsDefensible(
+              formatPercent(operatingMargin),
+              roundedPercentValue(fcfMargin),
+            )
+          : t.advisor.answers.operatingLeverage(roundedPercentValue(operatingMargin)),
+      signal: metricSignal(snapshot, "operating-margin"),
+    },
+    {
+      question:
+        hasNumber(liabilitiesToAssets) && liabilitiesToAssets > 0.7
+          ? t.advisor.questions.balanceFlex
+          : t.advisor.questions.priceReflect,
+      answer:
+        hasNumber(liabilitiesToAssets) && liabilitiesToAssets > 0.7
+          ? t.advisor.answers.balanceFlex(
+              formatPercent(liabilitiesToAssets),
+              hasNumber(debtToEquity) ? formatMetricValue(debtToEquity, "ratio") : "n/a",
+            )
+          : t.advisor.answers.priceReflect,
+      signal: metricSignal(snapshot, "liabilities-to-assets"),
+    },
   ];
-
-  if (hasNumber(liabilitiesToAssets) && liabilitiesToAssets > 0.7) {
-    questions.push(t.advisor.questions.balanceFlex);
-  }
-
-  questions.push(t.advisor.questions.priceReflect);
-  return questions.slice(0, 4);
 }
 
 function makeChartRows(snapshot: CompanySnapshot | null) {
@@ -237,15 +371,13 @@ function AdvisorSummary({
   snapshot: CompanySnapshot;
   t: Dictionary;
 }) {
-  const latest = snapshot.periods[0];
-  const revenueGrowth = metricValue(snapshot, "revenue-growth");
-  const netIncomeGrowth = metricValue(snapshot, "net-income-growth");
-  const questions = advisorQuestions(snapshot, t);
+  const reads = advisorReads(snapshot, t);
+  const questions = advisorQuestionAnswers(snapshot, t);
 
   return (
     <section className="min-w-0 max-w-full rounded-md border border-zinc-200 bg-white p-4 sm:p-5">
-      <div className="flex min-w-0 max-w-full flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <div className="min-w-0 max-w-full xl:max-w-3xl">
+      <div className="grid min-w-0 max-w-full gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(300px,390px)]">
+        <div className="min-w-0 max-w-full">
           <div className="inline-flex items-center gap-2 rounded-md border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800">
             <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
             {t.advisor.badge}
@@ -254,36 +386,65 @@ function AdvisorSummary({
             {t.advisor.heading}
           </h3>
           <p className="mt-2 break-words text-sm leading-6 text-zinc-700">
-            {t.advisor.intro}{" "}
-            {t.advisor.latestFacts(
-              snapshot.identity.name,
-              compactCurrency(latest?.revenue),
-              compactCurrency(latest?.netIncome),
-              compactCurrency(latest?.freeCashFlow),
-              latest?.fiscalYear ? String(latest.fiscalYear) : t.advisor.latestPeriod,
-            )}{" "}
-            {describeChange(t.advisor.labels.revenue, revenueGrowth, t)}{" "}
-            {t.advisor.and}{" "}
-            {describeChange(t.advisor.labels.netIncome, netIncomeGrowth, t)}.
+            {t.advisor.intro}
           </p>
-          <p className="mt-2 break-words text-sm leading-6 text-zinc-700">
-            {qualityRead(snapshot, t)} {balanceSheetRead(snapshot, t)}{" "}
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {reads.map((read) => (
+              <article
+                key={read.title}
+                className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3"
+              >
+                <div className="flex items-start gap-3">
+                  <span
+                    className={`mt-0.5 inline-flex shrink-0 rounded-md border p-1.5 ${signalClasses(read.signal)}`}
+                  >
+                    {signalIcon(read.signal)}
+                  </span>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-semibold text-zinc-950">
+                      {read.title}
+                    </h4>
+                    <p className="mt-1 break-words text-sm leading-6 text-zinc-700">
+                      {read.body}
+                    </p>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+          <p className="mt-3 break-words text-xs leading-5 text-zinc-500">
             {t.advisor.closing}
           </p>
         </div>
 
-        <div className="min-w-0 max-w-full rounded-md border border-zinc-200 bg-zinc-50 p-4 xl:w-80 xl:shrink-0">
+        <div className="min-w-0 max-w-full rounded-md border border-zinc-200 bg-zinc-50 p-4">
           <h4 className="text-sm font-semibold text-zinc-950">
             {t.advisor.questionsTitle}
           </h4>
-          <ul className="mt-3 space-y-2 text-sm leading-5 text-zinc-700">
-            {questions.map((question) => (
-              <li key={question} className="flex min-w-0 gap-2">
-                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-700" />
-                <span className="min-w-0 break-words">{question}</span>
-              </li>
+          <div className="mt-3 space-y-3">
+            {questions.map((item) => (
+              <article
+                key={item.question}
+                className="min-w-0 rounded-md border border-zinc-200 bg-white p-3"
+              >
+                <div className="flex items-start gap-2">
+                  <span
+                    className={`mt-0.5 inline-flex shrink-0 rounded-md border p-1 ${signalClasses(item.signal)}`}
+                  >
+                    {signalIcon(item.signal)}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-semibold leading-5 text-zinc-950">
+                      {item.question}
+                    </p>
+                    <p className="mt-1 break-words text-sm leading-6 text-zinc-700">
+                      {item.answer}
+                    </p>
+                  </div>
+                </div>
+              </article>
             ))}
-          </ul>
+          </div>
         </div>
       </div>
     </section>
