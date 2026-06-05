@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyEventImpact,
   companySearchTerms,
+  eventRelevanceScore,
   normalizeNewsProviderName,
   parseRssItems,
 } from "@/lib/event-impact";
@@ -24,7 +25,7 @@ describe("event impact analysis", () => {
         </channel>
       </rss>
       `,
-      "AAPL",
+      companySearchTerms(fixtureIdentity),
     );
 
     expect(items).toHaveLength(1);
@@ -77,6 +78,97 @@ describe("event impact analysis", () => {
 
     expect(items).toHaveLength(1);
     expect(items[0].title).toBe("Apple services pricing update could lift margins");
+  });
+
+  it("filters weak related-company mentions from ticker RSS feeds", () => {
+    const terms = companySearchTerms(fixtureIdentity);
+    const items = parseRssItems(
+      `
+      <rss>
+        <channel>
+          <item>
+            <title><![CDATA[Here is what Morgan Stanley says ahead of Apple's AAPL WWDC event]]></title>
+            <link>https://example.com/apple-wwdc</link>
+            <description><![CDATA[The event could affect iPhone demand and services revenue.]]></description>
+            <pubDate>Fri, 05 Jun 2026 12:00:00 GMT</pubDate>
+          </item>
+          <item>
+            <title><![CDATA[Foxconn hits monthly revenue record]]></title>
+            <link>https://example.com/foxconn-record</link>
+            <description><![CDATA[The supplier is Apple's top iPhone assembler.]]></description>
+            <pubDate>Fri, 05 Jun 2026 13:00:00 GMT</pubDate>
+          </item>
+          <item>
+            <title><![CDATA[Intel stock drops after AI partnership with Apple supplier Foxconn]]></title>
+            <link>https://example.com/intel-foxconn</link>
+            <description><![CDATA[The report is primarily about Intel and Foxconn.]]></description>
+            <pubDate>Fri, 05 Jun 2026 13:30:00 GMT</pubDate>
+          </item>
+          <item>
+            <title><![CDATA[Smartphone stocks trade higher before developer events]]></title>
+            <link>https://example.com/smartphone-sector</link>
+            <description><![CDATA[Analysts mention Apple as one of several large hardware companies.]]></description>
+            <pubDate>Fri, 05 Jun 2026 14:00:00 GMT</pubDate>
+          </item>
+          <item>
+            <title><![CDATA[Software firm announces new product]]></title>
+            <link>https://example.com/software-firm</link>
+            <description><![CDATA[No matching company alias appears here.]]></description>
+            <pubDate>Fri, 05 Jun 2026 15:00:00 GMT</pubDate>
+          </item>
+        </channel>
+      </rss>
+      `,
+      terms,
+    );
+
+    expect(items).toHaveLength(1);
+    expect(items[0].title).toContain("Apple's AAPL WWDC");
+    expect(
+      eventRelevanceScore(
+        {
+          title: "Foxconn hits monthly revenue record",
+          summary: "The supplier is Apple's top iPhone assembler.",
+        },
+        terms,
+      ),
+    ).toBeLessThan(4);
+    expect(
+      eventRelevanceScore(
+        {
+          title: "Intel stock drops after AI partnership with Apple supplier Foxconn",
+          summary: "The report is primarily about Intel and Foxconn.",
+        },
+        terms,
+      ),
+    ).toBeLessThan(4);
+  });
+
+  it("keeps ticker-only headlines from provider feeds", () => {
+    const items = parseRssItems(
+      `
+      <rss>
+        <channel>
+          <item>
+            <title><![CDATA[AAPL shares move after services pricing update]]></title>
+            <link>https://example.com/aapl-services</link>
+            <description><![CDATA[Analysts debate demand and margin impact.]]></description>
+            <pubDate>Fri, 05 Jun 2026 12:00:00 GMT</pubDate>
+          </item>
+          <item>
+            <title><![CDATA[Unrelated company announces new product]]></title>
+            <link>https://example.com/unrelated</link>
+            <description><![CDATA[No matching company alias appears here.]]></description>
+            <pubDate>Fri, 05 Jun 2026 13:00:00 GMT</pubDate>
+          </item>
+        </channel>
+      </rss>
+      `,
+      "AAPL",
+    );
+
+    expect(items).toHaveLength(1);
+    expect(items[0].title).toContain("AAPL");
   });
 
   it("classifies product pricing as revenue and margin exposure", () => {

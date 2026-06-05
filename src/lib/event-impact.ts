@@ -47,6 +47,7 @@ const MAX_EVENT_ITEMS = 8;
 const DEFAULT_NEWS_RSS_TEMPLATE =
   "https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US";
 const DETERMINISTIC_EVENT_MODEL = "deterministic";
+const MIN_EVENT_RELEVANCE_SCORE = 4;
 const EVENT_FILING_FORMS = new Set([
   "8-K",
   "8-K/A",
@@ -58,6 +59,14 @@ const EVENT_FILING_FORMS = new Set([
   "S-1",
   "S-1/A",
 ]);
+const RELATED_COMPANY_CONTEXT_TERMS = [
+  "assembler",
+  "competitor",
+  "distributor",
+  "rival",
+  "supplier",
+  "vendor",
+];
 
 export type RawEvent = RawCompanyEvent;
 
@@ -174,9 +183,98 @@ function searchTermsFromInput(tickerOrTerms: string | string[]): string[] {
   return terms.map(normalizeSearchText).filter((term) => term.length >= 2);
 }
 
+function textHasTerm(text: string, term: string): boolean {
+  return ` ${text} `.includes(` ${term} `);
+}
+
+function isTickerSearchTerm(term: string, index: number): boolean {
+  return index === 0 && !term.includes(" ") && /^[A-Z0-9]{1,6}$/.test(term);
+}
+
+function wordsMatchAt(words: string[], termWords: string[], index: number): boolean {
+  return termWords.every((word, offset) => words[index + offset] === word);
+}
+
+function hasRelatedCompanyContext(text: string, terms: string[]) {
+  const words = text.split(/\s+/).filter(Boolean);
+  const relatedTerms = RELATED_COMPANY_CONTEXT_TERMS.map(normalizeSearchText);
+
+  for (const [termIndex, term] of terms.entries()) {
+    if (isTickerSearchTerm(term, termIndex)) {
+      continue;
+    }
+
+    const termWords = term.split(/\s+/).filter(Boolean);
+    if (!termWords.length) {
+      continue;
+    }
+
+    for (let index = 0; index <= words.length - termWords.length; index += 1) {
+      if (!wordsMatchAt(words, termWords, index)) {
+        continue;
+      }
+
+      const contextWindow = words.slice(
+        Math.max(0, index - 2),
+        Math.min(words.length, index + termWords.length + 3),
+      );
+      if (relatedTerms.some((related) => contextWindow.includes(related))) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+export function eventRelevanceScore(
+  event: Pick<RawCompanyEvent, "title" | "summary">,
+  terms: string[],
+) {
+  const titleText = normalizeSearchText(event.title);
+  const summaryText = normalizeSearchText(event.summary ?? "");
+  const combinedText = `${titleText} ${summaryText}`.trim().toLowerCase();
+  let score = 0;
+  let titleMatches = 0;
+  let summaryMatches = 0;
+  let tickerMatch = false;
+
+  terms.forEach((term, index) => {
+    const isTicker = isTickerSearchTerm(term, index);
+    const isPhrase = term.includes(" ");
+    const titleHit = textHasTerm(titleText, term);
+    const summaryHit = textHasTerm(summaryText, term);
+
+    if (titleHit) {
+      titleMatches += 1;
+      score += isTicker ? 6 : isPhrase ? 5 : 4;
+    }
+
+    if (summaryHit) {
+      summaryMatches += 1;
+      score += isTicker ? 4 : isPhrase ? 2 : 1;
+    }
+
+    tickerMatch ||= isTicker && (titleHit || summaryHit);
+  });
+
+  if (!tickerMatch && hasRelatedCompanyContext(`${titleText} ${summaryText}`, terms)) {
+    return Math.min(score, 2);
+  }
+
+  if (titleMatches === 0 && summaryMatches > 0 && includesAny(combinedText, RELATED_COMPANY_CONTEXT_TERMS)) {
+    return Math.min(score, 2);
+  }
+
+  if (titleMatches === 0 && summaryMatches === 1 && !tickerMatch) {
+    return Math.min(score, 2);
+  }
+
+  return score;
+}
+
 function eventMatchesTerms(event: Pick<RawCompanyEvent, "title" | "summary">, terms: string[]) {
-  const searchable = ` ${normalizeSearchText(`${event.title} ${event.summary ?? ""}`)} `;
-  return terms.some((term) => searchable.includes(` ${term} `));
+  return eventRelevanceScore(event, terms) >= MIN_EVENT_RELEVANCE_SCORE;
 }
 
 export function parseRssItems(
@@ -211,7 +309,7 @@ export function parseRssItems(
       };
     })
     .filter((event): event is RawCompanyEvent => event !== null)
-    .filter((event) => eventMatchesTerms(event, terms) || itemMatches.length <= 3)
+    .filter((event) => eventMatchesTerms(event, terms))
     .slice(0, MAX_NEWS_ITEMS);
 }
 
@@ -632,7 +730,7 @@ function configuredNewsProvider(): EventProvider {
 
 async function fetchHeadlineEvents(identity: CompanyIdentity): Promise<RawCompanyEvent[]> {
   const provider = configuredNewsProvider();
-  const key = cacheKey(["events", "provider", provider.id, identity.ticker, "v2"]);
+  const key = cacheKey(["events", "provider", provider.id, identity.ticker, "v3"]);
   const cached = await getJsonCache<RawCompanyEvent[]>(key);
   if (cached) {
     return cached;
@@ -686,14 +784,22 @@ function dedupeEvents(events: RawCompanyEvent[]): RawCompanyEvent[] {
   const deduped: RawCompanyEvent[] = [];
 
   for (const event of events) {
-    const key = event.url
+    const urlKey = event.url
       ? event.url.trim().toLowerCase()
       : `${event.title.toLowerCase()}|${event.publishedAt}`;
-    if (seen.has(key)) {
+    const titleKey =
+      event.sourceType === "news"
+        ? `news-title:${normalizeSearchText(event.title)}`
+        : undefined;
+
+    if (seen.has(urlKey) || titleKey && seen.has(titleKey)) {
       continue;
     }
 
-    seen.add(key);
+    seen.add(urlKey);
+    if (titleKey) {
+      seen.add(titleKey);
+    }
     deduped.push(event);
   }
 
