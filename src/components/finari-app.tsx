@@ -28,6 +28,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -119,7 +120,64 @@ function signalIcon(signal: TrendSignal, variant: SignalIconVariant = "status") 
     return <AlertTriangle className="h-4 w-4" aria-hidden="true" />;
   }
 
+  if (signal === "unknown") {
+    return <CircleHelp className="h-4 w-4" aria-hidden="true" />;
+  }
+
   return <ShieldCheck className="h-4 w-4" aria-hidden="true" />;
+}
+
+function signalTooltip(
+  signal: TrendSignal,
+  variant: SignalIconVariant,
+  t: Dictionary,
+): string {
+  const tooltipSet =
+    variant === "trend"
+      ? t.advisor.signalTooltips.trend
+      : t.advisor.signalTooltips.status;
+
+  return tooltipSet[signal];
+}
+
+function SignalBadge({
+  signal,
+  variant = "status",
+  label,
+  t,
+  className = "p-1.5",
+  tooltipAlign = "left",
+}: {
+  signal: TrendSignal;
+  variant?: SignalIconVariant;
+  label: string;
+  t: Dictionary;
+  className?: string;
+  tooltipAlign?: "left" | "right";
+}) {
+  const tooltipId = useId();
+  const tooltip = signalTooltip(signal, variant, t);
+  const alignClass = tooltipAlign === "right" ? "right-0" : "left-0";
+
+  return (
+    <span
+      className={`group relative inline-flex shrink-0 rounded-md border ${className} ${signalClasses(signal)} outline-none transition focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2`}
+      role="img"
+      tabIndex={0}
+      aria-label={`${label}: ${signal}. ${tooltip}`}
+      aria-describedby={tooltipId}
+      title={tooltip}
+    >
+      {signalIcon(signal, variant)}
+      <span
+        id={tooltipId}
+        role="tooltip"
+        className={`pointer-events-none absolute ${alignClass} top-full z-30 mt-2 hidden w-64 max-w-[calc(100vw-2rem)] break-words rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-left text-xs font-medium leading-5 text-white shadow-lg group-hover:block group-focus-visible:block`}
+      >
+        {tooltip}
+      </span>
+    </span>
+  );
 }
 
 function metricTone(metric: FinancialMetric): string {
@@ -443,13 +501,13 @@ function AdvisorSummary({
                 className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3"
               >
                 <div className="flex items-start gap-3">
-                  <span
-                    className={`mt-0.5 inline-flex shrink-0 rounded-md border p-1.5 ${signalClasses(read.signal)}`}
-                    role="img"
-                    aria-label={`${read.title}: ${read.signal}`}
-                  >
-                    {signalIcon(read.signal, read.iconVariant)}
-                  </span>
+                  <SignalBadge
+                    signal={read.signal}
+                    variant={read.iconVariant}
+                    label={read.title}
+                    t={t}
+                    className="mt-0.5 p-1.5"
+                  />
                   <div className="min-w-0">
                     <h4 className="text-sm font-semibold text-zinc-950">
                       {read.title}
@@ -478,11 +536,12 @@ function AdvisorSummary({
                 className="min-w-0 rounded-md border border-zinc-200 bg-white p-3"
               >
                 <div className="flex items-start gap-2">
-                  <span
-                    className={`mt-0.5 inline-flex shrink-0 rounded-md border p-1 ${signalClasses(item.signal)}`}
-                  >
-                    {signalIcon(item.signal)}
-                  </span>
+                  <SignalBadge
+                    signal={item.signal}
+                    label={item.question}
+                    t={t}
+                    className="mt-0.5 p-1"
+                  />
                   <div className="min-w-0">
                     <p className="break-words text-sm font-semibold leading-5 text-zinc-950">
                       {item.question}
@@ -771,33 +830,36 @@ function SnapshotHeader({
 function MetricGrid({ metrics, t }: { metrics: FinancialMetric[]; t: Dictionary }) {
   return (
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-      {metrics.slice(0, 10).map((metric) => (
-        <article
-          key={metric.id}
-          className="rounded-md border border-zinc-200 bg-white p-4"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-medium text-zinc-500">
-                {t.metrics[metric.id as keyof typeof t.metrics]?.label ?? metric.label}
-              </p>
-              <p className={`mt-2 text-xl font-semibold ${metricTone(metric)}`}>
-                {formatMetricValue(metric.value, metric.unit)}
-              </p>
+      {metrics.slice(0, 10).map((metric) => {
+        const metricCopy = t.metrics[metric.id as keyof typeof t.metrics];
+
+        return (
+          <article
+            key={metric.id}
+            className="rounded-md border border-zinc-200 bg-white p-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium text-zinc-500">
+                  {metricCopy?.label ?? metric.label}
+                </p>
+                <p className={`mt-2 text-xl font-semibold ${metricTone(metric)}`}>
+                  {formatMetricValue(metric.value, metric.unit)}
+                </p>
+              </div>
+              <SignalBadge
+                signal={metric.signal}
+                label={metricCopy?.label ?? metric.label}
+                t={t}
+                tooltipAlign="right"
+              />
             </div>
-            <span
-              className={`inline-flex rounded-md border p-1.5 ${signalClasses(metric.signal)}`}
-              aria-label={metric.signal}
-            >
-              {signalIcon(metric.signal)}
-            </span>
-          </div>
-          <p className="mt-3 text-xs leading-5 text-zinc-500">
-            {t.metrics[metric.id as keyof typeof t.metrics]?.description ??
-              metric.description}
-          </p>
-        </article>
-      ))}
+            <p className="mt-3 text-xs leading-5 text-zinc-500">
+              {metricCopy?.description ?? metric.description}
+            </p>
+          </article>
+        );
+      })}
     </section>
   );
 }
@@ -1125,11 +1187,12 @@ function MemoPanel({
               className="rounded-md border border-zinc-200 bg-zinc-50 p-4"
             >
               <div className="flex items-start gap-3">
-                <span
-                  className={`mt-0.5 inline-flex rounded-md border p-1.5 ${signalClasses(section.signal ?? "neutral")}`}
-                >
-                  {signalIcon(section.signal ?? "neutral")}
-                </span>
+                <SignalBadge
+                  signal={section.signal ?? "neutral"}
+                  label={section.title}
+                  t={t}
+                  className="mt-0.5 p-1.5"
+                />
                 <div>
                   <h4 className="font-semibold text-zinc-950">{section.title}</h4>
                   <p className="mt-1 text-sm leading-6 text-zinc-700">

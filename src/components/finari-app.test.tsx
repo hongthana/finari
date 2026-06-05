@@ -40,7 +40,12 @@ describe("FinariApp", () => {
     expect(screen.getByText("Plain-English summary")).toBeInTheDocument();
     expect(screen.getByText("What the latest filing means for investors")).toBeInTheDocument();
     expect(
-      screen.getByRole("img", { name: "Growth and earnings: positive" }),
+      screen.getByRole("img", { name: /Growth and earnings: positive/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Trend improved in the latest annual comparison. The up arrow means revenue and/or earnings are rising.",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText("Decision takeaway")).toBeInTheDocument();
     expect(screen.getByText("Investor questions with filing-backed answers")).toBeInTheDocument();
@@ -79,7 +84,12 @@ describe("FinariApp", () => {
     expect(screen.getByText("สรุปให้อ่านง่าย")).toBeInTheDocument();
     expect(screen.getByText("งบล่าสุดบอกอะไรสำหรับนักลงทุน")).toBeInTheDocument();
     expect(
-      screen.getByRole("img", { name: "การเติบโตและกำไร: positive" }),
+      screen.getByRole("img", { name: /การเติบโตและกำไร: positive/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "แนวโน้มดีขึ้นในการเทียบปีล่าสุด ลูกศรขึ้นหมายถึง revenue และ/หรือ earnings กำลังเพิ่มขึ้น",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText("ข้อสรุปเพื่อการตัดสินใจ")).toBeInTheDocument();
     expect(screen.getByText("คำถามนักลงทุนพร้อมคำตอบจาก filing")).toBeInTheDocument();

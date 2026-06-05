@@ -117,6 +117,28 @@ const en = {
       balance: "Balance-sheet risk",
       decision: "Decision takeaway",
     },
+    signalTooltips: {
+      trend: {
+        positive:
+          "Trend improved in the latest annual comparison. The up arrow means revenue and/or earnings are rising.",
+        negative:
+          "Trend weakened in the latest annual comparison. The down arrow means revenue or earnings declined and deserves follow-up.",
+        neutral:
+          "Trend is mixed or roughly flat. The line means growth and earnings do not point clearly up or down.",
+        unknown:
+          "Trend cannot be read from comparable SEC data yet. The question mark means there is not enough standardized data.",
+      },
+      status: {
+        positive:
+          "Constructive filing signal. The check means this metric currently supports business quality.",
+        negative:
+          "Pressure or risk signal. The warning means this metric deserves extra review.",
+        neutral:
+          "Mixed filing signal. The shield means this point needs context before deciding.",
+        unknown:
+          "Data is unavailable or not comparable. The question mark means standardized SEC tags are incomplete.",
+      },
+    },
     noComparable: (label: string) =>
       `${label} did not have a clean prior-year comparison in the normalized filing data`,
     flat: (label: string) => `${label} was roughly flat year over year`,
@@ -466,6 +488,28 @@ const th: Dictionary = {
       quality: "คุณภาพกำไร",
       balance: "ความเสี่ยงงบดุล",
       decision: "ข้อสรุปเพื่อการตัดสินใจ",
+    },
+    signalTooltips: {
+      trend: {
+        positive:
+          "แนวโน้มดีขึ้นในการเทียบปีล่าสุด ลูกศรขึ้นหมายถึง revenue และ/หรือ earnings กำลังเพิ่มขึ้น",
+        negative:
+          "แนวโน้มอ่อนลงในการเทียบปีล่าสุด ลูกศรลงหมายถึง revenue หรือ earnings ลดลงและควรดูสาเหตุเพิ่มเติม",
+        neutral:
+          "แนวโน้มผสมหรือใกล้ทรงตัว เส้นแนวนอนหมายถึง growth และ earnings ยังไม่ชี้ชัดขึ้นหรือลง",
+        unknown:
+          "ยังอ่านแนวโน้มจากข้อมูล SEC ที่เทียบกันได้ไม่ชัด เครื่องหมายคำถามหมายถึงข้อมูล standardized ยังไม่พอ",
+      },
+      status: {
+        positive:
+          "สัญญาณจาก filing เป็นบวก เครื่องหมายถูกหมายถึง metric นี้สนับสนุนคุณภาพธุรกิจ",
+        negative:
+          "สัญญาณความกดดันหรือความเสี่ยง เครื่องหมายเตือนหมายถึง metric นี้ควรตรวจเพิ่ม",
+        neutral:
+          "สัญญาณผสม โล่หมายถึงต้องดูบริบทก่อนใช้ตัดสินใจ",
+        unknown:
+          "ข้อมูลไม่ครบหรือเทียบกันไม่ได้ เครื่องหมายคำถามหมายถึง standardized SEC tags ยังไม่พอ",
+      },
     },
     noComparable: (label: string) =>
       `${label} ไม่มีตัวเลขปีก่อนที่เทียบกันได้ในข้อมูล filing ที่ปรับมาตรฐาน`,
