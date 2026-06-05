@@ -49,12 +49,41 @@ describe("financial analysis", () => {
       id: "quarterly-revenue",
       signal: "positive",
     });
+    expect(snapshot.changeAnalysis.quarterly.map((item) => item.id)).toContain(
+      "quarterly-liabilities-to-assets",
+    );
+    expect(
+      snapshot.changeAnalysis.annual.find((item) => item.id === "annual-debt"),
+    ).toMatchObject({
+      currentValue: 100_000_000_000,
+      previousValue: 104_000_000_000,
+      signal: "positive",
+    });
     expect(snapshot.balanceSheetAnalysis).toMatchObject({
       cash: 32_000_000_000,
       debt: 100_000_000_000,
       workingCapital: -5_000_000_000,
     });
+    expect(snapshot.businessDrivers.find((driver) => driver.id === "growth")?.details)
+      .toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: "product-demand" }),
+          expect.objectContaining({ id: "recent-quarter-demand" }),
+          expect.objectContaining({ id: "services-hardware-mix", signal: "unknown" }),
+          expect.objectContaining({ id: "geographic-exposure", signal: "unknown" }),
+        ]),
+      );
+    expect(
+      snapshot.businessDrivers.find((driver) => driver.id === "profitability")
+        ?.details,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "pricing-power" }),
+        expect.objectContaining({ id: "margin-pressure" }),
+      ]),
+    );
     expect(snapshot.dataQuality.label).toBe("High");
+    expect(snapshot.caveatChangeAnalysis.status).toBe("baseline");
     expect(snapshot.decisionFramework.watchMetric).toBeTruthy();
     expect(snapshot.citations[0].url).toContain("Archives/edgar/data/320193");
   });
@@ -68,6 +97,28 @@ describe("financial analysis", () => {
 
     expect(snapshot.caveats).toContain(
       "No annual financial-statement facts were found for this company.",
+    );
+  });
+
+  it("tracks new and resolved normalization caveats against a previous snapshot", () => {
+    const snapshot = normalizeCompanySnapshot(
+      fixtureIdentity,
+      fixtureSubmissions,
+      {
+        cik: 320193,
+        entityName: "Apple Inc.",
+        facts: { "us-gaap": {} },
+      },
+      undefined,
+      ["Resolved prior caveat."],
+    );
+
+    expect(snapshot.caveatChangeAnalysis.status).toBe("changed");
+    expect(snapshot.caveatChangeAnalysis.newCaveats).toContain(
+      "No annual financial-statement facts were found for this company.",
+    );
+    expect(snapshot.caveatChangeAnalysis.resolvedCaveats).toContain(
+      "Resolved prior caveat.",
     );
   });
 

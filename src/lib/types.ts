@@ -86,6 +86,30 @@ export interface ChangeAnalysis {
   annual: ChangeItem[];
 }
 
+export interface CaveatChangeAnalysis {
+  status: "baseline" | "changed" | "unchanged";
+  newCaveats: string[];
+  resolvedCaveats: string[];
+  unchangedCaveats: string[];
+}
+
+export interface BusinessDriverDetail {
+  id:
+    | "product-demand"
+    | "recent-quarter-demand"
+    | "pricing-power"
+    | "margin-pressure"
+    | "cash-conversion"
+    | "capital-return"
+    | "working-capital-flexibility"
+    | "balance-sheet-flexibility"
+    | "services-hardware-mix"
+    | "geographic-exposure";
+  value: number | null;
+  unit: MetricUnit;
+  signal: TrendSignal;
+}
+
 export interface BusinessDriver {
   id:
     | "growth"
@@ -98,6 +122,7 @@ export interface BusinessDriver {
   primaryValue: number | null;
   secondaryValue?: number | null;
   unit: MetricUnit;
+  details?: BusinessDriverDetail[];
 }
 
 export interface BalanceSheetAnalysis {
@@ -167,6 +192,7 @@ export interface CompanySnapshot {
   ttmPeriod?: FinancialPeriod;
   metrics: FinancialMetric[];
   changeAnalysis: ChangeAnalysis;
+  caveatChangeAnalysis: CaveatChangeAnalysis;
   businessDrivers: BusinessDriver[];
   balanceSheetAnalysis: BalanceSheetAnalysis;
   peerComparison: PeerComparison;

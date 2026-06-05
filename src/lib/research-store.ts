@@ -28,7 +28,7 @@ import type {
 } from "@/lib/types";
 
 const SNAPSHOT_TTL_MS = 24 * 60 * 60 * 1000;
-const MEMO_PROMPT_VERSION = "finari_memo_v3";
+const MEMO_PROMPT_VERSION = "finari_memo_v4";
 
 type StoredSnapshot = {
   snapshotId: string;
@@ -131,6 +131,14 @@ function numberOrNull(value: number | null | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function isCurrentSnapshotShape(snapshot: CompanySnapshot): boolean {
+  return Boolean(
+    snapshot.caveatChangeAnalysis &&
+      snapshot.changeAnalysis?.annual?.some((item) => item.id === "annual-debt") &&
+      snapshot.businessDrivers?.some((driver) => driver.details?.length),
+  );
+}
+
 export function computeSnapshotSourceHash(snapshot: CompanySnapshot): string {
   return stableHash({
     cik: snapshot.identity.cik,
@@ -148,6 +156,7 @@ export function computeSnapshotSourceHash(snapshot: CompanySnapshot): string {
     latestAnnualFiling: snapshot.latestAnnualFiling?.accessionNumber,
     latestQuarterlyFiling: snapshot.latestQuarterlyFiling?.accessionNumber,
     changeAnalysis: snapshot.changeAnalysis,
+    caveatChangeAnalysis: snapshot.caveatChangeAnalysis,
     businessDrivers: snapshot.businessDrivers,
     balanceSheetAnalysis: snapshot.balanceSheetAnalysis,
     peerComparison: snapshot.peerComparison,
@@ -172,6 +181,7 @@ export function computeMemoPromptHash(
     ttmPeriod: snapshot.ttmPeriod,
     metrics: snapshot.metrics,
     changeAnalysis: snapshot.changeAnalysis,
+    caveatChangeAnalysis: snapshot.caveatChangeAnalysis,
     businessDrivers: snapshot.businessDrivers,
     balanceSheetAnalysis: snapshot.balanceSheetAnalysis,
     peerComparison: snapshot.peerComparison,
@@ -359,7 +369,11 @@ export async function getFreshStoredSnapshot(ticker: string): Promise<StoredSnap
   const normalized = normalizeTicker(ticker);
   if (!hasDatabase()) {
     const stored = getSnapshotMemory().get(normalized);
-    if (!stored || isSnapshotExpired(stored.snapshot)) {
+    if (
+      !stored ||
+      isSnapshotExpired(stored.snapshot) ||
+      !isCurrentSnapshotShape(stored.snapshot)
+    ) {
       return null;
     }
     return stored;
@@ -382,6 +396,44 @@ export async function getFreshStoredSnapshot(ticker: string): Promise<StoredSnap
     .limit(1);
 
   if (!row || row.expiresAt <= new Date()) {
+    return null;
+  }
+
+  const snapshot = row.snapshotJson as unknown as CompanySnapshot;
+  if (!isCurrentSnapshotShape(snapshot)) {
+    return null;
+  }
+
+  return {
+    snapshotId: row.snapshotId,
+    companyId: row.companyId,
+    sourceHash: row.sourceHash,
+    snapshot,
+  };
+}
+
+export async function getLatestStoredSnapshot(ticker: string): Promise<StoredSnapshot | null> {
+  const normalized = normalizeTicker(ticker);
+  if (!hasDatabase()) {
+    return getSnapshotMemory().get(normalized) ?? null;
+  }
+
+  const db = getDb();
+  const [row] = await db
+    .select({
+      snapshotId: researchSnapshots.id,
+      companyId: researchSnapshots.companyId,
+      sourceHash: researchSnapshots.sourceHash,
+      snapshotJson: researchSnapshots.snapshotJson,
+    })
+    .from(companyTickers)
+    .innerJoin(companies, eq(companyTickers.companyId, companies.id))
+    .innerJoin(researchSnapshots, eq(researchSnapshots.companyId, companies.id))
+    .where(and(eq(companyTickers.ticker, normalized), eq(companyTickers.isActive, true)))
+    .orderBy(desc(researchSnapshots.generatedAt))
+    .limit(1);
+
+  if (!row) {
     return null;
   }
 

@@ -17,6 +17,7 @@ import {
 } from "@/lib/sec";
 import {
   getFreshStoredSnapshot,
+  getLatestStoredSnapshot,
   getStoredMemo,
   recordAiUsageEvent,
   computeMemoPromptHash,
@@ -116,6 +117,7 @@ async function fetchAndPersistSnapshot(ticker: string) {
   }
 
   return withRedisLock(cacheKey(["research", "lock", identity.cik]), 30, async () => {
+    const previousStored = await getLatestStoredSnapshot(identity.ticker);
     const [submissions, facts] = await Promise.all([
       getSubmissions(identity.cik),
       getCompanyFacts(identity.cik),
@@ -131,6 +133,7 @@ async function fetchAndPersistSnapshot(ticker: string) {
       submissions,
       facts,
       peerComparison,
+      previousStored?.snapshot.caveats,
     );
     const stored = await persistSnapshot(snapshot);
     await setJsonCache(

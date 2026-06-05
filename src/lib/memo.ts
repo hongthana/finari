@@ -253,6 +253,7 @@ function buildPrompt(snapshot: CompanySnapshot, locale: Locale): string {
       peerComparison: snapshot.peerComparison,
       dataQuality: snapshot.dataQuality,
       decisionFramework: snapshot.decisionFramework,
+      caveatChangeAnalysis: snapshot.caveatChangeAnalysis,
       caveats: snapshot.caveats,
       citations: snapshot.citations,
     },

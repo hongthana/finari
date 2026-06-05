@@ -1219,20 +1219,30 @@ function ChangeCard({
   item: ChangeItem;
   t: Dictionary;
 }) {
+  const label = recordValue(t.analysis.changeLabels, item.id, item.label);
+  const description = recordValue(
+    t.analysis.changeDescriptions,
+    item.id,
+    item.description,
+  );
+
   return (
     <article className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3">
       <div className="flex items-start gap-3">
         <SignalBadge
           signal={item.signal}
           variant="trend"
-          label={item.label}
+          label={label}
           t={t}
           className="mt-0.5 p-1.5"
         />
         <div className="min-w-0">
           <h4 className="text-sm font-semibold text-zinc-950">
-            {item.label}
+            {label}
           </h4>
+          <p className="mt-1 text-xs leading-5 text-zinc-500">
+            {description}
+          </p>
           <dl className="mt-2 grid gap-2 text-xs text-zinc-600 sm:grid-cols-3">
             <div>
               <dt className="font-medium text-zinc-500">{t.analysis.current}</dt>
@@ -1259,11 +1269,78 @@ function ChangeCard({
   );
 }
 
-function ChangeAnalysisPanel({
+function CaveatChangePanel({
   snapshot,
+  locale,
   t,
 }: {
   snapshot: CompanySnapshot;
+  locale: Locale;
+  t: Dictionary;
+}) {
+  const caveatChange = snapshot.caveatChangeAnalysis ?? {
+    status: "baseline" as const,
+    newCaveats: [],
+    resolvedCaveats: [],
+    unchangedCaveats: snapshot.caveats,
+  };
+  const hasDeltas =
+    caveatChange.newCaveats.length || caveatChange.resolvedCaveats.length;
+
+  const renderList = (title: string, caveats: string[]) =>
+    caveats.length ? (
+      <div>
+        <h5 className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
+          {title}
+        </h5>
+        <ul className="mt-2 space-y-1 text-sm leading-6 text-zinc-700">
+          {caveats.map((caveat) => (
+            <li key={caveat} className="flex gap-2">
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-600" />
+              <span className="min-w-0 break-words">
+                {translateCaveat(caveat, locale)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ) : null;
+
+  return (
+    <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-4">
+      <h4 className="text-sm font-semibold text-zinc-950">
+        {t.analysis.caveatChangesTitle}
+      </h4>
+      {caveatChange.status === "baseline" ? (
+        <p className="mt-2 text-sm leading-6 text-zinc-600">
+          {t.analysis.caveatBaseline}
+        </p>
+      ) : hasDeltas ? (
+        <div className="mt-3 grid gap-4 md:grid-cols-2">
+          {renderList(t.analysis.newCaveats, caveatChange.newCaveats)}
+          {renderList(t.analysis.resolvedCaveats, caveatChange.resolvedCaveats)}
+        </div>
+      ) : (
+        <p className="mt-2 text-sm leading-6 text-zinc-600">
+          {t.analysis.caveatUnchanged}
+        </p>
+      )}
+      {caveatChange.unchangedCaveats.length > 0 && (
+        <div className="mt-4">
+          {renderList(t.analysis.unchangedCaveats, caveatChange.unchangedCaveats)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChangeAnalysisPanel({
+  snapshot,
+  locale,
+  t,
+}: {
+  snapshot: CompanySnapshot;
+  locale: Locale;
   t: Dictionary;
 }) {
   return (
@@ -1319,6 +1396,7 @@ function ChangeAnalysisPanel({
           </div>
         </div>
       </div>
+      <CaveatChangePanel snapshot={snapshot} locale={locale} t={t} />
     </section>
   );
 }
@@ -1373,6 +1451,46 @@ function BusinessDriverCard({
               </div>
             )}
           </dl>
+          {driver.details?.length ? (
+            <div className="mt-3 space-y-2 border-t border-zinc-100 pt-3">
+              {driver.details.map((detail) => {
+                const detailLabel = recordValue(
+                  t.analysis.driverDetailLabels,
+                  detail.id,
+                  detail.id,
+                );
+                const detailDescription = recordValue(
+                  t.analysis.driverDetailDescriptions,
+                  detail.id,
+                  detail.id,
+                );
+
+                return (
+                  <div key={detail.id} className="flex items-start gap-2">
+                    <SignalBadge
+                      signal={detail.signal}
+                      label={detailLabel}
+                      t={t}
+                      className="mt-0.5 h-6 w-6 rounded-md p-1"
+                    />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                        <h5 className="text-xs font-semibold text-zinc-950">
+                          {detailLabel}
+                        </h5>
+                        <span className="text-xs font-semibold text-zinc-600">
+                          {formatAnalysisValue(detail.value, detail.unit)}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 break-words text-xs leading-5 text-zinc-500">
+                        {detailDescription}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
       </div>
     </article>
@@ -2668,7 +2786,7 @@ export function FinariApp({
               <DecisionScreen snapshot={snapshot} t={t} />
               <AdvisorSummary snapshot={snapshot} t={t} />
               <QuarterlyTrendPanel snapshot={snapshot} t={t} />
-              <ChangeAnalysisPanel snapshot={snapshot} t={t} />
+              <ChangeAnalysisPanel snapshot={snapshot} locale={locale} t={t} />
               <BusinessDriversPanel snapshot={snapshot} t={t} />
               <BalanceSheetPanel snapshot={snapshot} t={t} />
               <PeerComparisonPanel snapshot={snapshot} t={t} />

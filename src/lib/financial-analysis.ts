@@ -9,6 +9,7 @@ import {
 import type {
   BalanceSheetAnalysis,
   BusinessDriver,
+  CaveatChangeAnalysis,
   ChangeAnalysis,
   ChangeItem,
   CompanyIdentity,
@@ -497,6 +498,31 @@ function signalForMetric(
   return "neutral";
 }
 
+function signalForChange(
+  change: number | null,
+  positiveAt = 0.02,
+  negativeAt = -0.02,
+  lowerIsBetter = false,
+): TrendSignal {
+  if (!isFiniteNumber(change)) {
+    return "unknown";
+  }
+
+  if (lowerIsBetter) {
+    if (change < -Math.abs(positiveAt)) {
+      return "positive";
+    }
+
+    if (change > Math.abs(negativeAt)) {
+      return "negative";
+    }
+
+    return "neutral";
+  }
+
+  return signalForMetric(change, positiveAt, negativeAt);
+}
+
 function leverageSignal(value: number | null): TrendSignal {
   if (!isFiniteNumber(value)) {
     return "unknown";
@@ -667,12 +693,14 @@ function changeItem(
   description: string,
   positiveAt = 0.02,
   negativeAt = -0.02,
+  lowerIsBetter = false,
 ): ChangeItem {
   const change = unit === "percent"
     ? (isFiniteNumber(currentValue) && isFiniteNumber(previousValue)
         ? currentValue - previousValue
         : null)
     : percentChange(currentValue, previousValue);
+  const signal = signalForChange(change, positiveAt, negativeAt, lowerIsBetter);
 
   return {
     id,
@@ -682,7 +710,7 @@ function changeItem(
     change,
     unit,
     description,
-    signal: signalForMetric(change, positiveAt, negativeAt),
+    signal,
   };
 }
 
@@ -732,6 +760,44 @@ function buildChangeAnalysis(
             0.01,
             -0.01,
           ),
+          changeItem(
+            "quarterly-debt",
+            "Quarterly debt",
+            "currency",
+            latestQuarter.debt,
+            previousQuarterPeriod?.debt,
+            "Latest quarter debt compared with the prior quarter.",
+            0.02,
+            -0.02,
+            true,
+          ),
+          changeItem(
+            "quarterly-cash",
+            "Quarterly cash",
+            "currency",
+            latestQuarter.cash,
+            previousQuarterPeriod?.cash,
+            "Latest quarter cash compared with the prior quarter.",
+          ),
+          changeItem(
+            "quarterly-liabilities-to-assets",
+            "Quarterly liabilities to assets",
+            "percent",
+            divide(latestQuarter.liabilities, latestQuarter.assets),
+            divide(previousQuarterPeriod?.liabilities, previousQuarterPeriod?.assets),
+            "Latest quarter liabilities/assets compared with the prior quarter.",
+            0.01,
+            -0.01,
+            true,
+          ),
+          changeItem(
+            "quarterly-working-capital",
+            "Quarterly working capital",
+            "currency",
+            latestQuarter.workingCapital,
+            previousQuarterPeriod?.workingCapital,
+            "Latest quarter working capital compared with the prior quarter.",
+          ),
         ]
       : [],
     annual: latestAnnual
@@ -770,8 +836,73 @@ function buildChangeAnalysis(
             0.01,
             -0.01,
           ),
+          changeItem(
+            "annual-debt",
+            "Annual debt",
+            "currency",
+            latestAnnual.debt,
+            previousAnnual?.debt,
+            "Latest annual debt compared with the prior fiscal year.",
+            0.02,
+            -0.02,
+            true,
+          ),
+          changeItem(
+            "annual-cash",
+            "Annual cash",
+            "currency",
+            latestAnnual.cash,
+            previousAnnual?.cash,
+            "Latest annual cash compared with the prior fiscal year.",
+          ),
+          changeItem(
+            "annual-liabilities-to-assets",
+            "Annual liabilities to assets",
+            "percent",
+            divide(latestAnnual.liabilities, latestAnnual.assets),
+            divide(previousAnnual?.liabilities, previousAnnual?.assets),
+            "Latest annual liabilities/assets compared with the prior fiscal year.",
+            0.01,
+            -0.01,
+            true,
+          ),
+          changeItem(
+            "annual-working-capital",
+            "Annual working capital",
+            "currency",
+            latestAnnual.workingCapital,
+            previousAnnual?.workingCapital,
+            "Latest annual working capital compared with the prior fiscal year.",
+          ),
         ]
       : [],
+  };
+}
+
+function buildCaveatChangeAnalysis(
+  currentCaveats: string[],
+  previousCaveats?: string[],
+): CaveatChangeAnalysis {
+  if (!previousCaveats) {
+    return {
+      status: "baseline",
+      newCaveats: [],
+      resolvedCaveats: [],
+      unchangedCaveats: currentCaveats,
+    };
+  }
+
+  const previous = new Set(previousCaveats);
+  const current = new Set(currentCaveats);
+  const newCaveats = currentCaveats.filter((caveat) => !previous.has(caveat));
+  const resolvedCaveats = previousCaveats.filter((caveat) => !current.has(caveat));
+  const unchangedCaveats = currentCaveats.filter((caveat) => previous.has(caveat));
+
+  return {
+    status: newCaveats.length || resolvedCaveats.length ? "changed" : "unchanged",
+    newCaveats,
+    resolvedCaveats,
+    unchangedCaveats,
   };
 }
 
@@ -861,16 +992,38 @@ function buildBusinessDrivers(
   const metric = (id: string) => metrics.find((item) => item.id === id)?.value ?? null;
   const latestAnnual = annualPeriods[0];
   const latestQuarter = quarterlyPeriods[0];
+  const previousQuarter = quarterlyPeriods[1];
   const revenueChange =
-    percentChange(latestQuarter?.revenue, quarterlyPeriods[1]?.revenue) ??
+    percentChange(latestQuarter?.revenue, previousQuarter?.revenue) ??
     metric("revenue-growth");
+  const annualRevenueChange = metric("revenue-growth");
   const operatingMargin = divide(
     ttmPeriod?.operatingIncome ?? latestAnnual?.operatingIncome,
     ttmPeriod?.revenue ?? latestAnnual?.revenue,
   );
+  const grossMargin = divide(
+    ttmPeriod?.grossProfit ?? latestAnnual?.grossProfit,
+    ttmPeriod?.revenue ?? latestAnnual?.revenue,
+  );
+  const grossMarginChange =
+    divide(latestQuarter?.grossProfit, latestQuarter?.revenue) !== null &&
+    divide(previousQuarter?.grossProfit, previousQuarter?.revenue) !== null
+      ? Number(divide(latestQuarter?.grossProfit, latestQuarter?.revenue)) -
+        Number(divide(previousQuarter?.grossProfit, previousQuarter?.revenue))
+      : null;
+  const operatingMarginChange =
+    divide(latestQuarter?.operatingIncome, latestQuarter?.revenue) !== null &&
+    divide(previousQuarter?.operatingIncome, previousQuarter?.revenue) !== null
+      ? Number(divide(latestQuarter?.operatingIncome, latestQuarter?.revenue)) -
+        Number(divide(previousQuarter?.operatingIncome, previousQuarter?.revenue))
+      : null;
   const fcfMargin = divide(
     ttmPeriod?.freeCashFlow ?? latestAnnual?.freeCashFlow,
     ttmPeriod?.revenue ?? latestAnnual?.revenue,
+  );
+  const cashConversion = divide(
+    ttmPeriod?.freeCashFlow ?? latestAnnual?.freeCashFlow,
+    ttmPeriod?.netIncome ?? latestAnnual?.netIncome,
   );
   const buybacks = ttmPeriod?.buybacks ?? latestAnnual?.buybacks;
   const dividends = ttmPeriod?.dividends ?? latestAnnual?.dividends;
@@ -884,6 +1037,7 @@ function buildBusinessDrivers(
   );
   const currentRatio = divide(latestQuarter?.currentAssets ?? latestAnnual?.currentAssets, latestQuarter?.currentLiabilities ?? latestAnnual?.currentLiabilities);
   const liabilitiesToAssets = metric("liabilities-to-assets");
+  const cashToDebt = divide(latestQuarter?.cash ?? latestAnnual?.cash, latestQuarter?.debt ?? latestAnnual?.debt);
 
   return [
     {
@@ -891,18 +1045,70 @@ function buildBusinessDrivers(
       signal: signalForMetric(revenueChange, 0.03, -0.03),
       primaryValue: revenueChange,
       unit: "percent",
+      details: [
+        {
+          id: "product-demand",
+          value: annualRevenueChange,
+          unit: "percent",
+          signal: signalForMetric(annualRevenueChange, 0.03, -0.03),
+        },
+        {
+          id: "recent-quarter-demand",
+          value: revenueChange,
+          unit: "percent",
+          signal: signalForMetric(revenueChange, 0.03, -0.03),
+        },
+        {
+          id: "services-hardware-mix",
+          value: null,
+          unit: "ratio",
+          signal: "unknown",
+        },
+        {
+          id: "geographic-exposure",
+          value: null,
+          unit: "ratio",
+          signal: "unknown",
+        },
+      ],
     },
     {
       id: "profitability",
       signal: signalForMetric(operatingMargin, 0.15, 0.03),
       primaryValue: operatingMargin,
       unit: "percent",
+      details: [
+        {
+          id: "pricing-power",
+          value: grossMarginChange ?? grossMargin,
+          unit: "percent",
+          signal: grossMarginChange !== null
+            ? signalForMetric(grossMarginChange, 0.01, -0.01)
+            : signalForMetric(grossMargin, 0.3, 0.1),
+        },
+        {
+          id: "margin-pressure",
+          value: operatingMarginChange ?? operatingMargin,
+          unit: "percent",
+          signal: operatingMarginChange !== null
+            ? signalForMetric(operatingMarginChange, 0.01, -0.01)
+            : signalForMetric(operatingMargin, 0.15, 0.03),
+        },
+      ],
     },
     {
       id: "cash-generation",
       signal: signalForMetric(fcfMargin, 0.08, 0),
       primaryValue: fcfMargin,
       unit: "percent",
+      details: [
+        {
+          id: "cash-conversion",
+          value: cashConversion,
+          unit: "ratio",
+          signal: signalForMetric(cashConversion, 0.8, 0.4),
+        },
+      ],
     },
     {
       id: "capital-allocation",
@@ -910,6 +1116,14 @@ function buildBusinessDrivers(
       primaryValue: payout,
       secondaryValue: capitalReturned,
       unit: "percent",
+      details: [
+        {
+          id: "capital-return",
+          value: capitalReturned,
+          unit: "currency",
+          signal: riskSignal(payout, 0.5, 1),
+        },
+      ],
     },
     {
       id: "liquidity",
@@ -917,12 +1131,28 @@ function buildBusinessDrivers(
       primaryValue: currentRatio,
       secondaryValue: latestQuarter?.workingCapital ?? latestAnnual?.workingCapital ?? null,
       unit: "ratio",
+      details: [
+        {
+          id: "working-capital-flexibility",
+          value: latestQuarter?.workingCapital ?? latestAnnual?.workingCapital ?? null,
+          unit: "currency",
+          signal: signalForMetric(latestQuarter?.workingCapital ?? latestAnnual?.workingCapital ?? null, 0, -1),
+        },
+      ],
     },
     {
       id: "leverage",
       signal: riskSignal(liabilitiesToAssets, 0.45, 0.75),
       primaryValue: liabilitiesToAssets,
       unit: "percent",
+      details: [
+        {
+          id: "balance-sheet-flexibility",
+          value: cashToDebt,
+          unit: "ratio",
+          signal: signalForMetric(cashToDebt, 1, 0.25),
+        },
+      ],
     },
   ];
 }
@@ -1380,6 +1610,7 @@ export function normalizeCompanySnapshot(
   submissions: SecSubmissionsResponse,
   facts: SecCompanyFactsResponse,
   peerComparison?: PeerComparison,
+  previousCaveats?: string[],
 ): CompanySnapshot {
   const enrichedIdentity = enrichIdentityFromSubmissions(identity, submissions);
   const periods = new Map<number, FinancialPeriod>();
@@ -1612,6 +1843,7 @@ export function normalizeCompanySnapshot(
     ttmPeriod,
     metrics,
     changeAnalysis: buildChangeAnalysis(normalizedPeriods, normalizedQuarterlyPeriods),
+    caveatChangeAnalysis: buildCaveatChangeAnalysis(caveats, previousCaveats),
     businessDrivers: buildBusinessDrivers(
       metrics,
       normalizedPeriods,

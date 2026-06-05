@@ -177,6 +177,62 @@ const en = {
     previous: "Previous",
     change: "Change",
     noComparable: "No clean comparison available.",
+    caveatChangesTitle: "Caveat changes",
+    caveatBaseline:
+      "This is the first stored snapshot, so Finari will track caveat changes from the next refresh.",
+    caveatUnchanged:
+      "No normalization caveats changed versus the previous stored snapshot.",
+    newCaveats: "New caveats",
+    resolvedCaveats: "Resolved caveats",
+    unchangedCaveats: "Still applies",
+    changeLabels: {
+      "quarterly-revenue": "Quarterly revenue",
+      "quarterly-net-income": "Quarterly net income",
+      "quarterly-fcf": "Quarterly FCF",
+      "quarterly-operating-margin": "Quarterly operating margin",
+      "quarterly-debt": "Quarterly debt",
+      "quarterly-cash": "Quarterly cash",
+      "quarterly-liabilities-to-assets": "Quarterly liabilities/assets",
+      "quarterly-working-capital": "Quarterly working capital",
+      "annual-revenue": "Annual revenue",
+      "annual-net-income": "Annual net income",
+      "annual-fcf": "Annual FCF",
+      "annual-operating-margin": "Annual operating margin",
+      "annual-debt": "Annual debt",
+      "annual-cash": "Annual cash",
+      "annual-liabilities-to-assets": "Annual liabilities/assets",
+      "annual-working-capital": "Annual working capital",
+    },
+    changeDescriptions: {
+      "quarterly-revenue": "Latest quarter revenue compared with the prior quarter.",
+      "quarterly-net-income":
+        "Latest quarter net income compared with the prior quarter.",
+      "quarterly-fcf": "Latest quarter free cash flow compared with the prior quarter.",
+      "quarterly-operating-margin":
+        "Latest quarter operating margin compared with the prior quarter.",
+      "quarterly-debt":
+        "Latest quarter debt compared with the prior quarter. Lower debt is usually more flexible.",
+      "quarterly-cash":
+        "Latest quarter cash compared with the prior quarter. More cash can increase flexibility.",
+      "quarterly-liabilities-to-assets":
+        "Latest quarter liabilities/assets compared with the prior quarter. Lower is usually better.",
+      "quarterly-working-capital":
+        "Latest quarter working capital compared with the prior quarter.",
+      "annual-revenue": "Latest annual revenue compared with the prior fiscal year.",
+      "annual-net-income":
+        "Latest annual net income compared with the prior fiscal year.",
+      "annual-fcf": "Latest annual free cash flow compared with the prior fiscal year.",
+      "annual-operating-margin":
+        "Latest annual operating margin compared with the prior fiscal year.",
+      "annual-debt":
+        "Latest annual debt compared with the prior fiscal year. Lower debt is usually more flexible.",
+      "annual-cash":
+        "Latest annual cash compared with the prior fiscal year. More cash can increase flexibility.",
+      "annual-liabilities-to-assets":
+        "Latest annual liabilities/assets compared with the prior fiscal year. Lower is usually better.",
+      "annual-working-capital":
+        "Latest annual working capital compared with the prior fiscal year.",
+    },
     driversTitle: "Business-driver read",
     driversSubtitle:
       "Deterministic reads from tagged facts: growth, profitability, cash generation, capital allocation, liquidity, and leverage.",
@@ -201,6 +257,40 @@ const en = {
         "Near-term balance-sheet flexibility. Current assets should comfortably cover current liabilities.",
       leverage:
         "Balance-sheet obligations relative to assets. Higher liabilities reduce room for error.",
+    },
+    driverDetailLabels: {
+      "product-demand": "Product demand proxy",
+      "recent-quarter-demand": "Recent-quarter demand",
+      "pricing-power": "Pricing-power proxy",
+      "margin-pressure": "Margin pressure",
+      "cash-conversion": "Cash conversion",
+      "capital-return": "Capital return",
+      "working-capital-flexibility": "Working-capital flexibility",
+      "balance-sheet-flexibility": "Balance-sheet flexibility",
+      "services-hardware-mix": "Services vs hardware mix",
+      "geographic-exposure": "Geographic exposure",
+    },
+    driverDetailDescriptions: {
+      "product-demand":
+        "Annual revenue growth is the cleanest standardized SEC proxy for demand.",
+      "recent-quarter-demand":
+        "Latest quarter revenue change shows whether recent demand improved or weakened.",
+      "pricing-power":
+        "Gross-margin movement is the SEC-tagged proxy for pricing power, product mix, or cost pressure.",
+      "margin-pressure":
+        "Operating-margin movement shows whether revenue is converting into operating profit better or worse.",
+      "cash-conversion":
+        "Free cash flow divided by net income shows how much reported profit becomes cash.",
+      "capital-return":
+        "Buybacks plus dividends show how much cash is being returned to shareholders.",
+      "working-capital-flexibility":
+        "Working capital shows whether short-term assets exceed short-term obligations.",
+      "balance-sheet-flexibility":
+        "Cash divided by debt shows how much debt is covered by cash on hand.",
+      "services-hardware-mix":
+        "Standardized SEC facts do not provide a comparable services/hardware mix for every company; verify the segment table in the filing.",
+      "geographic-exposure":
+        "Standardized SEC facts do not provide a comparable geography mix for every company; verify the geographic revenue table in the filing.",
     },
     primaryValue: "Primary value",
     secondaryValue: "Secondary value",
@@ -762,6 +852,59 @@ const th: Dictionary = {
     previous: "ก่อนหน้า",
     change: "เปลี่ยนแปลง",
     noComparable: "ยังไม่มีข้อมูลเปรียบเทียบที่สะอาดพอ",
+    caveatChangesTitle: "การเปลี่ยนแปลงของข้อควรระวัง",
+    caveatBaseline:
+      "นี่คือ snapshot แรกที่จัดเก็บไว้ Finari จะเริ่มติดตามการเปลี่ยนแปลงของ caveat ในการรีเฟรชครั้งถัดไป",
+    caveatUnchanged:
+      "ไม่มี caveat จากการ normalize ข้อมูลที่เปลี่ยนไปเมื่อเทียบกับ snapshot ก่อนหน้า",
+    newCaveats: "caveat ใหม่",
+    resolvedCaveats: "caveat ที่หายไป",
+    unchangedCaveats: "ยังต้องใช้ caveat นี้",
+    changeLabels: {
+      "quarterly-revenue": "Revenue รายไตรมาส",
+      "quarterly-net-income": "Net income รายไตรมาส",
+      "quarterly-fcf": "FCF รายไตรมาส",
+      "quarterly-operating-margin": "Operating margin รายไตรมาส",
+      "quarterly-debt": "Debt รายไตรมาส",
+      "quarterly-cash": "Cash รายไตรมาส",
+      "quarterly-liabilities-to-assets": "Liabilities/assets รายไตรมาส",
+      "quarterly-working-capital": "Working capital รายไตรมาส",
+      "annual-revenue": "Revenue รายปี",
+      "annual-net-income": "Net income รายปี",
+      "annual-fcf": "FCF รายปี",
+      "annual-operating-margin": "Operating margin รายปี",
+      "annual-debt": "Debt รายปี",
+      "annual-cash": "Cash รายปี",
+      "annual-liabilities-to-assets": "Liabilities/assets รายปี",
+      "annual-working-capital": "Working capital รายปี",
+    },
+    changeDescriptions: {
+      "quarterly-revenue": "Revenue ไตรมาสล่าสุดเทียบกับไตรมาสก่อนหน้า",
+      "quarterly-net-income":
+        "Net income ไตรมาสล่าสุดเทียบกับไตรมาสก่อนหน้า",
+      "quarterly-fcf": "Free cash flow ไตรมาสล่าสุดเทียบกับไตรมาสก่อนหน้า",
+      "quarterly-operating-margin":
+        "Operating margin ไตรมาสล่าสุดเทียบกับไตรมาสก่อนหน้า",
+      "quarterly-debt":
+        "Debt ไตรมาสล่าสุดเทียบกับไตรมาสก่อนหน้า โดยทั่วไป debt ที่ลดลงช่วยเพิ่มความยืดหยุ่น",
+      "quarterly-cash":
+        "Cash ไตรมาสล่าสุดเทียบกับไตรมาสก่อนหน้า Cash ที่เพิ่มขึ้นช่วยเพิ่มความยืดหยุ่น",
+      "quarterly-liabilities-to-assets":
+        "Liabilities/assets ไตรมาสล่าสุดเทียบกับไตรมาสก่อนหน้า โดยทั่วไปยิ่งต่ำยิ่งดี",
+      "quarterly-working-capital":
+        "Working capital ไตรมาสล่าสุดเทียบกับไตรมาสก่อนหน้า",
+      "annual-revenue": "Revenue ปีล่าสุดเทียบกับปีก่อนหน้า",
+      "annual-net-income": "Net income ปีล่าสุดเทียบกับปีก่อนหน้า",
+      "annual-fcf": "Free cash flow ปีล่าสุดเทียบกับปีก่อนหน้า",
+      "annual-operating-margin": "Operating margin ปีล่าสุดเทียบกับปีก่อนหน้า",
+      "annual-debt":
+        "Debt ปีล่าสุดเทียบกับปีก่อนหน้า โดยทั่วไป debt ที่ลดลงช่วยเพิ่มความยืดหยุ่น",
+      "annual-cash":
+        "Cash ปีล่าสุดเทียบกับปีก่อนหน้า Cash ที่เพิ่มขึ้นช่วยเพิ่มความยืดหยุ่น",
+      "annual-liabilities-to-assets":
+        "Liabilities/assets ปีล่าสุดเทียบกับปีก่อนหน้า โดยทั่วไปยิ่งต่ำยิ่งดี",
+      "annual-working-capital": "Working capital ปีล่าสุดเทียบกับปีก่อนหน้า",
+    },
     driversTitle: "ตัวขับเคลื่อนธุรกิจ",
     driversSubtitle:
       "อ่านจาก tagged facts แบบ deterministic: growth, profitability, cash generation, capital allocation, liquidity, และ leverage",
@@ -786,6 +929,40 @@ const th: Dictionary = {
         "ความยืดหยุ่นระยะสั้นของงบดุล Current assets ควรมากพอเมื่อเทียบกับ current liabilities",
       leverage:
         "ภาระผูกพันในงบดุลเทียบกับสินทรัพย์ หนี้สินสูงทำให้มี room for error น้อยลง",
+    },
+    driverDetailLabels: {
+      "product-demand": "ตัวแทน product demand",
+      "recent-quarter-demand": "Demand ไตรมาสล่าสุด",
+      "pricing-power": "ตัวแทน pricing power",
+      "margin-pressure": "แรงกดดันต่อ margin",
+      "cash-conversion": "Cash conversion",
+      "capital-return": "Capital return",
+      "working-capital-flexibility": "ความยืดหยุ่นจาก working capital",
+      "balance-sheet-flexibility": "ความยืดหยุ่นของงบดุล",
+      "services-hardware-mix": "Services vs hardware mix",
+      "geographic-exposure": "Geographic exposure",
+    },
+    driverDetailDescriptions: {
+      "product-demand":
+        "Revenue growth รายปีคือ proxy จาก standardized SEC facts ที่สะอาดที่สุดสำหรับ demand",
+      "recent-quarter-demand":
+        "การเปลี่ยนแปลงของ revenue ไตรมาสล่าสุดช่วยดูว่า demand ล่าสุดดีขึ้นหรืออ่อนลง",
+      "pricing-power":
+        "การเปลี่ยนแปลงของ gross margin เป็น proxy จาก SEC tags สำหรับ pricing power, product mix, หรือ cost pressure",
+      "margin-pressure":
+        "การเปลี่ยนแปลงของ operating margin บอกว่า revenue เปลี่ยนเป็น operating profit ได้ดีขึ้นหรือแย่ลง",
+      "cash-conversion":
+        "Free cash flow หารด้วย net income บอกว่ากำไรทางบัญชีเปลี่ยนเป็นเงินสดได้แค่ไหน",
+      "capital-return":
+        "Buybacks รวม dividends แสดงเงินสดที่คืนให้ผู้ถือหุ้น",
+      "working-capital-flexibility":
+        "Working capital บอกว่า short-term assets มากกว่าภาระระยะสั้นหรือไม่",
+      "balance-sheet-flexibility":
+        "Cash หาร debt บอกว่า cash ในมือครอบคลุม debt ได้แค่ไหน",
+      "services-hardware-mix":
+        "Standardized SEC facts ยังไม่ให้ services/hardware mix ที่เทียบได้ครบทุกบริษัท ควรตรวจ segment table ใน filing",
+      "geographic-exposure":
+        "Standardized SEC facts ยังไม่ให้ geography mix ที่เทียบได้ครบทุกบริษัท ควรตรวจ geographic revenue table ใน filing",
     },
     primaryValue: "ค่าหลัก",
     secondaryValue: "ค่าเสริม",
