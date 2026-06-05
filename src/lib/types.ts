@@ -46,6 +46,20 @@ export type EventImpactDriver =
 
 export type EventHorizon = "short-term" | "long-term" | "both" | "uncertain";
 export type EventConfidence = "High" | "Medium" | "Low";
+export type CompanyEventSourceType = "news" | "filing";
+export type EventAnalysisMode = "deterministic" | "ai";
+export type EventVisibility = "public" | "private";
+
+export interface RawCompanyEvent {
+  title: string;
+  summary?: string;
+  url: string;
+  sourceName: string;
+  publishedAt: string;
+  sourceType: CompanyEventSourceType;
+  provider: string;
+  form?: string;
+}
 
 export interface CompanyEventImpact {
   id: string;
@@ -54,6 +68,8 @@ export interface CompanyEventImpact {
   summary?: string;
   url: string;
   sourceName: string;
+  sourceType: CompanyEventSourceType;
+  provider: string;
   publishedAt: string;
   eventType: CompanyEventType;
   drivers: EventImpactDriver[];
@@ -61,6 +77,14 @@ export interface CompanyEventImpact {
   horizon: EventHorizon;
   watchMetric: string;
   confidence: EventConfidence;
+  impactSummary: string;
+  investorMeaning: string;
+  analysisMode: EventAnalysisMode;
+  visibility: EventVisibility;
+  isFeatured?: boolean;
+  isHidden?: boolean;
+  generatedAt?: string;
+  publishedAtAnalysis?: string;
 }
 
 export interface FinancialPeriod {

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyEventImpact, parseRssItems } from "@/lib/event-impact";
+import {
+  classifyEventImpact,
+  companySearchTerms,
+  normalizeNewsProviderName,
+  parseRssItems,
+} from "@/lib/event-impact";
 import { fixtureIdentity } from "@/test/fixtures";
 
 describe("event impact analysis", () => {
@@ -30,6 +35,50 @@ describe("event impact analysis", () => {
     });
   });
 
+  it("matches company aliases and falls back to the supported RSS provider", () => {
+    expect(companySearchTerms(fixtureIdentity)).toEqual(
+      expect.arrayContaining(["AAPL", "APPLE"]),
+    );
+    expect(normalizeNewsProviderName("future-paid-provider")).toBe("rss");
+
+    const items = parseRssItems(
+      `
+      <rss>
+        <channel>
+          <item>
+            <title><![CDATA[Apple services pricing update could lift margins]]></title>
+            <link>https://example.com/apple-services</link>
+            <description><![CDATA[Analysts debate services demand and margin impact.]]></description>
+            <pubDate>Fri, 05 Jun 2026 12:00:00 GMT</pubDate>
+          </item>
+          <item>
+            <title><![CDATA[Unrelated company announces new product]]></title>
+            <link>https://example.com/unrelated</link>
+            <description><![CDATA[No matching company alias appears here.]]></description>
+            <pubDate>Fri, 05 Jun 2026 13:00:00 GMT</pubDate>
+          </item>
+          <item>
+            <title><![CDATA[Another unrelated item]]></title>
+            <link>https://example.com/unrelated-2</link>
+            <description><![CDATA[No matching company alias appears here.]]></description>
+            <pubDate>Fri, 05 Jun 2026 14:00:00 GMT</pubDate>
+          </item>
+          <item>
+            <title><![CDATA[One more unrelated item]]></title>
+            <link>https://example.com/unrelated-3</link>
+            <description><![CDATA[No matching company alias appears here.]]></description>
+            <pubDate>Fri, 05 Jun 2026 15:00:00 GMT</pubDate>
+          </item>
+        </channel>
+      </rss>
+      `,
+      companySearchTerms(fixtureIdentity),
+    );
+
+    expect(items).toHaveLength(1);
+    expect(items[0].title).toBe("Apple services pricing update could lift margins");
+  });
+
   it("classifies product pricing as revenue and margin exposure", () => {
     const impact = classifyEventImpact(
       {
@@ -39,6 +88,7 @@ describe("event impact analysis", () => {
         sourceName: "Example News",
         publishedAt: "2026-06-05T10:00:00.000Z",
         sourceType: "news",
+        provider: "rss",
       },
       fixtureIdentity,
     );
@@ -60,6 +110,7 @@ describe("event impact analysis", () => {
         sourceName: "SEC EDGAR",
         publishedAt: "2026-05-01T00:00:00.000Z",
         sourceType: "filing",
+        provider: "sec",
         form: "10-Q",
       },
       fixtureIdentity,

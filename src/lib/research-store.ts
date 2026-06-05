@@ -28,7 +28,7 @@ import type {
 } from "@/lib/types";
 
 const SNAPSHOT_TTL_MS = 24 * 60 * 60 * 1000;
-const MEMO_PROMPT_VERSION = "finari_memo_v4";
+const MEMO_PROMPT_VERSION = "finari_memo_v5_event_context";
 
 type StoredSnapshot = {
   snapshotId: string;
@@ -53,13 +53,18 @@ type MemoScopeInput = {
 export type AiUsageEventInput = {
   userId?: string | null;
   companyId: string;
-  snapshotId: string;
+  snapshotId?: string | null;
   memoId?: string | null;
+  eventImpactId?: string | null;
   model: string;
   requestId?: string;
   promptHash: string;
   locale: Locale;
-  purpose: "private_memo" | "admin_public_memo";
+  purpose:
+    | "private_memo"
+    | "admin_public_memo"
+    | "private_event_impact"
+    | "admin_public_event_impact";
   status: "success" | "fallback" | "error";
   inputTokens?: number;
   outputTokens?: number;
@@ -169,6 +174,18 @@ export function computeSnapshotSourceHash(snapshot: CompanySnapshot): string {
 export function computeMemoPromptHash(
   snapshot: CompanySnapshot,
   locale: Locale = DEFAULT_LOCALE,
+  eventImpacts: Array<{
+    id: string;
+    title: string;
+    eventType: string;
+    drivers: string[];
+    impact: string;
+    horizon: string;
+    watchMetric: string;
+    confidence: string;
+    impactSummary: string;
+    investorMeaning: string;
+  }> = [],
 ): string {
   return stableHash({
     version: MEMO_PROMPT_VERSION,
@@ -187,6 +204,18 @@ export function computeMemoPromptHash(
     peerComparison: snapshot.peerComparison,
     dataQuality: snapshot.dataQuality,
     decisionFramework: snapshot.decisionFramework,
+    eventImpacts: eventImpacts.slice(0, 6).map((event) => ({
+      id: event.id,
+      title: event.title,
+      eventType: event.eventType,
+      drivers: event.drivers,
+      impact: event.impact,
+      horizon: event.horizon,
+      watchMetric: event.watchMetric,
+      confidence: event.confidence,
+      impactSummary: event.impactSummary,
+      investorMeaning: event.investorMeaning,
+    })),
     caveats: snapshot.caveats,
     citations: snapshot.citations,
   });
@@ -629,8 +658,9 @@ export async function getStoredMemo(
   locale: Locale = DEFAULT_LOCALE,
   scopeInput: MemoScopeInput = {},
   model = getOpenAiModel(),
+  eventImpacts: Parameters<typeof computeMemoPromptHash>[2] = [],
 ): Promise<StoredMemo | null> {
-  const promptHash = computeMemoPromptHash(snapshot.snapshot, locale);
+  const promptHash = computeMemoPromptHash(snapshot.snapshot, locale, eventImpacts);
   const scope = normalizeMemoScope(scopeInput);
   if (!hasDatabase()) {
     return getMemoMemory().get(memoMemoryKey(snapshot.snapshotId, locale, model, promptHash, scope)) ?? null;
@@ -687,8 +717,9 @@ export async function persistMemo(
   locale: Locale = DEFAULT_LOCALE,
   scopeInput: MemoScopeInput = {},
   model = getOpenAiModel(),
+  eventImpacts: Parameters<typeof computeMemoPromptHash>[2] = [],
 ): Promise<StoredMemo> {
-  const promptHash = computeMemoPromptHash(snapshot.snapshot, locale);
+  const promptHash = computeMemoPromptHash(snapshot.snapshot, locale, eventImpacts);
   const scope = normalizeMemoScope(scopeInput);
   const memoWithVisibility: ResearchMemo = {
     ...memo,
@@ -784,8 +815,9 @@ export async function recordAiUsageEvent(input: AiUsageEventInput) {
     id: crypto.randomUUID(),
     userId: input.userId ?? null,
     companyId: input.companyId,
-    snapshotId: input.snapshotId,
+    snapshotId: input.snapshotId ?? null,
     memoId: input.memoId ?? null,
+    eventImpactId: input.eventImpactId ?? null,
     model: input.model,
     requestId: input.requestId ?? null,
     promptHash: input.promptHash,

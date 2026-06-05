@@ -1,16 +1,25 @@
 import { jsonError } from "@/lib/api";
 import { getCompanyEventImpacts } from "@/lib/event-impact";
+import { normalizeLocale } from "@/lib/i18n";
+import { getCurrentUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ ticker: string }> },
 ) {
   const { ticker } = await context.params;
+  const url = new URL(request.url);
+  const locale = normalizeLocale(url.searchParams.get("locale"));
+  const includeHidden = url.searchParams.get("includeHidden") === "1";
+  const user = includeHidden ? await getCurrentUser() : null;
 
   try {
-    const result = await getCompanyEventImpacts(ticker);
+    const result = await getCompanyEventImpacts(ticker, locale, {
+      includeHidden: Boolean(includeHidden && user?.isAdmin),
+      ownerUserId: user?.id,
+    });
     return Response.json(result);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("Unknown ticker:")) {

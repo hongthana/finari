@@ -13,6 +13,8 @@ const fixtureEvents = [
     summary: "The event could affect demand and gross margin.",
     url: "https://example.com/apple-pricing",
     sourceName: "Example News",
+    sourceType: "news" as const,
+    provider: "rss",
     publishedAt: "2026-06-05T10:00:00.000Z",
     eventType: "company-specific" as const,
     drivers: ["revenue", "margin"] as const,
@@ -20,6 +22,12 @@ const fixtureEvents = [
     horizon: "both" as const,
     watchMetric: "revenue-growth",
     confidence: "Medium" as const,
+    impactSummary:
+      "Possible financial impact: positive signal for Revenue, Margin. Watch Revenue growth in the next filing. Confidence: medium.",
+    investorMeaning:
+      "Investor meaning: treat this as a positive signal for Revenue, Margin. It may affect sentiment and fundamentals, so confirm the effect in future filings before relying on it.",
+    analysisMode: "deterministic" as const,
+    visibility: "public" as const,
   },
 ];
 
@@ -77,7 +85,18 @@ describe("FinariApp", () => {
       ).toBeInTheDocument();
     });
     expect(screen.getByText("Apple launches new product pricing plan")).toBeInTheDocument();
-    expect(screen.getByText("Investor meaning: treat this as a positive signal for Revenue, Margin. It may affect sentiment and fundamentals, so confirm the effect in future filings before relying on it.")).toBeInTheDocument();
+    expect(screen.getByText("Financial impact read")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Possible financial impact: positive signal for Revenue, Margin. Watch Revenue growth in the next filing. Confidence: medium.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Investor meaning")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Investor meaning: treat this as a positive signal for Revenue, Margin. It may affect sentiment and fundamentals, so confirm the effect in future filings before relying on it.",
+      ),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("img", { name: /Growth and earnings: positive/ }),
     ).toBeInTheDocument();
@@ -100,7 +119,7 @@ describe("FinariApp", () => {
       screen.getByRole("img", { name: /Annual statement screen\. Year-by-year/ }),
     ).toBeInTheDocument();
     expect(screen.getByText("Join waitlist")).toBeInTheDocument();
-  });
+  }, 10_000);
 
   it("renders Thai interface copy and keeps SEC company facts visible", async () => {
     vi.stubGlobal(

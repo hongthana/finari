@@ -375,6 +375,26 @@ const en = {
     horizon: "Time frame",
     watchNext: "Watch in the next filing",
     confidence: "Confidence",
+    impactSummaryLabel: "Financial impact read",
+    investorMeaningLabel: "Investor meaning",
+    analysis: "Analysis",
+    publicAnalysis: "Public analysis",
+    privateAnalysis: "Private analysis",
+    deterministicAnalysis: "Rule-based read",
+    aiAnalysis: "AI-enhanced read",
+    generatePrivate: "Generate private event analysis",
+    signInForPrivate: "Sign in for private event analysis",
+    publishPublic: "Publish public event analysis",
+    adminPublishHint:
+      "Admin control for the canonical public event-impact read.",
+    featured: "Featured",
+    hidden: "Hidden",
+    feature: "Feature",
+    unfeature: "Unfeature",
+    hide: "Hide",
+    unhide: "Unhide",
+    curationFailed: "Unable to update event curation right now.",
+    analysisFailed: "Unable to generate event analysis right now.",
     source: "Source",
     generated: "Generated",
     sourceNote:
@@ -419,8 +439,17 @@ const en = {
       capex: "Capex and cash flow",
       "risk-disclosure": "Risk disclosures and management commentary",
     },
+    impactSummary: (
+      impact: string,
+      drivers: string,
+      watchMetric: string,
+      confidence: string,
+    ) =>
+      `Possible financial impact: ${impact.toLowerCase()} signal for ${drivers}. Watch ${watchMetric} in the next filing. Confidence: ${confidence.toLowerCase()}.`,
     investorMeaning: (impact: string, drivers: string, horizon: string) =>
       `Investor meaning: treat this as a ${impact.toLowerCase()} signal for ${drivers}. It may affect ${horizon.toLowerCase()}, so confirm the effect in future filings before relying on it.`,
+    aiInstruction:
+      "Analyze only the supplied source headline, feed snippet, filing metadata, and deterministic baseline. Do not fetch or invent article details. Explain the possible financial impact in English for retail investors. Avoid buy/sell recommendations, price targets, predictions, or personalized advice. Return strict JSON with one result per event.",
   },
   advisor: {
     badge: "Plain-English summary",
@@ -667,7 +696,7 @@ const en = {
     disclaimer:
       "Finari is educational research software. It does not provide personalized investment advice, buy/sell recommendations, price targets, or suitability analysis.",
     aiInstruction:
-      "Write a concise institutional-grade equity research memo in English for retail investors. Use only the supplied SEC-derived facts, quarterly/TTM fields, peer comparison, data-quality checks, decision framework, citations, and caveats. Do not include buy/sell recommendations, price targets, or personalized investment advice. Return strict JSON with sections: [{title, body, signal}] where signal is positive, neutral, negative, or unknown.",
+      "Write a concise institutional-grade equity research memo in English for retail investors. Use only the supplied SEC-derived facts, quarterly/TTM fields, peer comparison, data-quality checks, decision framework, source-linked event impacts, citations, and caveats. Treat events as headline/snippet-level signals, not confirmed financial outcomes. Do not include buy/sell recommendations, price targets, stock-price predictions, or personalized investment advice. Return strict JSON with sections: [{title, body, signal}] where signal is positive, neutral, negative, or unknown.",
     signal: {
       positive:
         "The current filing profile screens as constructive, but it still needs valuation and business-quality review.",
@@ -685,6 +714,7 @@ const en = {
       decisionScreen: "Decision screen",
       quarterlyTtm: "Quarterly and TTM read",
       peerAndConfidence: "Peer and data confidence",
+      eventImpact: "Event impact watchlist",
       riskQuestions: "Risk questions",
     },
     fallback: {
@@ -718,6 +748,8 @@ const en = {
         "Quarterly and TTM analysis is limited because comparable quarterly facts were not available.",
       peerDataQuality: (peerCount: number, confidence: string) =>
         `Peer comparison uses ${peerCount} same-SIC SEC peers from bounded Finari coverage. Data confidence is ${confidence}, so missing tags or limited peers should affect how much weight the screen receives.`,
+      eventImpact: (events: string) =>
+        `Latest source-linked events to watch: ${events} Treat these as possible driver checks, not stock-price predictions.`,
       reviewCaveats: (caveats: string) =>
         `Review these before relying on the memo: ${caveats}`,
       defaultQuestions:
@@ -1112,6 +1144,26 @@ const th: Dictionary = {
     horizon: "กรอบเวลา",
     watchNext: "สิ่งที่ควรดูใน filing ถัดไป",
     confidence: "ความมั่นใจ",
+    impactSummaryLabel: "อ่านผลกระทบทางการเงิน",
+    investorMeaningLabel: "ความหมายสำหรับนักลงทุน",
+    analysis: "การวิเคราะห์",
+    publicAnalysis: "บทวิเคราะห์สาธารณะ",
+    privateAnalysis: "บทวิเคราะห์ส่วนตัว",
+    deterministicAnalysis: "อ่านด้วย rule",
+    aiAnalysis: "อ่านด้วย AI",
+    generatePrivate: "สร้างบทวิเคราะห์ event ส่วนตัว",
+    signInForPrivate: "เข้าสู่ระบบเพื่อสร้างบทวิเคราะห์ event ส่วนตัว",
+    publishPublic: "เผยแพร่บทวิเคราะห์ event สาธารณะ",
+    adminPublishHint:
+      "เครื่องมือ admin สำหรับสร้าง event-impact read สาธารณะของ ticker นี้",
+    featured: "ปักหมุด",
+    hidden: "ซ่อนอยู่",
+    feature: "ปักหมุด",
+    unfeature: "เลิกปักหมุด",
+    hide: "ซ่อน",
+    unhide: "เลิกซ่อน",
+    curationFailed: "ยังอัปเดตการจัดการ event ไม่ได้ในตอนนี้",
+    analysisFailed: "ยังสร้างบทวิเคราะห์ event ไม่ได้ในตอนนี้",
     source: "Source",
     generated: "สร้างเมื่อ",
     sourceNote:
@@ -1156,8 +1208,17 @@ const th: Dictionary = {
       capex: "Capex และ cash flow",
       "risk-disclosure": "Risk disclosure และคำอธิบายของผู้บริหาร",
     },
+    impactSummary: (
+      impact: string,
+      drivers: string,
+      watchMetric: string,
+      confidence: string,
+    ) =>
+      `ผลกระทบที่อาจเกิดขึ้น: เป็นสัญญาณ${impact}ต่อ ${drivers} ควรดู ${watchMetric} ใน filing ถัดไป ความมั่นใจ: ${confidence}`,
     investorMeaning: (impact: string, drivers: string, horizon: string) =>
       `ความหมายสำหรับนักลงทุน: มองเป็นสัญญาณ${impact}ต่อ ${drivers} และอาจกระทบ ${horizon} จึงควรยืนยันผลจริงใน filing ถัดไปก่อนใช้ตัดสินใจ`,
+    aiInstruction:
+      "วิเคราะห์เฉพาะ headline, snippet จาก feed, metadata ของ filing, และ deterministic baseline ที่ให้มาเท่านั้น ห้ามดึงหรือแต่งรายละเอียดจากบทความเพิ่มเติม อธิบายผลกระทบทางการเงินเป็นภาษาไทยที่นักลงทุนทั่วไปเข้าใจง่าย ห้ามให้คำแนะนำซื้อขาย ราคาเป้าหมาย การทำนายราคา หรือคำแนะนำเฉพาะบุคคล ส่งกลับ strict JSON หนึ่งผลลัพธ์ต่อหนึ่ง event",
   },
   advisor: {
     badge: "สรุปให้อ่านง่าย",
@@ -1403,7 +1464,7 @@ const th: Dictionary = {
     disclaimer:
       "Finari เป็นซอฟต์แวร์วิจัยเพื่อการศึกษา ไม่ใช่คำแนะนำการลงทุนเฉพาะบุคคล คำแนะนำให้ซื้อหรือขาย ราคาเป้าหมาย หรือการวิเคราะห์ความเหมาะสมรายบุคคล",
     aiInstruction:
-      "เขียน equity research memo ระดับสถาบันเป็นภาษาไทยแบบมืออาชีพและเข้าใจง่ายสำหรับนักลงทุนรายย่อย ใช้เฉพาะข้อมูล SEC-derived facts, quarterly/TTM fields, peer comparison, data-quality checks, decision framework, citations, และ caveats ที่ให้มาเท่านั้น ห้ามให้คำแนะนำซื้อหรือขาย ห้ามให้ราคาเป้าหมาย และห้ามให้คำแนะนำการลงทุนเฉพาะบุคคล ส่งกลับเป็น strict JSON พร้อม sections: [{title, body, signal}] โดย signal ต้องเป็น positive, neutral, negative, หรือ unknown",
+      "เขียน equity research memo ระดับสถาบันเป็นภาษาไทยแบบมืออาชีพและเข้าใจง่ายสำหรับนักลงทุนรายย่อย ใช้เฉพาะข้อมูล SEC-derived facts, quarterly/TTM fields, peer comparison, data-quality checks, decision framework, event impacts ที่มี source link, citations, และ caveats ที่ให้มาเท่านั้น มอง event เป็นสัญญาณจาก headline/snippet ไม่ใช่ผลลัพธ์ทางการเงินที่ยืนยันแล้ว ห้ามให้คำแนะนำซื้อหรือขาย ห้ามให้ราคาเป้าหมาย ห้ามทำนายราคาหุ้น และห้ามให้คำแนะนำการลงทุนเฉพาะบุคคล ส่งกลับเป็น strict JSON พร้อม sections: [{title, body, signal}] โดย signal ต้องเป็น positive, neutral, negative, หรือ unknown",
     signal: {
       positive:
         "ภาพจาก filing ล่าสุดดูเป็นบวกในเชิง screening แต่ยังต้องตรวจสอบ valuation และคุณภาพธุรกิจเพิ่มเติม",
@@ -1421,6 +1482,7 @@ const th: Dictionary = {
       decisionScreen: "หน้าช่วยตัดสินใจ",
       quarterlyTtm: "มุมมองรายไตรมาสและ TTM",
       peerAndConfidence: "Peer และความมั่นใจของข้อมูล",
+      eventImpact: "เหตุการณ์ที่ควรติดตาม",
       riskQuestions: "คำถามด้านความเสี่ยง",
     },
     fallback: {
@@ -1454,6 +1516,8 @@ const th: Dictionary = {
         "การวิเคราะห์รายไตรมาสและ TTM ยังจำกัด เพราะไม่มี quarterly facts ที่เทียบกันได้ครบ",
       peerDataQuality: (peerCount: number, confidence: string) =>
         `Peer comparison ใช้ peer same-SIC ${peerCount} บริษัทจาก Finari coverage ที่จำกัดและอ้างอิง SEC เท่านั้น ความมั่นใจของข้อมูลอยู่ที่ ${confidence} ดังนั้น missing tags หรือ peer coverage ที่จำกัดควรมีผลต่อน้ำหนักที่ใช้กับ screen นี้`,
+      eventImpact: (events: string) =>
+        `เหตุการณ์ล่าสุดที่มี source link และควรติดตาม: ${events} ใช้เป็นจุดตรวจ driver ทางการเงิน ไม่ใช่การทำนายราคาหุ้น`,
       reviewCaveats: (caveats: string) =>
         `ตรวจสอบประเด็นเหล่านี้ก่อนใช้ memo: ${caveats}`,
       defaultQuestions:

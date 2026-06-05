@@ -79,6 +79,7 @@ import type {
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type MemoState = "idle" | "loading" | "ready" | "error";
+type EventCurationAction = "feature" | "unfeature" | "hide" | "unhide";
 type Viewer = {
   id: string;
   email?: string | null;
@@ -664,10 +665,16 @@ function EventImpactCard({
   event,
   locale,
   t,
+  viewer,
+  curating,
+  onCurate,
 }: {
   event: CompanyEventImpact;
   locale: Locale;
   t: Dictionary;
+  viewer: Viewer | null;
+  curating: boolean;
+  onCurate: (eventId: string, action: EventCurationAction) => void;
 }) {
   const eventType = recordValue(t.events.typeLabels, event.eventType, event.eventType);
   const impact = recordValue(t.events.impactLabels, event.impact, event.impact);
@@ -688,9 +695,19 @@ function EventImpactCard({
   const publishedAt = new Date(event.publishedAt).toLocaleString(
     locale === "th" ? "th-TH" : "en-US",
   );
+  const analysisLabel =
+    event.analysisMode === "ai"
+      ? t.events.aiAnalysis
+      : t.events.deterministicAnalysis;
+  const visibilityLabel =
+    event.visibility === "private" ? t.events.privateAnalysis : t.events.publicAnalysis;
 
   return (
-    <article className="min-w-0 rounded-md border border-zinc-200 bg-white p-4">
+    <article
+      className={`min-w-0 rounded-md border bg-white p-4 ${
+        event.isFeatured ? "border-sky-300" : "border-zinc-200"
+      } ${event.isHidden ? "opacity-70" : ""}`}
+    >
       <div className="flex items-start gap-3">
         <SignalBadge
           signal={event.impact}
@@ -705,6 +722,24 @@ function EventImpactCard({
           <h4 className="mt-1 break-words text-sm font-semibold leading-6 text-zinc-950">
             {event.title}
           </h4>
+          <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold">
+            <span className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-zinc-700">
+              {analysisLabel}
+            </span>
+            <span className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-zinc-700">
+              {visibilityLabel}
+            </span>
+            {event.isFeatured && (
+              <span className="rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-sky-800">
+                {t.events.featured}
+              </span>
+            )}
+            {event.isHidden && (
+              <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-amber-900">
+                {t.events.hidden}
+              </span>
+            )}
+          </div>
           {event.summary && (
             <p className="mt-1 break-words text-sm leading-6 text-zinc-600">
               {event.summary}
@@ -712,6 +747,12 @@ function EventImpactCard({
           )}
 
           <dl className="mt-4 grid gap-3 text-xs text-zinc-600 md:grid-cols-2">
+            <div>
+              <dt className="font-semibold text-zinc-500">{t.events.analysis}</dt>
+              <dd className="mt-1 font-semibold text-zinc-900">
+                {analysisLabel}
+              </dd>
+            </div>
             <div>
               <dt className="font-semibold text-zinc-500">{t.events.eventType}</dt>
               <dd className="mt-1 font-semibold text-zinc-900">{eventType}</dd>
@@ -749,9 +790,24 @@ function EventImpactCard({
             </div>
           </dl>
 
-          <p className="mt-3 break-words text-sm leading-6 text-zinc-700">
-            {t.events.investorMeaning(impact, driverLabels.join(", "), horizon)}
-          </p>
+          <div className="mt-3 space-y-2 rounded-md border border-zinc-200 bg-zinc-50 p-3">
+            <div>
+              <p className="text-xs font-semibold text-zinc-500">
+                {t.events.impactSummaryLabel}
+              </p>
+              <p className="mt-1 break-words text-sm leading-6 text-zinc-700">
+                {event.impactSummary}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-zinc-500">
+                {t.events.investorMeaningLabel}
+              </p>
+              <p className="mt-1 break-words text-sm leading-6 text-zinc-700">
+                {event.investorMeaning}
+              </p>
+            </div>
+          </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-zinc-100 pt-3 text-xs font-medium text-zinc-500">
             <span className="inline-flex items-center gap-1">
@@ -770,6 +826,36 @@ function EventImpactCard({
               <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             </a>
           </div>
+          {viewer?.isAdmin && (
+            <div className="mt-3 flex flex-wrap gap-2 border-t border-zinc-100 pt-3">
+              <button
+                type="button"
+                disabled={curating}
+                onClick={() =>
+                  onCurate(event.id, event.isFeatured ? "unfeature" : "feature")
+                }
+                className="inline-flex h-8 items-center justify-center rounded-md border border-sky-200 bg-sky-50 px-2.5 text-xs font-semibold text-sky-800 transition hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {curating
+                  ? t.events.analysis
+                  : event.isFeatured
+                    ? t.events.unfeature
+                    : t.events.feature}
+              </button>
+              <button
+                type="button"
+                disabled={curating}
+                onClick={() => onCurate(event.id, event.isHidden ? "unhide" : "hide")}
+                className="inline-flex h-8 items-center justify-center rounded-md border border-amber-200 bg-amber-50 px-2.5 text-xs font-semibold text-amber-900 transition hover:border-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {curating
+                  ? t.events.analysis
+                  : event.isHidden
+                    ? t.events.unhide
+                    : t.events.hide}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </article>
@@ -779,19 +865,40 @@ function EventImpactCard({
 function EventImpactPanel({
   events,
   state,
+  privateState,
+  adminState,
   error,
+  privateError,
+  adminError,
   locale,
   t,
+  viewer,
+  curatingEventId,
+  onGeneratePrivate,
+  onPublishPublic,
+  onCurate,
 }: {
   events: CompanyEventImpact[];
   state: LoadState;
+  privateState: MemoState;
+  adminState: MemoState;
   error: string | null;
+  privateError: string | null;
+  adminError: string | null;
   locale: Locale;
   t: Dictionary;
+  viewer: Viewer | null;
+  curatingEventId: string | null;
+  onGeneratePrivate: () => void;
+  onPublishPublic: () => void;
+  onCurate: (eventId: string, action: EventCurationAction) => void;
 }) {
+  const signedIn = Boolean(viewer);
+  const isAdmin = Boolean(viewer?.isAdmin);
+
   return (
     <section className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-5">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <MeaningPill
             Icon={Newspaper}
@@ -806,7 +913,65 @@ function EventImpactPanel({
             {t.events.subtitle}
           </p>
         </div>
+        <div className="flex flex-col gap-2 sm:items-end">
+          {signedIn ? (
+            <button
+              type="button"
+              disabled={privateState === "loading" || state === "loading"}
+              onClick={onGeneratePrivate}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-teal-700 px-3 text-xs font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
+            >
+              {privateState === "loading" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              {t.events.generatePrivate}
+            </button>
+          ) : (
+            <Link
+              href="/api/auth/signin"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-3 text-xs font-semibold text-zinc-700 transition hover:border-teal-500 hover:text-teal-700"
+            >
+              <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />
+              {t.events.signInForPrivate}
+            </Link>
+          )}
+          {isAdmin && (
+            <button
+              type="button"
+              disabled={adminState === "loading" || state === "loading"}
+              onClick={onPublishPublic}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-900 transition hover:border-amber-500 disabled:cursor-not-allowed disabled:border-zinc-200 disabled:bg-zinc-100 disabled:text-zinc-400"
+            >
+              {adminState === "loading" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              {t.events.publishPublic}
+            </button>
+          )}
+        </div>
       </div>
+
+      {isAdmin && (
+        <p className="mt-3 text-xs leading-5 text-zinc-500">
+          {t.events.adminPublishHint}
+        </p>
+      )}
+
+      {privateError && (
+        <p className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+          {privateError}
+        </p>
+      )}
+
+      {adminError && (
+        <p className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+          {adminError}
+        </p>
+      )}
 
       {state === "loading" && (
         <p className="mt-4 rounded-md border border-zinc-200 bg-white p-4 text-sm text-zinc-600">
@@ -834,6 +999,9 @@ function EventImpactPanel({
               event={event}
               locale={locale}
               t={t}
+              viewer={viewer}
+              curating={curatingEventId === event.id}
+              onCurate={onCurate}
             />
           ))}
         </div>
@@ -2756,6 +2924,11 @@ export function FinariApp({
   const [events, setEvents] = useState<CompanyEventImpact[]>([]);
   const [eventsState, setEventsState] = useState<LoadState>("idle");
   const [eventsError, setEventsError] = useState<string | null>(null);
+  const [privateEventsState, setPrivateEventsState] = useState<MemoState>("idle");
+  const [adminEventsState, setAdminEventsState] = useState<MemoState>("idle");
+  const [privateEventsError, setPrivateEventsError] = useState<string | null>(null);
+  const [adminEventsError, setAdminEventsError] = useState<string | null>(null);
+  const [curatingEventId, setCuratingEventId] = useState<string | null>(null);
   const [activeTicker, setActiveTicker] = useState(normalizedInitialTicker);
   const [memo, setMemo] = useState<ResearchMemo | null>(null);
   const [memoState, setMemoState] = useState<MemoState>("idle");
@@ -2769,7 +2942,7 @@ export function FinariApp({
     query.trim().length > 0 && query.trim().toUpperCase() !== activeTicker;
   const visibleResults = showSearchResults ? results : [];
 
-  const loadEvents = useCallback(async (ticker: string) => {
+  const loadEvents = useCallback(async (ticker: string, includeHidden = false) => {
     const normalized = ticker.trim().toUpperCase();
     if (!normalized) {
       return;
@@ -2780,8 +2953,12 @@ export function FinariApp({
     setEventsError(null);
 
     try {
+      const params = new URLSearchParams({ locale });
+      if (includeHidden) {
+        params.set("includeHidden", "1");
+      }
       const response = await fetch(
-        `/api/company/${encodeURIComponent(normalized)}/events?locale=${locale}`,
+        `/api/company/${encodeURIComponent(normalized)}/events?${params.toString()}`,
       );
       const payload = (await response.json()) as {
         events?: CompanyEventImpact[];
@@ -2818,6 +2995,11 @@ export function FinariApp({
     setEvents([]);
     setEventsState("idle");
     setEventsError(null);
+    setPrivateEventsState("idle");
+    setAdminEventsState("idle");
+    setPrivateEventsError(null);
+    setAdminEventsError(null);
+    setCuratingEventId(null);
     setLoadState("loading");
     setLoadError(null);
 
@@ -2919,6 +3101,105 @@ export function FinariApp({
     }
   }
 
+  async function generatePrivateEventAnalysis() {
+    if (!snapshot || !viewer) {
+      return;
+    }
+
+    setPrivateEventsState("loading");
+    setPrivateEventsError(null);
+
+    try {
+      const response = await fetch(
+        `/api/me/company/${encodeURIComponent(snapshot.identity.ticker)}/events/analysis?locale=${locale}`,
+        { method: "POST" },
+      );
+      const payload = (await response.json()) as {
+        events?: CompanyEventImpact[];
+        error?: string;
+      };
+
+      if (!response.ok || !payload.events) {
+        throw new Error(payload.error || t.events.analysisFailed);
+      }
+
+      setEvents(payload.events);
+      setPrivateEventsState("ready");
+    } catch (error) {
+      setPrivateEventsState("error");
+      setPrivateEventsError(
+        error instanceof Error ? error.message : t.events.analysisFailed,
+      );
+    }
+  }
+
+  async function publishPublicEventAnalysis() {
+    if (!snapshot || !viewer?.isAdmin) {
+      return;
+    }
+
+    setAdminEventsState("loading");
+    setAdminEventsError(null);
+
+    try {
+      const response = await fetch(
+        `/api/admin/company/${encodeURIComponent(snapshot.identity.ticker)}/events/refresh?locale=${locale}`,
+        { method: "POST" },
+      );
+      const payload = (await response.json()) as {
+        events?: CompanyEventImpact[];
+        error?: string;
+      };
+
+      if (!response.ok || !payload.events) {
+        throw new Error(payload.error || t.events.analysisFailed);
+      }
+
+      setEvents(payload.events);
+      setAdminEventsState("ready");
+    } catch (error) {
+      setAdminEventsState("error");
+      setAdminEventsError(
+        error instanceof Error ? error.message : t.events.analysisFailed,
+      );
+    }
+  }
+
+  async function curateEvent(eventId: string, action: EventCurationAction) {
+    if (!snapshot || !viewer?.isAdmin) {
+      return;
+    }
+
+    setCuratingEventId(eventId);
+    setAdminEventsError(null);
+
+    try {
+      const response = await fetch(
+        `/api/admin/company/${encodeURIComponent(snapshot.identity.ticker)}/events/${encodeURIComponent(eventId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        },
+      );
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error || t.events.curationFailed);
+      }
+
+      await loadEvents(snapshot.identity.ticker, true);
+    } catch (error) {
+      setAdminEventsError(
+        error instanceof Error ? error.message : t.events.curationFailed,
+      );
+    } finally {
+      setCuratingEventId(null);
+    }
+  }
+
   useEffect(() => {
     let mounted = true;
 
@@ -2950,6 +3231,16 @@ export function FinariApp({
 
     return () => window.clearTimeout(timeout);
   }, [loadCompany, normalizedInitialTicker]);
+
+  useEffect(() => {
+    if (viewer?.isAdmin && snapshot) {
+      const timeout = window.setTimeout(() => {
+        void loadEvents(snapshot.identity.ticker, true);
+      }, 0);
+      return () => window.clearTimeout(timeout);
+    }
+    return undefined;
+  }, [loadEvents, snapshot, viewer?.isAdmin]);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -3018,9 +3309,18 @@ export function FinariApp({
               <EventImpactPanel
                 events={events}
                 state={eventsState}
+                privateState={privateEventsState}
+                adminState={adminEventsState}
                 error={eventsError}
+                privateError={privateEventsError}
+                adminError={adminEventsError}
                 locale={locale}
                 t={t}
+                viewer={viewer}
+                curatingEventId={curatingEventId}
+                onGeneratePrivate={() => void generatePrivateEventAnalysis()}
+                onPublishPublic={() => void publishPublicEventAnalysis()}
+                onCurate={(eventId, action) => void curateEvent(eventId, action)}
               />
               <QuarterlyTrendPanel snapshot={snapshot} t={t} />
               <ChangeAnalysisPanel snapshot={snapshot} locale={locale} t={t} />

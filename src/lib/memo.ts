@@ -8,6 +8,7 @@ import {
   type Locale,
 } from "@/lib/i18n";
 import type {
+  CompanyEventImpact,
   CompanySnapshot,
   MemoSection,
   ResearchMemo,
@@ -77,6 +78,7 @@ function periodLabel(snapshot: CompanySnapshot, locale: Locale): string {
 function fallbackSections(
   snapshot: CompanySnapshot,
   locale: Locale,
+  eventImpacts: CompanyEventImpact[] = [],
 ): MemoSection[] {
   const t = getDictionary(locale);
   const latest = snapshot.periods[0];
@@ -97,7 +99,7 @@ function fallbackSections(
     .map((caveat) => translateCaveat(caveat, locale))
     .join(" ");
 
-  return [
+  const sections: MemoSection[] = [
     {
       title: t.memo.sections.institutionalRead,
       signal,
@@ -177,18 +179,48 @@ function fallbackSections(
         t.analysis.confidenceLabels[snapshot.dataQuality.label],
       ),
     },
-    {
+  ];
+
+  if (eventImpacts.length > 0) {
+    const topEvents = eventImpacts
+      .slice(0, 3)
+      .map((event) => `${event.title}: ${event.investorMeaning}`)
+      .join(" ");
+    sections.push({
+      title: t.memo.sections.eventImpact,
+      signal: eventImpacts.some((event) => event.impact === "negative")
+        ? "negative"
+        : eventImpacts.some((event) => event.impact === "positive")
+          ? "positive"
+          : "neutral",
+      body: t.memo.fallback.eventImpact(topEvents),
+    });
+  }
+
+  sections.push({
       title: t.memo.sections.riskQuestions,
       signal: snapshot.caveats.length ? "negative" : "neutral",
       body:
         snapshot.caveats.length > 0
           ? t.memo.fallback.reviewCaveats(translatedCaveats)
           : t.memo.fallback.defaultQuestions,
-    },
-  ];
+    });
+
+  return sections;
 }
 
-function buildPrompt(snapshot: CompanySnapshot, locale: Locale): string {
+function eventCitations(eventImpacts: CompanyEventImpact[]) {
+  return eventImpacts.slice(0, 6).map((event) => ({
+    label: event.sourceName ? `${event.sourceName}: ${event.title}` : event.title,
+    url: event.url,
+  }));
+}
+
+function buildPrompt(
+  snapshot: CompanySnapshot,
+  locale: Locale,
+  eventImpacts: CompanyEventImpact[] = [],
+): string {
   const t = getDictionary(locale);
   const latest = snapshot.periods[0];
   const periods = snapshot.periods.map((period) => ({
@@ -253,9 +285,27 @@ function buildPrompt(snapshot: CompanySnapshot, locale: Locale): string {
       peerComparison: snapshot.peerComparison,
       dataQuality: snapshot.dataQuality,
       decisionFramework: snapshot.decisionFramework,
+      eventImpacts: eventImpacts.slice(0, 6).map((event) => ({
+        title: event.title,
+        summary: event.summary,
+        sourceName: event.sourceName,
+        sourceType: event.sourceType,
+        provider: event.provider,
+        publishedAt: event.publishedAt,
+        eventType: event.eventType,
+        drivers: event.drivers,
+        impact: event.impact,
+        horizon: event.horizon,
+        watchMetric: event.watchMetric,
+        confidence: event.confidence,
+        impactSummary: event.impactSummary,
+        investorMeaning: event.investorMeaning,
+        analysisMode: event.analysisMode,
+        visibility: event.visibility,
+      })),
       caveatChangeAnalysis: snapshot.caveatChangeAnalysis,
       caveats: snapshot.caveats,
-      citations: snapshot.citations,
+      citations: [...snapshot.citations, ...eventCitations(eventImpacts)],
     },
     null,
     2,
@@ -371,6 +421,7 @@ function extractTokenUsage(responseJson: unknown) {
 async function generateAiSections(
   snapshot: CompanySnapshot,
   locale: Locale,
+  eventImpacts: CompanyEventImpact[] = [],
 ): Promise<{
   sections: MemoSection[];
   usage: Omit<AiGenerationUsage, "model" | "status" | "errorMessage">;
@@ -389,7 +440,7 @@ async function generateAiSections(
     },
     body: JSON.stringify({
       model: getOpenAiModel(),
-      input: buildPrompt(snapshot, locale),
+      input: buildPrompt(snapshot, locale, eventImpacts),
       text: {
         format: {
           type: "json_schema",
@@ -456,6 +507,7 @@ export function generateFallbackResearchMemo(
   snapshot: CompanySnapshot,
   locale: Locale = DEFAULT_LOCALE,
   visibility: "public" | "private" = "public",
+  eventImpacts: CompanyEventImpact[] = [],
 ): ResearchMemo {
   const t = getDictionary(locale);
 
@@ -465,8 +517,8 @@ export function generateFallbackResearchMemo(
     mode: "fallback",
     visibility,
     disclaimer: t.memo.disclaimer,
-    sections: fallbackSections(snapshot, locale),
-    citations: snapshot.citations,
+    sections: fallbackSections(snapshot, locale, eventImpacts),
+    citations: [...snapshot.citations, ...eventCitations(eventImpacts)],
   };
 }
 
@@ -474,12 +526,13 @@ export async function generateResearchMemoWithUsage(
   snapshot: CompanySnapshot,
   locale: Locale = DEFAULT_LOCALE,
   visibility: "public" | "private" = "private",
+  eventImpacts: CompanyEventImpact[] = [],
 ): Promise<GeneratedResearchMemo> {
   const t = getDictionary(locale);
   const model = getOpenAiModel();
 
   try {
-    const result = await generateAiSections(snapshot, locale);
+    const result = await generateAiSections(snapshot, locale, eventImpacts);
     return {
       memo: {
         company: snapshot.identity,
@@ -488,7 +541,7 @@ export async function generateResearchMemoWithUsage(
         visibility,
         disclaimer: t.memo.disclaimer,
         sections: result.sections,
-        citations: snapshot.citations,
+        citations: [...snapshot.citations, ...eventCitations(eventImpacts)],
       },
       usage: {
         model,
@@ -498,7 +551,7 @@ export async function generateResearchMemoWithUsage(
     };
   } catch (error) {
     return {
-      memo: generateFallbackResearchMemo(snapshot, locale, visibility),
+      memo: generateFallbackResearchMemo(snapshot, locale, visibility, eventImpacts),
       usage: {
         model,
         status: "fallback",

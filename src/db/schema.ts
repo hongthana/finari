@@ -262,6 +262,102 @@ export const researchSnapshots = pgTable(
   }),
 );
 
+export const companyEvents = pgTable(
+  "company_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    sourceType: text("source_type").notNull(),
+    sourceName: text("source_name").notNull(),
+    title: text("title").notNull(),
+    summary: text("summary"),
+    url: text("url").notNull(),
+    publishedAt: timestamp("published_at", { withTimezone: true }).notNull(),
+    form: text("form"),
+    sourceFingerprint: text("source_fingerprint").notNull(),
+    metadataJson: jsonb("metadata_json").$type<Record<string, unknown>>().default({}).notNull(),
+    isHidden: boolean("is_hidden").default(false).notNull(),
+    isFeatured: boolean("is_featured").default(false).notNull(),
+    curatedByUserId: text("curated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    curatedAt: timestamp("curated_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    companyFingerprintIdx: uniqueIndex("company_events_company_fingerprint_idx").on(
+      table.companyId,
+      table.sourceFingerprint,
+    ),
+    companyPublishedIdx: index("company_events_company_published_idx").on(
+      table.companyId,
+      table.publishedAt,
+    ),
+    sourceFingerprintIdx: index("company_events_source_fingerprint_idx").on(
+      table.sourceFingerprint,
+    ),
+  }),
+);
+
+export const eventImpacts = pgTable(
+  "event_impacts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    companyEventId: uuid("company_event_id")
+      .notNull()
+      .references(() => companyEvents.id, { onDelete: "cascade" }),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    locale: text("locale").default("en").notNull(),
+    visibility: text("visibility").default("public").notNull(),
+    ownerUserId: text("owner_user_id").references(() => users.id, { onDelete: "cascade" }),
+    analysisMode: text("analysis_mode").notNull(),
+    model: text("model").notNull(),
+    promptHash: text("prompt_hash").notNull(),
+    eventType: text("event_type").notNull(),
+    driversJson: jsonb("drivers_json").$type<string[]>().default([]).notNull(),
+    impact: text("impact").notNull(),
+    horizon: text("horizon").notNull(),
+    watchMetric: text("watch_metric").notNull(),
+    confidence: text("confidence").notNull(),
+    impactSummary: text("impact_summary").notNull(),
+    investorMeaning: text("investor_meaning").notNull(),
+    generatedAt: timestamp("generated_at", { withTimezone: true }).defaultNow().notNull(),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    publishedByUserId: text("published_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (table) => ({
+    publicImpactCacheIdx: uniqueIndex("event_impacts_public_cache_idx")
+      .on(table.companyEventId, table.locale, table.model, table.promptHash)
+      .where(sql`${table.visibility} = 'public'`),
+    privateImpactCacheIdx: uniqueIndex("event_impacts_private_cache_idx")
+      .on(
+        table.companyEventId,
+        table.locale,
+        table.model,
+        table.promptHash,
+        table.ownerUserId,
+      )
+      .where(sql`${table.visibility} = 'private' and ${table.ownerUserId} is not null`),
+    eventLocaleIdx: index("event_impacts_event_locale_idx").on(
+      table.companyEventId,
+      table.locale,
+    ),
+    ownerIdx: index("event_impacts_owner_user_id_idx").on(table.ownerUserId),
+    companyGeneratedIdx: index("event_impacts_company_generated_idx").on(
+      table.companyId,
+      table.generatedAt,
+    ),
+  }),
+);
+
 export const researchMemos = pgTable(
   "research_memos",
   {
@@ -317,6 +413,9 @@ export const aiUsageEvents = pgTable(
       onDelete: "set null",
     }),
     memoId: uuid("memo_id").references(() => researchMemos.id, { onDelete: "set null" }),
+    eventImpactId: uuid("event_impact_id").references(() => eventImpacts.id, {
+      onDelete: "set null",
+    }),
     model: text("model").notNull(),
     requestId: text("request_id"),
     promptHash: text("prompt_hash").notNull(),
@@ -336,6 +435,7 @@ export const aiUsageEvents = pgTable(
       table.createdAt,
     ),
     memoIdx: index("ai_usage_events_memo_id_idx").on(table.memoId),
+    eventImpactIdx: index("ai_usage_events_event_impact_id_idx").on(table.eventImpactId),
   }),
 );
 
@@ -467,6 +567,7 @@ export const companiesRelations = relations(companies, ({ many }) => ({
   filings: many(filings),
   periods: many(financialPeriods),
   snapshots: many(researchSnapshots),
+  events: many(companyEvents),
 }));
 
 export const researchSnapshotsRelations = relations(researchSnapshots, ({ one, many }) => ({
@@ -475,6 +576,25 @@ export const researchSnapshotsRelations = relations(researchSnapshots, ({ one, m
     references: [companies.id],
   }),
   memos: many(researchMemos),
+}));
+
+export const companyEventsRelations = relations(companyEvents, ({ one, many }) => ({
+  company: one(companies, {
+    fields: [companyEvents.companyId],
+    references: [companies.id],
+  }),
+  impacts: many(eventImpacts),
+}));
+
+export const eventImpactsRelations = relations(eventImpacts, ({ one }) => ({
+  event: one(companyEvents, {
+    fields: [eventImpacts.companyEventId],
+    references: [companyEvents.id],
+  }),
+  company: one(companies, {
+    fields: [eventImpacts.companyId],
+    references: [companies.id],
+  }),
 }));
 
 export const watchlistsRelations = relations(watchlists, ({ one, many }) => ({

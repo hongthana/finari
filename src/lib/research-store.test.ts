@@ -47,6 +47,23 @@ describe("research store", () => {
     expect(computeMemoPromptHash(modified, "en")).not.toEqual(
       computeMemoPromptHash(fixtureSnapshot, "en"),
     );
+
+    expect(
+      computeMemoPromptHash(fixtureSnapshot, "en", [
+        {
+          id: "event_1",
+          title: "Apple launches new product pricing plan",
+          eventType: "company-specific",
+          drivers: ["revenue", "margin"],
+          impact: "positive",
+          horizon: "both",
+          watchMetric: "revenue-growth",
+          confidence: "Medium",
+          impactSummary: "Possible impact on revenue and margin.",
+          investorMeaning: "Watch revenue growth and gross margin.",
+        },
+      ]),
+    ).not.toEqual(computeMemoPromptHash(fixtureSnapshot, "en"));
   });
 
   it("stores and retrieves a fresh snapshot from the memory fallback", async () => {

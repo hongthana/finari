@@ -4,6 +4,7 @@ import {
   buildPeerComparisonFromSnapshots,
   normalizeCompanySnapshot,
 } from "@/lib/financial-analysis";
+import { getCompanyEventImpacts } from "@/lib/event-impact";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n";
 import {
   generateFallbackResearchMemo,
@@ -172,7 +173,14 @@ export async function getResearchMemoForTicker(
   snapshotId: string;
 }> {
   const snapshot = await getStoredSnapshotForTicker(ticker);
-  const existing = await getStoredMemo(snapshot, locale, { visibility: "public" });
+  const eventContext = (await getCompanyEventImpacts(ticker, locale)).events;
+  const existing = await getStoredMemo(
+    snapshot,
+    locale,
+    { visibility: "public" },
+    undefined,
+    eventContext,
+  );
   if (existing) {
     return {
       memo: existing.memo,
@@ -181,7 +189,12 @@ export async function getResearchMemoForTicker(
     };
   }
 
-  const memo = generateFallbackResearchMemo(snapshot.snapshot, locale, "public");
+  const memo = generateFallbackResearchMemo(
+    snapshot.snapshot,
+    locale,
+    "public",
+    eventContext,
+  );
   return {
     memo,
     memoId: `fallback:${snapshot.snapshotId}:${locale}`,
@@ -199,10 +212,19 @@ export async function getPrivateResearchMemoForTicker(
   snapshotId: string;
 }> {
   const snapshot = await getStoredSnapshotForTicker(ticker);
-  const existing = await getStoredMemo(snapshot, locale, {
-    visibility: "private",
-    ownerUserId: userId,
-  });
+  const eventContext = (
+    await getCompanyEventImpacts(ticker, locale, { ownerUserId: userId })
+  ).events;
+  const existing = await getStoredMemo(
+    snapshot,
+    locale,
+    {
+      visibility: "private",
+      ownerUserId: userId,
+    },
+    undefined,
+    eventContext,
+  );
   if (existing) {
     return {
       memo: existing.memo,
@@ -215,11 +237,19 @@ export async function getPrivateResearchMemoForTicker(
     snapshot.snapshot,
     locale,
     "private",
+    eventContext,
   );
-  const stored = await persistMemo(snapshot, generated.memo, locale, {
-    visibility: "private",
-    ownerUserId: userId,
-  });
+  const stored = await persistMemo(
+    snapshot,
+    generated.memo,
+    locale,
+    {
+      visibility: "private",
+      ownerUserId: userId,
+    },
+    undefined,
+    eventContext,
+  );
   await recordAiUsageEvent({
     userId,
     companyId: snapshot.companyId,
@@ -227,7 +257,7 @@ export async function getPrivateResearchMemoForTicker(
     memoId: stored.memoId,
     model: generated.usage.model,
     requestId: generated.usage.requestId,
-    promptHash: computeMemoPromptHash(snapshot.snapshot, locale),
+    promptHash: computeMemoPromptHash(snapshot.snapshot, locale, eventContext),
     locale,
     purpose: "private_memo",
     status: generated.usage.status,
@@ -254,15 +284,24 @@ export async function publishPublicResearchMemoForTicker(
   snapshotId: string;
 }> {
   const snapshot = await getStoredSnapshotForTicker(ticker);
+  const eventContext = (await getCompanyEventImpacts(ticker, locale)).events;
   const generated = await generateResearchMemoWithUsage(
     snapshot.snapshot,
     locale,
     "public",
+    eventContext,
   );
-  const stored = await persistMemo(snapshot, generated.memo, locale, {
-    visibility: "public",
-    publishedByUserId: adminUserId,
-  });
+  const stored = await persistMemo(
+    snapshot,
+    generated.memo,
+    locale,
+    {
+      visibility: "public",
+      publishedByUserId: adminUserId,
+    },
+    undefined,
+    eventContext,
+  );
   await recordAiUsageEvent({
     userId: adminUserId,
     companyId: snapshot.companyId,
@@ -270,7 +309,7 @@ export async function publishPublicResearchMemoForTicker(
     memoId: stored.memoId,
     model: generated.usage.model,
     requestId: generated.usage.requestId,
-    promptHash: computeMemoPromptHash(snapshot.snapshot, locale),
+    promptHash: computeMemoPromptHash(snapshot.snapshot, locale, eventContext),
     locale,
     purpose: "admin_public_memo",
     status: generated.usage.status,
