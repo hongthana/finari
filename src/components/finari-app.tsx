@@ -61,9 +61,15 @@ import {
   type Locale,
 } from "@/lib/i18n";
 import type {
+  BusinessDriver,
+  ChangeItem,
   CompanyIdentity,
   CompanySnapshot,
+  DataQualityCheck,
   FinancialMetric,
+  FinancialPeriod,
+  MetricUnit,
+  PeerMetricComparison,
   ResearchMemo,
   TrendSignal,
 } from "@/lib/types";
@@ -832,6 +838,7 @@ function SnapshotHeader({
   }
 
   const latest = snapshot.periods[0];
+  const latestFinancialFiling = snapshot.latestFinancialFiling ?? snapshot.latestFiling;
   const snapshotCards = [
     {
       label: t.snapshot.revenue,
@@ -934,15 +941,15 @@ function SnapshotHeader({
           <RefreshCw className="h-4 w-4" aria-hidden="true" />
           {t.snapshot.refresh}
         </button>
-        {snapshot.latestFiling?.url && (
+        {latestFinancialFiling?.url && (
           <a
-            href={snapshot.latestFiling.url}
+            href={latestFinancialFiling.url}
             target="_blank"
             rel="noreferrer"
             className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 font-semibold text-zinc-700 transition hover:border-sky-500 hover:text-sky-700"
           >
             <FileText className="h-4 w-4" aria-hidden="true" />
-            {t.snapshot.latestFiling}
+            {t.snapshot.latestFinancialFiling}
           </a>
         )}
         <span className="text-xs font-medium text-zinc-500">
@@ -951,6 +958,736 @@ function SnapshotHeader({
             locale === "th" ? "th-TH" : "en-US",
           )}
         </span>
+      </div>
+    </section>
+  );
+}
+
+function recordValue<T extends Record<string, string>>(
+  record: T,
+  key: string,
+  fallback: string,
+): string {
+  return record[key as keyof T] ?? fallback;
+}
+
+function formatAnalysisValue(
+  value: number | null | undefined,
+  unit: MetricUnit,
+): string {
+  return formatMetricValue(value, unit);
+}
+
+function periodLabel(period: FinancialPeriod, t: Dictionary): string {
+  if (period.periodType === "ttm") {
+    return t.analysis.ttm;
+  }
+
+  if (period.periodType === "quarterly" && period.fiscalPeriod) {
+    return `${period.fiscalYear} ${period.fiscalPeriod}`;
+  }
+
+  return `${t.snapshot.fiscalYear} ${period.fiscalYear}`;
+}
+
+function DecisionScreen({
+  snapshot,
+  t,
+}: {
+  snapshot: CompanySnapshot;
+  t: Dictionary;
+}) {
+  const framework = snapshot.decisionFramework;
+  const latestFinancialFiling = snapshot.latestFinancialFiling ?? snapshot.latestFiling;
+  const decisionCards = [
+    {
+      label: t.decision.finalTakeaway,
+      value: recordValue(
+        t.decision.takeaways,
+        framework.takeaway,
+        framework.takeaway,
+      ),
+      Icon: ShieldCheck,
+      tooltip: t.decision.tooltips.takeaway,
+      tone: "teal" as const,
+      signal: framework.signal,
+    },
+    {
+      label: t.decision.strongestEvidence,
+      value: recordValue(
+        t.decision.evidence,
+        framework.strongestEvidence,
+        framework.strongestEvidence,
+      ),
+      Icon: CheckCircle2,
+      tooltip: t.decision.tooltips.evidence,
+      tone: "emerald" as const,
+      signal: "positive" as TrendSignal,
+    },
+    {
+      label: t.decision.mainRisk,
+      value: recordValue(t.decision.risks, framework.mainRisk, framework.mainRisk),
+      Icon: AlertTriangle,
+      tooltip: t.decision.tooltips.risk,
+      tone: "amber" as const,
+      signal: framework.signal === "positive" ? "neutral" : framework.signal,
+    },
+    {
+      label: t.decision.watchNext,
+      value: framework.watchMetric,
+      Icon: TrendingUp,
+      tooltip: t.decision.tooltips.watch,
+      tone: "sky" as const,
+      signal: "neutral" as TrendSignal,
+    },
+    {
+      label: t.decision.latestFinancialFiling,
+      value: latestFinancialFiling
+        ? [latestFinancialFiling.form, latestFinancialFiling.filingDate]
+            .filter(Boolean)
+            .join(" · ")
+        : t.decision.notAvailable,
+      Icon: FileText,
+      tooltip: t.decision.tooltips.filing,
+      tone: "zinc" as const,
+      signal: latestFinancialFiling ? "positive" : "unknown",
+    },
+    {
+      label: t.decision.dataConfidence,
+      value: `${t.analysis.confidenceLabels[snapshot.dataQuality.label]} · ${snapshot.dataQuality.score}/100`,
+      Icon: Database,
+      tooltip: t.decision.tooltips.confidence,
+      tone: "zinc" as const,
+      signal: snapshot.dataQuality.signal,
+    },
+  ];
+
+  return (
+    <section className="min-w-0 rounded-md border border-zinc-200 bg-white p-4 sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <MeaningPill
+            Icon={ShieldCheck}
+            label={t.decision.badge}
+            tooltip={t.decision.badgeTooltip}
+            tone="teal"
+          />
+          <h3 className="mt-3 text-base font-semibold text-zinc-950">
+            {t.decision.heading}
+          </h3>
+          <p className="mt-2 max-w-3xl break-words text-sm leading-6 text-zinc-600">
+            {t.decision.subtitle}
+          </p>
+        </div>
+        <SignalBadge
+          signal={framework.signal}
+          label={t.decision.finalTakeaway}
+          t={t}
+          tooltipAlign="right"
+        />
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {decisionCards.map((card) => (
+          <article
+            key={card.label}
+            className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3"
+          >
+            <div className="flex items-start gap-3">
+              <MeaningBadge
+                Icon={card.Icon}
+                label={card.label}
+                tooltip={card.tooltip}
+                tone={card.tone}
+                className="mt-0.5 p-1.5"
+              />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
+                  {card.label}
+                </p>
+                <p className="mt-1 break-words text-sm font-semibold leading-6 text-zinc-950">
+                  {card.value}
+                </p>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function QuarterlyTrendPanel({
+  snapshot,
+  t,
+}: {
+  snapshot: CompanySnapshot;
+  t: Dictionary;
+}) {
+  const latestQuarters = snapshot.quarterlyPeriods.slice(0, 4);
+  const rows = snapshot.ttmPeriod
+    ? [snapshot.ttmPeriod, ...latestQuarters]
+    : latestQuarters;
+
+  return (
+    <section className="min-w-0 rounded-md border border-zinc-200 bg-white p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold text-zinc-950">
+            {t.analysis.quarterlyTitle}
+          </h3>
+          <p className="mt-1 break-words text-sm leading-6 text-zinc-500">
+            {t.analysis.quarterlySubtitle}
+          </p>
+        </div>
+        <MeaningBadge
+          Icon={TrendingUp}
+          label={t.analysis.quarterlyTitle}
+          tooltip={t.analysis.tooltips.quarterly}
+          tone="teal"
+          tooltipAlign="right"
+        />
+      </div>
+
+      {rows.length ? (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[680px] border-collapse text-sm">
+            <thead className="text-left text-xs uppercase tracking-[0.08em] text-zinc-500">
+              <tr>
+                <th className="border-b border-zinc-200 py-2 pr-4 font-semibold">
+                  {t.analysis.quarter}
+                </th>
+                <th className="border-b border-zinc-200 px-4 py-2 font-semibold">
+                  {t.analysis.revenue}
+                </th>
+                <th className="border-b border-zinc-200 px-4 py-2 font-semibold">
+                  {t.analysis.netIncome}
+                </th>
+                <th className="border-b border-zinc-200 px-4 py-2 font-semibold">
+                  {t.analysis.fcf}
+                </th>
+                <th className="border-b border-zinc-200 px-4 py-2 font-semibold">
+                  {t.analysis.opMargin}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100">
+              {rows.map((period) => (
+                <tr key={`${period.periodType}-${period.fiscalYear}-${period.fiscalPeriod}`}>
+                  <td className="py-3 pr-4 font-semibold text-zinc-950">
+                    {periodLabel(period, t)}
+                  </td>
+                  <td className="px-4 py-3 text-zinc-700">
+                    {compactCurrency(period.revenue)}
+                  </td>
+                  <td className="px-4 py-3 text-zinc-700">
+                    {compactCurrency(period.netIncome)}
+                  </td>
+                  <td className="px-4 py-3 text-zinc-700">
+                    {compactCurrency(period.freeCashFlow)}
+                  </td>
+                  <td className="px-4 py-3 text-zinc-700">
+                    {formatPercent(
+                      period.operatingIncome && period.revenue
+                        ? period.operatingIncome / period.revenue
+                        : null,
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!snapshot.ttmPeriod && (
+            <p className="mt-3 text-xs leading-5 text-zinc-500">
+              {t.analysis.noTtm}
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          {t.analysis.noComparable}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ChangeCard({
+  item,
+  t,
+}: {
+  item: ChangeItem;
+  t: Dictionary;
+}) {
+  return (
+    <article className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3">
+      <div className="flex items-start gap-3">
+        <SignalBadge
+          signal={item.signal}
+          variant="trend"
+          label={item.label}
+          t={t}
+          className="mt-0.5 p-1.5"
+        />
+        <div className="min-w-0">
+          <h4 className="text-sm font-semibold text-zinc-950">
+            {item.label}
+          </h4>
+          <dl className="mt-2 grid gap-2 text-xs text-zinc-600 sm:grid-cols-3">
+            <div>
+              <dt className="font-medium text-zinc-500">{t.analysis.current}</dt>
+              <dd className="mt-0.5 font-semibold text-zinc-900">
+                {formatAnalysisValue(item.currentValue, item.unit)}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium text-zinc-500">{t.analysis.previous}</dt>
+              <dd className="mt-0.5 font-semibold text-zinc-900">
+                {formatAnalysisValue(item.previousValue, item.unit)}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium text-zinc-500">{t.analysis.change}</dt>
+              <dd className="mt-0.5 font-semibold text-zinc-900">
+                {formatPercent(item.change)}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function ChangeAnalysisPanel({
+  snapshot,
+  t,
+}: {
+  snapshot: CompanySnapshot;
+  t: Dictionary;
+}) {
+  return (
+    <section className="min-w-0 rounded-md border border-zinc-200 bg-white p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-zinc-950">
+            {t.analysis.changeTitle}
+          </h3>
+          <p className="mt-1 text-sm leading-6 text-zinc-500">
+            {t.analysis.changeSubtitle}
+          </p>
+        </div>
+        <MeaningBadge
+          Icon={RefreshCw}
+          label={t.analysis.changeTitle}
+          tooltip={t.analysis.tooltips.change}
+          tone="sky"
+          tooltipAlign="right"
+        />
+      </div>
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div className="min-w-0">
+          <h4 className="text-sm font-semibold text-zinc-950">
+            {t.analysis.latestQuarter}
+          </h4>
+          <div className="mt-3 space-y-3">
+            {snapshot.changeAnalysis.quarterly.length ? (
+              snapshot.changeAnalysis.quarterly.map((item) => (
+                <ChangeCard key={item.id} item={item} t={t} />
+              ))
+            ) : (
+              <p className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600">
+                {t.analysis.noComparable}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="min-w-0">
+          <h4 className="text-sm font-semibold text-zinc-950">
+            {t.analysis.latestAnnual}
+          </h4>
+          <div className="mt-3 space-y-3">
+            {snapshot.changeAnalysis.annual.length ? (
+              snapshot.changeAnalysis.annual.map((item) => (
+                <ChangeCard key={item.id} item={item} t={t} />
+              ))
+            ) : (
+              <p className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600">
+                {t.analysis.noComparable}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function BusinessDriverCard({
+  driver,
+  t,
+}: {
+  driver: BusinessDriver;
+  t: Dictionary;
+}) {
+  const label = recordValue(t.analysis.driverLabels, driver.id, driver.id);
+  const description = recordValue(
+    t.analysis.driverDescriptions,
+    driver.id,
+    driver.id,
+  );
+
+  return (
+    <article className="min-w-0 rounded-md border border-zinc-200 bg-white p-4">
+      <div className="flex items-start gap-3">
+        <SignalBadge
+          signal={driver.signal}
+          label={label}
+          t={t}
+          className="mt-0.5 p-1.5"
+        />
+        <div className="min-w-0">
+          <h4 className="text-sm font-semibold text-zinc-950">{label}</h4>
+          <p className="mt-1 break-words text-sm leading-6 text-zinc-600">
+            {description}
+          </p>
+          <dl className="mt-3 grid gap-2 text-xs text-zinc-600 sm:grid-cols-2">
+            <div>
+              <dt className="font-medium text-zinc-500">
+                {t.analysis.primaryValue}
+              </dt>
+              <dd className="mt-0.5 font-semibold text-zinc-900">
+                {formatAnalysisValue(driver.primaryValue, driver.unit)}
+              </dd>
+            </div>
+            {driver.secondaryValue !== undefined && (
+              <div>
+                <dt className="font-medium text-zinc-500">
+                  {t.analysis.secondaryValue}
+                </dt>
+                <dd className="mt-0.5 font-semibold text-zinc-900">
+                  {driver.id === "liquidity"
+                    ? compactCurrency(driver.secondaryValue)
+                    : formatAnalysisValue(driver.secondaryValue, "currency")}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function BusinessDriversPanel({
+  snapshot,
+  t,
+}: {
+  snapshot: CompanySnapshot;
+  t: Dictionary;
+}) {
+  return (
+    <section className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-zinc-950">
+            {t.analysis.driversTitle}
+          </h3>
+          <p className="mt-1 text-sm leading-6 text-zinc-500">
+            {t.analysis.driversSubtitle}
+          </p>
+        </div>
+        <MeaningBadge
+          Icon={ShieldCheck}
+          label={t.analysis.driversTitle}
+          tooltip={t.analysis.tooltips.drivers}
+          tone="teal"
+          tooltipAlign="right"
+        />
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {snapshot.businessDrivers.map((driver) => (
+          <BusinessDriverCard key={driver.id} driver={driver} t={t} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function BalanceSheetPanel({
+  snapshot,
+  t,
+}: {
+  snapshot: CompanySnapshot;
+  t: Dictionary;
+}) {
+  const analysis = snapshot.balanceSheetAnalysis;
+  const values = [
+    { label: t.analysis.cash, value: compactCurrency(analysis.cash) },
+    { label: t.analysis.debt, value: compactCurrency(analysis.debt) },
+    { label: t.analysis.netCash, value: compactCurrency(analysis.netCash) },
+    {
+      label: t.analysis.workingCapital,
+      value: compactCurrency(analysis.workingCapital),
+    },
+    {
+      label: t.analysis.cashToDebt,
+      value: formatMetricValue(analysis.cashToDebt, "ratio"),
+    },
+    {
+      label: t.analysis.liabilitiesToAssets,
+      value: formatPercent(analysis.liabilitiesToAssets),
+    },
+    {
+      label: t.analysis.debtToEquity,
+      value: formatMetricValue(analysis.debtToEquity, "ratio"),
+    },
+  ];
+
+  return (
+    <section className="min-w-0 rounded-md border border-zinc-200 bg-white p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-zinc-950">
+            {t.analysis.balanceTitle}
+          </h3>
+          <p className="mt-1 text-sm leading-6 text-zinc-500">
+            {t.analysis.balanceSubtitle}
+          </p>
+        </div>
+        <MeaningBadge
+          Icon={Database}
+          label={t.analysis.balanceTitle}
+          tooltip={t.analysis.tooltips.balance}
+          tone="sky"
+          tooltipAlign="right"
+        />
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {values.map((item) => (
+          <article
+            key={item.label}
+            className="rounded-md border border-zinc-200 bg-zinc-50 p-3"
+          >
+            <p className="text-xs font-medium text-zinc-500">{item.label}</p>
+            <p className="mt-1 break-words text-lg font-semibold text-zinc-950">
+              {item.value}
+            </p>
+          </article>
+        ))}
+        <article className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+          <p className="text-xs font-medium text-zinc-500">
+            {t.decision.finalTakeaway}
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <SignalBadge
+              signal={analysis.signal}
+              label={t.analysis.balanceTitle}
+              t={t}
+              className="p-1"
+            />
+            <span className="text-sm font-semibold capitalize text-zinc-950">
+              {analysis.signal}
+            </span>
+          </div>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function PeerMetricRow({
+  metric,
+  t,
+}: {
+  metric: PeerMetricComparison;
+  t: Dictionary;
+}) {
+  return (
+    <tr>
+      <td className="py-3 pr-4 font-semibold text-zinc-950">
+        <div className="flex items-center gap-2">
+          <SignalBadge
+            signal={metric.signal}
+            label={metric.label}
+            t={t}
+            className="p-1"
+          />
+          <span>{metric.label}</span>
+        </div>
+      </td>
+      <td className="px-4 py-3 text-zinc-700">
+        {formatAnalysisValue(metric.companyValue, metric.unit)}
+      </td>
+      <td className="px-4 py-3 text-zinc-700">
+        {formatAnalysisValue(metric.peerMedian, metric.unit)}
+      </td>
+    </tr>
+  );
+}
+
+function PeerComparisonPanel({
+  snapshot,
+  t,
+}: {
+  snapshot: CompanySnapshot;
+  t: Dictionary;
+}) {
+  const peerComparison = snapshot.peerComparison;
+
+  return (
+    <section className="min-w-0 rounded-md border border-zinc-200 bg-white p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-zinc-950">
+            {t.analysis.peersTitle}
+          </h3>
+          <p className="mt-1 text-sm leading-6 text-zinc-500">
+            {t.analysis.peersSubtitle}
+          </p>
+          <p className="mt-2 text-xs font-semibold text-zinc-600">
+            {t.analysis.peerCount(peerComparison.peerCount)}
+            {peerComparison.sicDescription ? ` · ${peerComparison.sicDescription}` : ""}
+          </p>
+        </div>
+        <MeaningBadge
+          Icon={Building2}
+          label={t.analysis.peersTitle}
+          tooltip={t.analysis.tooltips.peers}
+          tone="zinc"
+          tooltipAlign="right"
+        />
+      </div>
+
+      {peerComparison.status === "limited" && (
+        <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
+          {t.analysis.limitedPeerCoverage}
+        </p>
+      )}
+
+      {peerComparison.metrics.length ? (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[620px] border-collapse text-sm">
+            <thead className="text-left text-xs uppercase tracking-[0.08em] text-zinc-500">
+              <tr>
+                <th className="border-b border-zinc-200 py-2 pr-4 font-semibold">
+                  {t.analysis.metric}
+                </th>
+                <th className="border-b border-zinc-200 px-4 py-2 font-semibold">
+                  {t.analysis.company}
+                </th>
+                <th className="border-b border-zinc-200 px-4 py-2 font-semibold">
+                  {t.analysis.peerMedian}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100">
+              {peerComparison.metrics.map((metric) => (
+                <PeerMetricRow key={metric.id} metric={metric} t={t} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600">
+          {t.analysis.noPeerMetrics}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function DataQualityCheckRow({
+  check,
+  t,
+}: {
+  check: DataQualityCheck;
+  t: Dictionary;
+}) {
+  const label = recordValue(t.analysis.checkLabels, check.id, check.label);
+  const description = recordValue(
+    t.analysis.checkDescriptions,
+    check.id,
+    check.description,
+  );
+
+  return (
+    <article className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+      <div className="flex items-start gap-3">
+        <span
+          className={`mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border ${
+            check.passed
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-amber-200 bg-amber-50 text-amber-800"
+          }`}
+        >
+          {check.passed ? (
+            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+          )}
+        </span>
+        <div className="min-w-0">
+          <h4 className="text-sm font-semibold text-zinc-950">{label}</h4>
+          <p className="mt-1 text-sm leading-6 text-zinc-600">{description}</p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function DataQualityPanel({
+  snapshot,
+  t,
+}: {
+  snapshot: CompanySnapshot;
+  t: Dictionary;
+}) {
+  return (
+    <section className="min-w-0 rounded-md border border-zinc-200 bg-white p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-zinc-950">
+            {t.analysis.dataQualityTitle}
+          </h3>
+          <p className="mt-1 text-sm leading-6 text-zinc-500">
+            {t.analysis.dataQualitySubtitle}
+          </p>
+        </div>
+        <MeaningBadge
+          Icon={Database}
+          label={t.analysis.dataQualityTitle}
+          tooltip={t.analysis.tooltips.dataQuality}
+          tone="amber"
+          tooltipAlign="right"
+        />
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
+        <article className="rounded-md border border-zinc-200 bg-zinc-50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
+            {t.analysis.score}
+          </p>
+          <p className="mt-2 text-3xl font-semibold text-zinc-950">
+            {snapshot.dataQuality.score}/100
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <SignalBadge
+              signal={snapshot.dataQuality.signal}
+              label={t.analysis.confidence}
+              t={t}
+              className="p-1"
+            />
+            <span className="text-sm font-semibold text-zinc-800">
+              {t.analysis.confidenceLabels[snapshot.dataQuality.label]}
+            </span>
+          </div>
+        </article>
+        <div className="grid gap-3 lg:grid-cols-2">
+          {snapshot.dataQuality.checks.map((check) => (
+            <DataQualityCheckRow key={check.id} check={check} t={t} />
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -1928,7 +2665,14 @@ export function FinariApp({
 
           {snapshot && (
             <>
+              <DecisionScreen snapshot={snapshot} t={t} />
               <AdvisorSummary snapshot={snapshot} t={t} />
+              <QuarterlyTrendPanel snapshot={snapshot} t={t} />
+              <ChangeAnalysisPanel snapshot={snapshot} t={t} />
+              <BusinessDriversPanel snapshot={snapshot} t={t} />
+              <BalanceSheetPanel snapshot={snapshot} t={t} />
+              <PeerComparisonPanel snapshot={snapshot} t={t} />
+              <DataQualityPanel snapshot={snapshot} t={t} />
               <MetricGrid metrics={snapshot.metrics} t={t} />
               <FinancialCharts snapshot={snapshot} t={t} />
               <FinancialTable snapshot={snapshot} t={t} />

@@ -1,6 +1,9 @@
 import { jsonError } from "@/lib/api";
 import { cacheKey, getJsonCache, setJsonCache, withRedisLock } from "@/lib/cache";
-import { normalizeCompanySnapshot } from "@/lib/financial-analysis";
+import {
+  buildPeerComparisonFromSnapshots,
+  normalizeCompanySnapshot,
+} from "@/lib/financial-analysis";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n";
 import {
   generateFallbackResearchMemo,
@@ -25,6 +28,20 @@ import type { CompanyIdentity, CompanySnapshot, ResearchMemo } from "@/lib/types
 
 const SEARCH_CACHE_TTL_SECONDS = 15 * 60;
 const COMPANY_CACHE_TTL_SECONDS = 6 * 60 * 60;
+const MAX_PEER_SEED_FETCHES = 4;
+
+const PEER_SEED_TICKERS_BY_SIC: Record<string, string[]> = {
+  "3571": ["AAPL", "DELL", "HPQ", "HPE", "SMCI", "NTAP", "STX", "WDC"],
+  "3674": ["NVDA", "AMD", "INTC", "QCOM", "AVGO", "TXN", "MU"],
+  "7372": ["MSFT", "ORCL", "CRM", "ADBE", "INTU", "NOW"],
+  "7370": ["GOOGL", "META", "AMZN", "NFLX", "UBER", "ABNB"],
+  "6021": ["JPM", "BAC", "WFC", "C", "USB", "PNC", "TFC"],
+  "1311": ["XOM", "CVX", "COP", "EOG", "OXY", "MPC"],
+  "2834": ["JNJ", "PFE", "MRK", "LLY", "ABBV", "BMY"],
+  "3841": ["ABT", "TMO", "SYK", "BSX", "MDT", "ISRG"],
+  "5812": ["MCD", "SBUX", "YUM", "CMG", "DRI"],
+  "5411": ["WMT", "COST", "KR", "TGT", "DG"],
+};
 
 export class UnknownTickerError extends Error {
   constructor(ticker: string) {
@@ -53,6 +70,45 @@ export async function searchCompaniesWithCache(query: string): Promise<CompanyId
   return results;
 }
 
+async function fetchPeerSnapshots(baseSnapshot: CompanySnapshot): Promise<CompanySnapshot[]> {
+  const sic = baseSnapshot.identity.sic;
+  if (!sic) {
+    return [];
+  }
+
+  const seedTickers = (PEER_SEED_TICKERS_BY_SIC[sic] ?? [])
+    .filter((ticker) => ticker !== baseSnapshot.identity.ticker)
+    .slice(0, MAX_PEER_SEED_FETCHES);
+  if (!seedTickers.length) {
+    return [];
+  }
+
+  const peerSnapshots: CompanySnapshot[] = [];
+
+  for (const ticker of seedTickers) {
+    try {
+      const identity = await findCompanyByTicker(ticker);
+      if (!identity || identity.cik === baseSnapshot.identity.cik) {
+        continue;
+      }
+
+      const [submissions, facts] = await Promise.all([
+        getSubmissions(identity.cik),
+        getCompanyFacts(identity.cik),
+      ]);
+      const peerSnapshot = normalizeCompanySnapshot(identity, submissions, facts);
+
+      if (peerSnapshot.identity.sic === sic) {
+        peerSnapshots.push(peerSnapshot);
+      }
+    } catch {
+      // Peer coverage is best-effort and must not block primary company research.
+    }
+  }
+
+  return peerSnapshots;
+}
+
 async function fetchAndPersistSnapshot(ticker: string) {
   const identity = await findCompanyByTicker(ticker);
   if (!identity) {
@@ -64,7 +120,18 @@ async function fetchAndPersistSnapshot(ticker: string) {
       getSubmissions(identity.cik),
       getCompanyFacts(identity.cik),
     ]);
-    const snapshot = normalizeCompanySnapshot(identity, submissions, facts);
+    const baseSnapshot = normalizeCompanySnapshot(identity, submissions, facts);
+    const peerSnapshots = await fetchPeerSnapshots(baseSnapshot);
+    const peerComparison = buildPeerComparisonFromSnapshots(
+      baseSnapshot,
+      peerSnapshots,
+    );
+    const snapshot = normalizeCompanySnapshot(
+      identity,
+      submissions,
+      facts,
+      peerComparison,
+    );
     const stored = await persistSnapshot(snapshot);
     await setJsonCache(
       cacheKey(["company", identity.cik, "snapshot"]),

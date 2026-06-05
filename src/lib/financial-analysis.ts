@@ -7,15 +7,28 @@ import {
   type SecSubmissionsResponse,
 } from "@/lib/sec";
 import type {
+  BalanceSheetAnalysis,
+  BusinessDriver,
+  ChangeAnalysis,
+  ChangeItem,
   CompanyIdentity,
   CompanySnapshot,
+  DataQuality,
+  DataQualityCheck,
+  DecisionFramework,
   FinancialMetric,
   FinancialPeriod,
+  MetricUnit,
+  PeerComparison,
+  PeerMetricComparison,
   SourceCitation,
   TrendSignal,
 } from "@/lib/types";
 
-const ANNUAL_FORMS = new Set(["10-K", "10-K/A", "20-F", "20-F/A", "40-F"]);
+const ANNUAL_FORMS = new Set(["10-K", "10-K/A"]);
+const QUARTERLY_FORMS = new Set(["10-Q", "10-Q/A"]);
+const FINANCIAL_FORMS = new Set([...ANNUAL_FORMS, ...QUARTERLY_FORMS]);
+const QUARTER_ORDER = ["Q1", "Q2", "Q3", "Q4"] as const;
 
 const FACT_TAGS = {
   revenue: [
@@ -28,6 +41,8 @@ const FACT_TAGS = {
   netIncome: ["NetIncomeLoss", "ProfitLoss"],
   assets: ["Assets"],
   liabilities: ["Liabilities"],
+  currentAssets: ["AssetsCurrent"],
+  currentLiabilities: ["LiabilitiesCurrent"],
   equity: [
     "StockholdersEquity",
     "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
@@ -52,6 +67,20 @@ const FACT_TAGS = {
   ],
   operatingCashFlow: ["NetCashProvidedByUsedInOperatingActivities"],
   capitalExpenditure: ["PaymentsToAcquirePropertyPlantAndEquipment"],
+  researchAndDevelopment: ["ResearchAndDevelopmentExpense"],
+  sellingGeneralAdministrative: [
+    "SellingGeneralAndAdministrativeExpense",
+    "SellingAndMarketingExpense",
+  ],
+  buybacks: [
+    "PaymentsForRepurchaseOfCommonStock",
+    "PaymentsForRepurchaseOfEquity",
+  ],
+  dividends: [
+    "PaymentsOfDividendsCommonStock",
+    "PaymentsOfDividends",
+    "PaymentsOfOrdinaryDividends",
+  ],
   epsDiluted: ["EarningsPerShareDiluted", "EarningsPerShareBasic"],
   sharesDiluted: [
     "WeightedAverageNumberOfDilutedSharesOutstanding",
@@ -66,12 +95,20 @@ type StatementField =
   | "netIncome"
   | "assets"
   | "liabilities"
+  | "currentAssets"
+  | "currentLiabilities"
   | "equity"
   | "cash"
   | "operatingCashFlow"
   | "capitalExpenditure"
+  | "researchAndDevelopment"
+  | "sellingGeneralAdministrative"
+  | "buybacks"
+  | "dividends"
   | "epsDiluted"
   | "sharesDiluted";
+
+type QuarterName = (typeof QUARTER_ORDER)[number];
 
 interface SelectedFact {
   tag: string;
@@ -79,8 +116,26 @@ interface SelectedFact {
   fact: SecFactUnit;
 }
 
+interface SelectedFactValue extends SelectedFact {
+  value: number;
+}
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
+}
+
+function quarterRank(period?: string): number {
+  const index = QUARTER_ORDER.indexOf(period as QuarterName);
+  return index === -1 ? -1 : index;
+}
+
+function quarterKey(fiscalYear: number, fiscalPeriod: string): string {
+  return `${fiscalYear}:${fiscalPeriod}`;
+}
+
+function previousQuarter(period: string): QuarterName | null {
+  const index = quarterRank(period);
+  return index > 0 ? QUARTER_ORDER[index - 1] : null;
 }
 
 function isAnnualFact(fact: SecFactUnit): boolean {
@@ -89,6 +144,32 @@ function isAnnualFact(fact: SecFactUnit): boolean {
     (fact.fp === "FY" || annualFrame || ANNUAL_FORMS.has(fact.form ?? "")) &&
     isFiniteNumber(fact.val) &&
     isFiniteNumber(fact.fy)
+  );
+}
+
+function isQuarterFact(fact: SecFactUnit): boolean {
+  return (
+    Boolean(fact.fp && QUARTER_ORDER.includes(fact.fp as QuarterName)) &&
+    isFiniteNumber(fact.val) &&
+    isFiniteNumber(fact.fy) &&
+    (QUARTERLY_FORMS.has(fact.form ?? "") ||
+      /^CY\d{4}Q[1-4]/.test(fact.frame ?? ""))
+  );
+}
+
+function isStandaloneQuarterFact(fact: SecFactUnit): boolean {
+  return /^CY\d{4}Q[1-4]$/.test(fact.frame ?? "");
+}
+
+function canDeriveFromAdjacentYtdFact(
+  currentFact: SecFactUnit,
+  previousFact: SecFactUnit,
+): boolean {
+  return (
+    !isStandaloneQuarterFact(currentFact) &&
+    !isStandaloneQuarterFact(previousFact) &&
+    currentFact.form === previousFact.form &&
+    currentFact.fy === previousFact.fy
   );
 }
 
@@ -104,6 +185,28 @@ function scoreFact(fact: SecFactUnit): number {
   }
 
   if (ANNUAL_FORMS.has(fact.form ?? "")) {
+    score += 4;
+  }
+
+  if (fact.filed) {
+    score += Date.parse(fact.filed) / 10_000_000_000_000;
+  }
+
+  return score;
+}
+
+function scoreQuarterFact(fact: SecFactUnit): number {
+  let score = 0;
+
+  if (isStandaloneQuarterFact(fact)) {
+    score += 12;
+  }
+
+  if (QUARTERLY_FORMS.has(fact.form ?? "")) {
+    score += 6;
+  }
+
+  if (fact.fp && QUARTER_ORDER.includes(fact.fp as QuarterName)) {
     score += 4;
   }
 
@@ -160,23 +263,176 @@ function selectFactsByYear(
   return byYear;
 }
 
-function addFactValues(
+function selectFactsByQuarter(
+  facts: SecCompanyFactsResponse,
+  tags: readonly string[],
+  preferredUnits: readonly string[],
+): Map<string, SelectedFact> {
+  const byQuarter = new Map<string, SelectedFact>();
+
+  for (const tag of tags) {
+    const concept = getUsGaapFact(facts, tag);
+    if (!concept?.units) {
+      continue;
+    }
+
+    const unitNames = [
+      ...preferredUnits.filter((unit) => concept.units?.[unit]),
+      ...Object.keys(concept.units).filter(
+        (unit) => !preferredUnits.includes(unit),
+      ),
+    ];
+
+    for (const unit of unitNames) {
+      const unitFacts = concept.units[unit] ?? [];
+
+      for (const fact of unitFacts) {
+        if (!isQuarterFact(fact) || !isFiniteNumber(fact.fy) || !fact.fp) {
+          continue;
+        }
+
+        const key = quarterKey(fact.fy, fact.fp);
+        const existing = byQuarter.get(key);
+        if (!existing || scoreQuarterFact(fact) > scoreQuarterFact(existing.fact)) {
+          byQuarter.set(key, { tag, unit, fact });
+        }
+      }
+    }
+  }
+
+  return byQuarter;
+}
+
+function selectQuarterlyDurationFacts(
+  facts: SecCompanyFactsResponse,
+  tags: readonly string[],
+  preferredUnits: readonly string[],
+  annualFacts = selectFactsByYear(facts, tags, preferredUnits),
+): Map<string, SelectedFactValue> {
+  const selected = selectFactsByQuarter(facts, tags, preferredUnits);
+  const values = new Map<string, SelectedFactValue>();
+
+  for (const [key, selectedFact] of selected) {
+    const fiscalYear = selectedFact.fact.fy;
+    const fiscalPeriod = selectedFact.fact.fp;
+    if (!isFiniteNumber(fiscalYear) || !fiscalPeriod) {
+      continue;
+    }
+
+    let value: number | null = null;
+    if (fiscalPeriod === "Q1" || isStandaloneQuarterFact(selectedFact.fact)) {
+      value = selectedFact.fact.val;
+    } else {
+      const previous = previousQuarter(fiscalPeriod);
+      const previousFact = previous ? selected.get(quarterKey(fiscalYear, previous)) : null;
+      if (
+        previousFact &&
+        canDeriveFromAdjacentYtdFact(selectedFact.fact, previousFact.fact)
+      ) {
+        value = selectedFact.fact.val - previousFact.fact.val;
+      }
+    }
+
+    if (value !== null && Number.isFinite(value)) {
+      values.set(key, { ...selectedFact, value });
+    }
+  }
+
+  for (const [fiscalYear, annualFact] of annualFacts) {
+    const q3 = selected.get(quarterKey(fiscalYear, "Q3"));
+    if (
+      !q3 ||
+      selected.has(quarterKey(fiscalYear, "Q4")) ||
+      isStandaloneQuarterFact(q3.fact)
+    ) {
+      continue;
+    }
+
+    const value = annualFact.fact.val - q3.fact.val;
+    if (Number.isFinite(value)) {
+      values.set(quarterKey(fiscalYear, "Q4"), {
+        tag: annualFact.tag,
+        unit: annualFact.unit,
+        fact: {
+          ...annualFact.fact,
+          fp: "Q4",
+          form: annualFact.fact.form,
+          filed: annualFact.fact.filed,
+          start: q3.fact.end,
+        },
+        value,
+      });
+    }
+  }
+
+  return values;
+}
+
+function addAnnualFactValues(
   periods: Map<number, FinancialPeriod>,
   field: StatementField,
   facts: Map<number, SelectedFact>,
   transform: (value: number) => number | null = (value) => value,
 ): void {
   for (const [fiscalYear, selected] of facts) {
-    const period = periods.get(fiscalYear) ?? { fiscalYear };
+    const period = periods.get(fiscalYear) ?? {
+      periodType: "annual" as const,
+      fiscalYear,
+      fiscalPeriod: "FY",
+    };
     const value = transform(selected.fact.val);
 
     period[field] = value;
+    period.startDate ||= selected.fact.start;
     period.endDate ||= selected.fact.end;
     period.filedDate ||= selected.fact.filed;
     period.form ||= selected.fact.form;
     period.accessionNumber ||= selected.fact.accn;
     periods.set(fiscalYear, period);
   }
+}
+
+function addQuarterlyFactValues(
+  periods: Map<string, FinancialPeriod>,
+  field: StatementField,
+  facts: Map<string, SelectedFactValue>,
+  transform: (value: number) => number | null = (value) => value,
+): void {
+  for (const [key, selected] of facts) {
+    const fiscalYear = selected.fact.fy;
+    const fiscalPeriod = selected.fact.fp;
+    if (!isFiniteNumber(fiscalYear) || !fiscalPeriod) {
+      continue;
+    }
+
+    const period = periods.get(key) ?? {
+      periodType: "quarterly" as const,
+      fiscalYear,
+      fiscalPeriod,
+    };
+    const value = transform(selected.value);
+
+    period[field] = value;
+    period.startDate ||= selected.fact.start;
+    period.endDate ||= selected.fact.end;
+    period.filedDate ||= selected.fact.filed;
+    period.form ||= selected.fact.form;
+    period.accessionNumber ||= selected.fact.accn;
+    periods.set(key, period);
+  }
+}
+
+function addQuarterlyInstantFactValues(
+  periods: Map<string, FinancialPeriod>,
+  field: StatementField,
+  facts: Map<string, SelectedFact>,
+  transform: (value: number) => number | null = (value) => value,
+): void {
+  const values = new Map<string, SelectedFactValue>();
+  for (const [key, selected] of facts) {
+    values.set(key, { ...selected, value: selected.fact.val });
+  }
+  addQuarterlyFactValues(periods, field, values, transform);
 }
 
 function firstValue(values: Array<number | null | undefined>): number | null {
@@ -207,6 +463,18 @@ function divide(
   }
 
   return numerator / denominator;
+}
+
+function sumField(
+  periods: FinancialPeriod[],
+  field: keyof FinancialPeriod,
+): number | null {
+  const values = periods.map((period) => period[field]);
+  if (values.some((value) => !isFiniteNumber(value))) {
+    return null;
+  }
+
+  return values.reduce<number>((sum, value) => sum + Number(value), 0);
 }
 
 function signalForMetric(
@@ -245,9 +513,51 @@ function leverageSignal(value: number | null): TrendSignal {
   return "neutral";
 }
 
-function buildMetrics(periods: FinancialPeriod[]): FinancialMetric[] {
+function riskSignal(value: number | null, positiveBelow: number, negativeAbove: number): TrendSignal {
+  if (!isFiniteNumber(value)) {
+    return "unknown";
+  }
+
+  if (value <= positiveBelow) {
+    return "positive";
+  }
+
+  if (value >= negativeAbove) {
+    return "negative";
+  }
+
+  return "neutral";
+}
+
+function sortedPeriods(periods: FinancialPeriod[]): FinancialPeriod[] {
+  return periods.sort((a, b) => {
+    if (b.fiscalYear !== a.fiscalYear) {
+      return b.fiscalYear - a.fiscalYear;
+    }
+
+    return quarterRank(b.fiscalPeriod) - quarterRank(a.fiscalPeriod);
+  });
+}
+
+function withDerivedFields(period: FinancialPeriod): FinancialPeriod {
+  return {
+    ...period,
+    workingCapital:
+      isFiniteNumber(period.currentAssets) && isFiniteNumber(period.currentLiabilities)
+        ? period.currentAssets - period.currentLiabilities
+        : period.workingCapital ?? null,
+    freeCashFlow:
+      isFiniteNumber(period.operatingCashFlow) &&
+      isFiniteNumber(period.capitalExpenditure)
+        ? period.operatingCashFlow - period.capitalExpenditure
+        : period.freeCashFlow ?? null,
+  };
+}
+
+function buildMetrics(periods: FinancialPeriod[], ttmPeriod?: FinancialPeriod): FinancialMetric[] {
   const latest = periods[0];
   const previous = periods[1];
+  const cashPeriod = ttmPeriod ?? latest;
 
   if (!latest) {
     return [];
@@ -258,7 +568,7 @@ function buildMetrics(periods: FinancialPeriod[]): FinancialMetric[] {
   const grossMargin = divide(latest.grossProfit, latest.revenue);
   const operatingMargin = divide(latest.operatingIncome, latest.revenue);
   const netMargin = divide(latest.netIncome, latest.revenue);
-  const fcfMargin = divide(latest.freeCashFlow, latest.revenue);
+  const fcfMargin = divide(cashPeriod?.freeCashFlow, cashPeriod?.revenue);
   const debtToEquity = divide(latest.debt, latest.equity);
   const liabilitiesToAssets = divide(latest.liabilities, latest.assets);
   const returnOnAssets = divide(latest.netIncome, latest.assets);
@@ -327,7 +637,7 @@ function buildMetrics(periods: FinancialPeriod[]): FinancialMetric[] {
       value: liabilitiesToAssets,
       unit: "percent",
       description: "Balance-sheet obligations relative to total assets.",
-      signal: leverageSignal(liabilitiesToAssets),
+      signal: riskSignal(liabilitiesToAssets, 0.45, 0.75),
     },
     {
       id: "return-on-assets",
@@ -348,12 +658,419 @@ function buildMetrics(periods: FinancialPeriod[]): FinancialMetric[] {
   ];
 }
 
-function buildCaveats(periods: FinancialPeriod[], facts: SecCompanyFactsResponse) {
+function changeItem(
+  id: string,
+  label: string,
+  unit: MetricUnit,
+  currentValue: number | null | undefined,
+  previousValue: number | null | undefined,
+  description: string,
+  positiveAt = 0.02,
+  negativeAt = -0.02,
+): ChangeItem {
+  const change = unit === "percent"
+    ? (isFiniteNumber(currentValue) && isFiniteNumber(previousValue)
+        ? currentValue - previousValue
+        : null)
+    : percentChange(currentValue, previousValue);
+
+  return {
+    id,
+    label,
+    currentValue: currentValue ?? null,
+    previousValue: previousValue ?? null,
+    change,
+    unit,
+    description,
+    signal: signalForMetric(change, positiveAt, negativeAt),
+  };
+}
+
+function buildChangeAnalysis(
+  annualPeriods: FinancialPeriod[],
+  quarterlyPeriods: FinancialPeriod[],
+): ChangeAnalysis {
+  const latestQuarter = quarterlyPeriods[0];
+  const previousQuarterPeriod = quarterlyPeriods[1];
+  const latestAnnual = annualPeriods[0];
+  const previousAnnual = annualPeriods[1];
+
+  return {
+    quarterly: latestQuarter
+      ? [
+          changeItem(
+            "quarterly-revenue",
+            "Quarterly revenue",
+            "currency",
+            latestQuarter.revenue,
+            previousQuarterPeriod?.revenue,
+            "Latest quarter revenue compared with the prior quarter.",
+          ),
+          changeItem(
+            "quarterly-net-income",
+            "Quarterly net income",
+            "currency",
+            latestQuarter.netIncome,
+            previousQuarterPeriod?.netIncome,
+            "Latest quarter net income compared with the prior quarter.",
+          ),
+          changeItem(
+            "quarterly-fcf",
+            "Quarterly free cash flow",
+            "currency",
+            latestQuarter.freeCashFlow,
+            previousQuarterPeriod?.freeCashFlow,
+            "Latest quarter free cash flow compared with the prior quarter.",
+          ),
+          changeItem(
+            "quarterly-operating-margin",
+            "Quarterly operating margin",
+            "percent",
+            divide(latestQuarter.operatingIncome, latestQuarter.revenue),
+            divide(previousQuarterPeriod?.operatingIncome, previousQuarterPeriod?.revenue),
+            "Latest quarter operating margin compared with the prior quarter.",
+            0.01,
+            -0.01,
+          ),
+        ]
+      : [],
+    annual: latestAnnual
+      ? [
+          changeItem(
+            "annual-revenue",
+            "Annual revenue",
+            "currency",
+            latestAnnual.revenue,
+            previousAnnual?.revenue,
+            "Latest annual revenue compared with the prior fiscal year.",
+          ),
+          changeItem(
+            "annual-net-income",
+            "Annual net income",
+            "currency",
+            latestAnnual.netIncome,
+            previousAnnual?.netIncome,
+            "Latest annual net income compared with the prior fiscal year.",
+          ),
+          changeItem(
+            "annual-fcf",
+            "Annual free cash flow",
+            "currency",
+            latestAnnual.freeCashFlow,
+            previousAnnual?.freeCashFlow,
+            "Latest annual free cash flow compared with the prior fiscal year.",
+          ),
+          changeItem(
+            "annual-operating-margin",
+            "Annual operating margin",
+            "percent",
+            divide(latestAnnual.operatingIncome, latestAnnual.revenue),
+            divide(previousAnnual?.operatingIncome, previousAnnual?.revenue),
+            "Latest annual operating margin compared with the prior fiscal year.",
+            0.01,
+            -0.01,
+          ),
+        ]
+      : [],
+  };
+}
+
+function buildTtmPeriod(quarterlyPeriods: FinancialPeriod[]): FinancialPeriod | undefined {
+  const latestFour = quarterlyPeriods.slice(0, 4);
+  if (latestFour.length < 4) {
+    return undefined;
+  }
+
+  const latest = latestFour[0];
+  const ttm: FinancialPeriod = {
+    periodType: "ttm",
+    fiscalYear: latest.fiscalYear,
+    fiscalPeriod: "TTM",
+    startDate: latestFour[3].startDate,
+    endDate: latest.endDate,
+    filedDate: latest.filedDate,
+    form: latest.form,
+    accessionNumber: latest.accessionNumber,
+    revenue: sumField(latestFour, "revenue"),
+    grossProfit: sumField(latestFour, "grossProfit"),
+    operatingIncome: sumField(latestFour, "operatingIncome"),
+    netIncome: sumField(latestFour, "netIncome"),
+    operatingCashFlow: sumField(latestFour, "operatingCashFlow"),
+    capitalExpenditure: sumField(latestFour, "capitalExpenditure"),
+    researchAndDevelopment: sumField(latestFour, "researchAndDevelopment"),
+    sellingGeneralAdministrative: sumField(latestFour, "sellingGeneralAdministrative"),
+    buybacks: sumField(latestFour, "buybacks"),
+    dividends: sumField(latestFour, "dividends"),
+    assets: latest.assets,
+    liabilities: latest.liabilities,
+    currentAssets: latest.currentAssets,
+    currentLiabilities: latest.currentLiabilities,
+    equity: latest.equity,
+    cash: latest.cash,
+    debt: latest.debt,
+    epsDiluted: sumField(latestFour, "epsDiluted"),
+    sharesDiluted: latest.sharesDiluted,
+  };
+
+  return withDerivedFields(ttm);
+}
+
+function buildBalanceSheetAnalysis(
+  annualPeriods: FinancialPeriod[],
+  quarterlyPeriods: FinancialPeriod[],
+): BalanceSheetAnalysis {
+  const latest = quarterlyPeriods[0] ?? annualPeriods[0];
+  const latestAnnual = annualPeriods[0];
+  const cash = latest?.cash ?? null;
+  const debt = latest?.debt ?? latestAnnual?.debt ?? null;
+  const liabilitiesToAssets = divide(latest?.liabilities, latest?.assets);
+  const debtToEquity = divide(debt, latest?.equity ?? latestAnnual?.equity);
+  const cashToDebt = divide(cash, debt);
+  const workingCapital = latest?.workingCapital ?? null;
+  const netCash =
+    isFiniteNumber(cash) && isFiniteNumber(debt) ? cash - debt : null;
+  const signal = [
+    riskSignal(liabilitiesToAssets, 0.45, 0.75),
+    leverageSignal(debtToEquity),
+    signalForMetric(workingCapital, 0, -1),
+  ];
+
+  const negative = signal.filter((item) => item === "negative").length;
+  const positive = signal.filter((item) => item === "positive").length;
+
+  return {
+    cash,
+    debt,
+    netCash,
+    currentAssets: latest?.currentAssets ?? null,
+    currentLiabilities: latest?.currentLiabilities ?? null,
+    workingCapital,
+    cashToDebt,
+    debtToEquity,
+    liabilitiesToAssets,
+    signal: negative > 0 ? "negative" : positive > 1 ? "positive" : "neutral",
+  };
+}
+
+function buildBusinessDrivers(
+  metrics: FinancialMetric[],
+  annualPeriods: FinancialPeriod[],
+  quarterlyPeriods: FinancialPeriod[],
+  ttmPeriod?: FinancialPeriod,
+): BusinessDriver[] {
+  const metric = (id: string) => metrics.find((item) => item.id === id)?.value ?? null;
+  const latestAnnual = annualPeriods[0];
+  const latestQuarter = quarterlyPeriods[0];
+  const revenueChange =
+    percentChange(latestQuarter?.revenue, quarterlyPeriods[1]?.revenue) ??
+    metric("revenue-growth");
+  const operatingMargin = divide(
+    ttmPeriod?.operatingIncome ?? latestAnnual?.operatingIncome,
+    ttmPeriod?.revenue ?? latestAnnual?.revenue,
+  );
+  const fcfMargin = divide(
+    ttmPeriod?.freeCashFlow ?? latestAnnual?.freeCashFlow,
+    ttmPeriod?.revenue ?? latestAnnual?.revenue,
+  );
+  const buybacks = ttmPeriod?.buybacks ?? latestAnnual?.buybacks;
+  const dividends = ttmPeriod?.dividends ?? latestAnnual?.dividends;
+  const capitalReturned =
+    isFiniteNumber(buybacks) || isFiniteNumber(dividends)
+      ? (buybacks ?? 0) + (dividends ?? 0)
+      : null;
+  const payout = divide(
+    capitalReturned,
+    ttmPeriod?.freeCashFlow ?? latestAnnual?.freeCashFlow,
+  );
+  const currentRatio = divide(latestQuarter?.currentAssets ?? latestAnnual?.currentAssets, latestQuarter?.currentLiabilities ?? latestAnnual?.currentLiabilities);
+  const liabilitiesToAssets = metric("liabilities-to-assets");
+
+  return [
+    {
+      id: "growth",
+      signal: signalForMetric(revenueChange, 0.03, -0.03),
+      primaryValue: revenueChange,
+      unit: "percent",
+    },
+    {
+      id: "profitability",
+      signal: signalForMetric(operatingMargin, 0.15, 0.03),
+      primaryValue: operatingMargin,
+      unit: "percent",
+    },
+    {
+      id: "cash-generation",
+      signal: signalForMetric(fcfMargin, 0.08, 0),
+      primaryValue: fcfMargin,
+      unit: "percent",
+    },
+    {
+      id: "capital-allocation",
+      signal: riskSignal(payout, 0.5, 1),
+      primaryValue: payout,
+      secondaryValue: capitalReturned,
+      unit: "percent",
+    },
+    {
+      id: "liquidity",
+      signal: signalForMetric(currentRatio, 1.5, 1),
+      primaryValue: currentRatio,
+      secondaryValue: latestQuarter?.workingCapital ?? latestAnnual?.workingCapital ?? null,
+      unit: "ratio",
+    },
+    {
+      id: "leverage",
+      signal: riskSignal(liabilitiesToAssets, 0.45, 0.75),
+      primaryValue: liabilitiesToAssets,
+      unit: "percent",
+    },
+  ];
+}
+
+function buildDataQuality(
+  periods: FinancialPeriod[],
+  quarterlyPeriods: FinancialPeriod[],
+  latestFinancialFiling: unknown | undefined,
+  facts: SecCompanyFactsResponse,
+): DataQuality {
+  const latest = periods[0];
+  const checks: DataQualityCheck[] = [
+    {
+      id: "financial-filing",
+      label: "Latest financial filing found",
+      passed: Boolean(latestFinancialFiling),
+      description: "Finari identified a 10-K/10-Q family filing as the analysis anchor.",
+    },
+    {
+      id: "annual-comparability",
+      label: "Annual comparability",
+      passed: periods.length >= 2,
+      description: "At least two annual periods are available for trend analysis.",
+    },
+    {
+      id: "core-annual-tags",
+      label: "Core annual tags",
+      passed: Boolean(
+        latest &&
+          isFiniteNumber(latest.revenue) &&
+          isFiniteNumber(latest.netIncome) &&
+          isFiniteNumber(latest.assets) &&
+          isFiniteNumber(latest.operatingCashFlow),
+      ),
+      description: "Revenue, net income, assets, and operating cash flow were available.",
+    },
+    {
+      id: "quarterly-coverage",
+      label: "Quarterly coverage",
+      passed: quarterlyPeriods.length >= 4,
+      description: "At least four quarterly periods are available for TTM analysis.",
+    },
+    {
+      id: "us-gaap",
+      label: "US-GAAP facts",
+      passed: Boolean(facts.facts?.["us-gaap"]),
+      description: "The SEC response includes standard US-GAAP facts.",
+    },
+  ];
+  const passed = checks.filter((check) => check.passed).length;
+  const score = Math.round((passed / checks.length) * 100);
+  const label = score >= 80 ? "High" : score >= 55 ? "Medium" : "Low";
+
+  return {
+    score,
+    label,
+    signal: label === "High" ? "positive" : label === "Low" ? "negative" : "neutral",
+    summary:
+      label === "High"
+        ? "Core filing data is available and comparable."
+        : label === "Medium"
+          ? "Core analysis is usable, but some filing fields need caution."
+          : "Filing data is limited and should be manually reviewed.",
+    checks,
+  };
+}
+
+function buildDecisionFramework(
+  metrics: FinancialMetric[],
+  balanceSheetAnalysis: BalanceSheetAnalysis,
+  dataQuality: DataQuality,
+): DecisionFramework {
+  const metric = (id: string) => metrics.find((item) => item.id === id)?.value ?? null;
+  const revenueGrowth = metric("revenue-growth");
+  const operatingMargin = metric("operating-margin");
+  const fcfMargin = metric("free-cash-flow-margin");
+  const balanceRisk = balanceSheetAnalysis.signal === "negative";
+  const dataRisk = dataQuality.label === "Low";
+  const growthPressure = isFiniteNumber(revenueGrowth) && revenueGrowth < -0.03;
+  const qualitySupport =
+    (isFiniteNumber(operatingMargin) && operatingMargin >= 0.15) ||
+    (isFiniteNumber(fcfMargin) && fcfMargin >= 0.08);
+
+  if (dataRisk) {
+    return {
+      signal: "unknown",
+      takeaway: "limited",
+      strongestEvidence: "data-quality",
+      mainRisk: "data-quality",
+      watchMetric: "Core SEC tags",
+    };
+  }
+
+  if (growthPressure || balanceRisk) {
+    return {
+      signal: growthPressure && balanceRisk ? "negative" : "neutral",
+      takeaway: "caution",
+      strongestEvidence: qualitySupport ? "profit-quality" : "financial-scale",
+      mainRisk: growthPressure ? "growth" : "balance-sheet",
+      watchMetric: growthPressure ? "Revenue growth" : "Liabilities / assets",
+    };
+  }
+
+  if (qualitySupport) {
+    return {
+      signal: "positive",
+      takeaway: "constructive",
+      strongestEvidence:
+        isFiniteNumber(fcfMargin) && fcfMargin >= 0.08
+          ? "cash-generation"
+          : "profit-quality",
+      mainRisk: "valuation-needed",
+      watchMetric: "FCF margin",
+    };
+  }
+
+  return {
+    signal: "neutral",
+    takeaway: "mixed",
+    strongestEvidence: "financial-scale",
+    mainRisk: "margin-durability",
+    watchMetric: "Operating margin",
+  };
+}
+
+function buildCaveats(
+  periods: FinancialPeriod[],
+  quarterlyPeriods: FinancialPeriod[],
+  peerComparison: PeerComparison,
+  facts: SecCompanyFactsResponse,
+) {
   const caveats: string[] = [];
 
   if (periods.length < 2) {
     caveats.push(
       "Finari found fewer than two comparable annual periods, so trend analysis is limited.",
+    );
+  }
+
+  if (quarterlyPeriods.length < 4) {
+    caveats.push(
+      "Finari found fewer than four comparable quarterly periods, so TTM analysis is limited.",
+    );
+  }
+
+  if (peerComparison.status === "limited") {
+    caveats.push(
+      "SEC industry peer coverage is limited, so peer comparison should be treated as directional.",
     );
   }
 
@@ -391,6 +1108,9 @@ function buildCitations(
   const latestAnnualFiling = filings.find((filing) =>
     ANNUAL_FORMS.has(filing.form),
   );
+  const latestQuarterlyFiling = filings.find((filing) =>
+    QUARTERLY_FORMS.has(filing.form),
+  );
   const latestPeriod = periods[0];
   const citations: SourceCitation[] = [];
 
@@ -401,6 +1121,16 @@ function buildCitations(
       form: latestAnnualFiling.form,
       filedDate: latestAnnualFiling.filingDate,
       accessionNumber: latestAnnualFiling.accessionNumber,
+    });
+  }
+
+  if (latestQuarterlyFiling?.url) {
+    citations.push({
+      label: `${identity.ticker} latest quarterly filing`,
+      url: latestQuarterlyFiling.url,
+      form: latestQuarterlyFiling.form,
+      filedDate: latestQuarterlyFiling.filingDate,
+      accessionNumber: latestQuarterlyFiling.accessionNumber,
     });
   }
 
@@ -422,64 +1152,10 @@ function buildCitations(
   return citations;
 }
 
-export function normalizeCompanySnapshot(
-  identity: CompanyIdentity,
-  submissions: SecSubmissionsResponse,
+function buildDebtByYear(
+  periods: Map<number, FinancialPeriod>,
   facts: SecCompanyFactsResponse,
-): CompanySnapshot {
-  const enrichedIdentity = enrichIdentityFromSubmissions(identity, submissions);
-  const periods = new Map<number, FinancialPeriod>();
-
-  addFactValues(
-    periods,
-    "revenue",
-    selectFactsByYear(facts, FACT_TAGS.revenue, ["USD"]),
-  );
-  addFactValues(
-    periods,
-    "grossProfit",
-    selectFactsByYear(facts, FACT_TAGS.grossProfit, ["USD"]),
-  );
-  addFactValues(
-    periods,
-    "operatingIncome",
-    selectFactsByYear(facts, FACT_TAGS.operatingIncome, ["USD"]),
-  );
-  addFactValues(
-    periods,
-    "netIncome",
-    selectFactsByYear(facts, FACT_TAGS.netIncome, ["USD"]),
-  );
-  addFactValues(periods, "assets", selectFactsByYear(facts, FACT_TAGS.assets, ["USD"]));
-  addFactValues(
-    periods,
-    "liabilities",
-    selectFactsByYear(facts, FACT_TAGS.liabilities, ["USD"]),
-  );
-  addFactValues(periods, "equity", selectFactsByYear(facts, FACT_TAGS.equity, ["USD"]));
-  addFactValues(periods, "cash", selectFactsByYear(facts, FACT_TAGS.cash, ["USD"]));
-  addFactValues(
-    periods,
-    "operatingCashFlow",
-    selectFactsByYear(facts, FACT_TAGS.operatingCashFlow, ["USD"]),
-  );
-  addFactValues(
-    periods,
-    "capitalExpenditure",
-    selectFactsByYear(facts, FACT_TAGS.capitalExpenditure, ["USD"]),
-    (value) => Math.abs(value),
-  );
-  addFactValues(
-    periods,
-    "epsDiluted",
-    selectFactsByYear(facts, FACT_TAGS.epsDiluted, ["USD/shares"]),
-  );
-  addFactValues(
-    periods,
-    "sharesDiluted",
-    selectFactsByYear(facts, FACT_TAGS.sharesDiluted, ["shares"]),
-  );
-
+): void {
   const currentDebt = selectFactsByYear(facts, FACT_TAGS.debtCurrent, ["USD"]);
   const noncurrentDebt = selectFactsByYear(facts, FACT_TAGS.debtNoncurrent, ["USD"]);
   const totalDebt = selectFactsByYear(facts, FACT_TAGS.debtTotal, ["USD"]);
@@ -489,7 +1165,11 @@ export function normalizeCompanySnapshot(
     ...Array.from(noncurrentDebt.keys()),
     ...Array.from(totalDebt.keys()),
   ])) {
-    const period = periods.get(fiscalYear) ?? { fiscalYear };
+    const period = periods.get(fiscalYear) ?? {
+      periodType: "annual" as const,
+      fiscalYear,
+      fiscalPeriod: "FY",
+    };
     period.debt =
       totalDebt.get(fiscalYear)?.fact.val ??
       firstValue([currentDebt.get(fiscalYear)?.fact.val, 0])! +
@@ -512,28 +1192,437 @@ export function normalizeCompanySnapshot(
       currentDebt.get(fiscalYear)?.fact.accn;
     periods.set(fiscalYear, period);
   }
+}
+
+function buildDebtByQuarter(
+  periods: Map<string, FinancialPeriod>,
+  facts: SecCompanyFactsResponse,
+): void {
+  const currentDebt = selectFactsByQuarter(facts, FACT_TAGS.debtCurrent, ["USD"]);
+  const noncurrentDebt = selectFactsByQuarter(facts, FACT_TAGS.debtNoncurrent, ["USD"]);
+  const totalDebt = selectFactsByQuarter(facts, FACT_TAGS.debtTotal, ["USD"]);
+
+  for (const key of new Set([
+    ...Array.from(currentDebt.keys()),
+    ...Array.from(noncurrentDebt.keys()),
+    ...Array.from(totalDebt.keys()),
+  ])) {
+    const selected = totalDebt.get(key) ?? noncurrentDebt.get(key) ?? currentDebt.get(key);
+    const fiscalYear = selected?.fact.fy;
+    const fiscalPeriod = selected?.fact.fp;
+    if (!selected || !isFiniteNumber(fiscalYear) || !fiscalPeriod) {
+      continue;
+    }
+
+    const period = periods.get(key) ?? {
+      periodType: "quarterly" as const,
+      fiscalYear,
+      fiscalPeriod,
+    };
+    period.debt =
+      totalDebt.get(key)?.fact.val ??
+      firstValue([currentDebt.get(key)?.fact.val, 0])! +
+        firstValue([noncurrentDebt.get(key)?.fact.val, 0])!;
+    period.endDate ||=
+      totalDebt.get(key)?.fact.end ??
+      noncurrentDebt.get(key)?.fact.end ??
+      currentDebt.get(key)?.fact.end;
+    period.filedDate ||=
+      totalDebt.get(key)?.fact.filed ??
+      noncurrentDebt.get(key)?.fact.filed ??
+      currentDebt.get(key)?.fact.filed;
+    period.form ||=
+      totalDebt.get(key)?.fact.form ??
+      noncurrentDebt.get(key)?.fact.form ??
+      currentDebt.get(key)?.fact.form;
+    period.accessionNumber ||=
+      totalDebt.get(key)?.fact.accn ??
+      noncurrentDebt.get(key)?.fact.accn ??
+      currentDebt.get(key)?.fact.accn;
+    periods.set(key, period);
+  }
+}
+
+function emptyPeerComparison(identity: CompanyIdentity): PeerComparison {
+  return {
+    status: "limited",
+    sic: identity.sic,
+    sicDescription: identity.sicDescription,
+    peerCount: 0,
+    metrics: [],
+    caveats: [
+      "Fewer than three same-SIC peer snapshots are available from SEC data.",
+    ],
+  };
+}
+
+function metricValue(snapshot: CompanySnapshot, id: string): number | null {
+  return snapshot.metrics.find((metric) => metric.id === id)?.value ?? null;
+}
+
+function median(values: number[]): number | null {
+  const clean = values.filter(isFiniteNumber).sort((a, b) => a - b);
+  if (!clean.length) {
+    return null;
+  }
+  const middle = Math.floor(clean.length / 2);
+  return clean.length % 2
+    ? clean[middle]
+    : (clean[middle - 1] + clean[middle]) / 2;
+}
+
+function peerMetric(
+  id: string,
+  label: string,
+  unit: MetricUnit,
+  companyValue: number | null,
+  peerValues: Array<number | null>,
+  lowerIsBetter = false,
+): PeerMetricComparison {
+  const peerMedian = median(peerValues.filter(isFiniteNumber));
+  let signal: TrendSignal = "unknown";
+
+  if (isFiniteNumber(companyValue) && isFiniteNumber(peerMedian)) {
+    const better = lowerIsBetter
+      ? companyValue <= peerMedian
+      : companyValue >= peerMedian;
+    signal = better ? "positive" : "negative";
+  }
+
+  return {
+    id,
+    label,
+    companyValue,
+    peerMedian,
+    unit,
+    signal,
+    description: `${label} compared with the same-SIC peer median.`,
+  };
+}
+
+export function buildPeerComparisonFromSnapshots(
+  target: CompanySnapshot,
+  peers: CompanySnapshot[],
+): PeerComparison {
+  const sameIndustryPeers = peers.filter(
+    (peer) =>
+      peer.identity.ticker !== target.identity.ticker &&
+      peer.identity.sic &&
+      target.identity.sic &&
+      peer.identity.sic === target.identity.sic,
+  );
+
+  if (sameIndustryPeers.length === 0) {
+    return emptyPeerComparison(target.identity);
+  }
+
+  const metrics = [
+    peerMetric(
+      "revenue-growth",
+      "Revenue growth",
+      "percent",
+      metricValue(target, "revenue-growth"),
+      sameIndustryPeers.map((peer) => metricValue(peer, "revenue-growth")),
+    ),
+    peerMetric(
+      "operating-margin",
+      "Operating margin",
+      "percent",
+      metricValue(target, "operating-margin"),
+      sameIndustryPeers.map((peer) => metricValue(peer, "operating-margin")),
+    ),
+    peerMetric(
+      "free-cash-flow-margin",
+      "FCF margin",
+      "percent",
+      metricValue(target, "free-cash-flow-margin"),
+      sameIndustryPeers.map((peer) => metricValue(peer, "free-cash-flow-margin")),
+    ),
+    peerMetric(
+      "return-on-assets",
+      "Return on assets",
+      "percent",
+      metricValue(target, "return-on-assets"),
+      sameIndustryPeers.map((peer) => metricValue(peer, "return-on-assets")),
+    ),
+    peerMetric(
+      "liabilities-to-assets",
+      "Liabilities / assets",
+      "percent",
+      metricValue(target, "liabilities-to-assets"),
+      sameIndustryPeers.map((peer) => metricValue(peer, "liabilities-to-assets")),
+      true,
+    ),
+    peerMetric(
+      "cash-to-debt",
+      "Cash / debt",
+      "ratio",
+      target.balanceSheetAnalysis.cashToDebt,
+      sameIndustryPeers.map((peer) => peer.balanceSheetAnalysis.cashToDebt),
+    ),
+  ];
+
+  const limited = sameIndustryPeers.length < 3;
+  return {
+    status: limited ? "limited" : "ready",
+    sic: target.identity.sic,
+    sicDescription: target.identity.sicDescription,
+    peerCount: sameIndustryPeers.length,
+    metrics,
+    caveats: limited
+      ? ["Fewer than three same-SIC peer snapshots are available from SEC data."]
+      : [],
+  };
+}
+
+export function normalizeCompanySnapshot(
+  identity: CompanyIdentity,
+  submissions: SecSubmissionsResponse,
+  facts: SecCompanyFactsResponse,
+  peerComparison?: PeerComparison,
+): CompanySnapshot {
+  const enrichedIdentity = enrichIdentityFromSubmissions(identity, submissions);
+  const periods = new Map<number, FinancialPeriod>();
+  const quarterlyPeriods = new Map<string, FinancialPeriod>();
+
+  addAnnualFactValues(
+    periods,
+    "revenue",
+    selectFactsByYear(facts, FACT_TAGS.revenue, ["USD"]),
+  );
+  addAnnualFactValues(
+    periods,
+    "grossProfit",
+    selectFactsByYear(facts, FACT_TAGS.grossProfit, ["USD"]),
+  );
+  addAnnualFactValues(
+    periods,
+    "operatingIncome",
+    selectFactsByYear(facts, FACT_TAGS.operatingIncome, ["USD"]),
+  );
+  addAnnualFactValues(
+    periods,
+    "netIncome",
+    selectFactsByYear(facts, FACT_TAGS.netIncome, ["USD"]),
+  );
+  addAnnualFactValues(periods, "assets", selectFactsByYear(facts, FACT_TAGS.assets, ["USD"]));
+  addAnnualFactValues(
+    periods,
+    "liabilities",
+    selectFactsByYear(facts, FACT_TAGS.liabilities, ["USD"]),
+  );
+  addAnnualFactValues(
+    periods,
+    "currentAssets",
+    selectFactsByYear(facts, FACT_TAGS.currentAssets, ["USD"]),
+  );
+  addAnnualFactValues(
+    periods,
+    "currentLiabilities",
+    selectFactsByYear(facts, FACT_TAGS.currentLiabilities, ["USD"]),
+  );
+  addAnnualFactValues(periods, "equity", selectFactsByYear(facts, FACT_TAGS.equity, ["USD"]));
+  addAnnualFactValues(periods, "cash", selectFactsByYear(facts, FACT_TAGS.cash, ["USD"]));
+  addAnnualFactValues(
+    periods,
+    "operatingCashFlow",
+    selectFactsByYear(facts, FACT_TAGS.operatingCashFlow, ["USD"]),
+  );
+  addAnnualFactValues(
+    periods,
+    "capitalExpenditure",
+    selectFactsByYear(facts, FACT_TAGS.capitalExpenditure, ["USD"]),
+    (value) => Math.abs(value),
+  );
+  addAnnualFactValues(
+    periods,
+    "researchAndDevelopment",
+    selectFactsByYear(facts, FACT_TAGS.researchAndDevelopment, ["USD"]),
+  );
+  addAnnualFactValues(
+    periods,
+    "sellingGeneralAdministrative",
+    selectFactsByYear(facts, FACT_TAGS.sellingGeneralAdministrative, ["USD"]),
+  );
+  addAnnualFactValues(
+    periods,
+    "buybacks",
+    selectFactsByYear(facts, FACT_TAGS.buybacks, ["USD"]),
+    (value) => Math.abs(value),
+  );
+  addAnnualFactValues(
+    periods,
+    "dividends",
+    selectFactsByYear(facts, FACT_TAGS.dividends, ["USD"]),
+    (value) => Math.abs(value),
+  );
+  addAnnualFactValues(
+    periods,
+    "epsDiluted",
+    selectFactsByYear(facts, FACT_TAGS.epsDiluted, ["USD/shares"]),
+  );
+  addAnnualFactValues(
+    periods,
+    "sharesDiluted",
+    selectFactsByYear(facts, FACT_TAGS.sharesDiluted, ["shares"]),
+  );
+  buildDebtByYear(periods, facts);
+
+  addQuarterlyFactValues(
+    quarterlyPeriods,
+    "revenue",
+    selectQuarterlyDurationFacts(facts, FACT_TAGS.revenue, ["USD"]),
+  );
+  addQuarterlyFactValues(
+    quarterlyPeriods,
+    "grossProfit",
+    selectQuarterlyDurationFacts(facts, FACT_TAGS.grossProfit, ["USD"]),
+  );
+  addQuarterlyFactValues(
+    quarterlyPeriods,
+    "operatingIncome",
+    selectQuarterlyDurationFacts(facts, FACT_TAGS.operatingIncome, ["USD"]),
+  );
+  addQuarterlyFactValues(
+    quarterlyPeriods,
+    "netIncome",
+    selectQuarterlyDurationFacts(facts, FACT_TAGS.netIncome, ["USD"]),
+  );
+  addQuarterlyInstantFactValues(
+    quarterlyPeriods,
+    "assets",
+    selectFactsByQuarter(facts, FACT_TAGS.assets, ["USD"]),
+  );
+  addQuarterlyInstantFactValues(
+    quarterlyPeriods,
+    "liabilities",
+    selectFactsByQuarter(facts, FACT_TAGS.liabilities, ["USD"]),
+  );
+  addQuarterlyInstantFactValues(
+    quarterlyPeriods,
+    "currentAssets",
+    selectFactsByQuarter(facts, FACT_TAGS.currentAssets, ["USD"]),
+  );
+  addQuarterlyInstantFactValues(
+    quarterlyPeriods,
+    "currentLiabilities",
+    selectFactsByQuarter(facts, FACT_TAGS.currentLiabilities, ["USD"]),
+  );
+  addQuarterlyInstantFactValues(
+    quarterlyPeriods,
+    "equity",
+    selectFactsByQuarter(facts, FACT_TAGS.equity, ["USD"]),
+  );
+  addQuarterlyInstantFactValues(
+    quarterlyPeriods,
+    "cash",
+    selectFactsByQuarter(facts, FACT_TAGS.cash, ["USD"]),
+  );
+  addQuarterlyFactValues(
+    quarterlyPeriods,
+    "operatingCashFlow",
+    selectQuarterlyDurationFacts(facts, FACT_TAGS.operatingCashFlow, ["USD"]),
+  );
+  addQuarterlyFactValues(
+    quarterlyPeriods,
+    "capitalExpenditure",
+    selectQuarterlyDurationFacts(facts, FACT_TAGS.capitalExpenditure, ["USD"]),
+    (value) => Math.abs(value),
+  );
+  addQuarterlyFactValues(
+    quarterlyPeriods,
+    "researchAndDevelopment",
+    selectQuarterlyDurationFacts(facts, FACT_TAGS.researchAndDevelopment, ["USD"]),
+  );
+  addQuarterlyFactValues(
+    quarterlyPeriods,
+    "sellingGeneralAdministrative",
+    selectQuarterlyDurationFacts(facts, FACT_TAGS.sellingGeneralAdministrative, ["USD"]),
+  );
+  addQuarterlyFactValues(
+    quarterlyPeriods,
+    "buybacks",
+    selectQuarterlyDurationFacts(facts, FACT_TAGS.buybacks, ["USD"]),
+    (value) => Math.abs(value),
+  );
+  addQuarterlyFactValues(
+    quarterlyPeriods,
+    "dividends",
+    selectQuarterlyDurationFacts(facts, FACT_TAGS.dividends, ["USD"]),
+    (value) => Math.abs(value),
+  );
+  addQuarterlyFactValues(
+    quarterlyPeriods,
+    "epsDiluted",
+    selectQuarterlyDurationFacts(facts, FACT_TAGS.epsDiluted, ["USD/shares"]),
+  );
+  addQuarterlyFactValues(
+    quarterlyPeriods,
+    "sharesDiluted",
+    selectQuarterlyDurationFacts(facts, FACT_TAGS.sharesDiluted, ["shares"]),
+  );
+  buildDebtByQuarter(quarterlyPeriods, facts);
 
   const normalizedPeriods = Array.from(periods.values())
-    .map((period) => ({
-      ...period,
-      freeCashFlow:
-        isFiniteNumber(period.operatingCashFlow) &&
-        isFiniteNumber(period.capitalExpenditure)
-          ? period.operatingCashFlow - period.capitalExpenditure
-          : null,
-    }))
+    .map(withDerivedFields)
     .sort((a, b) => b.fiscalYear - a.fiscalYear)
     .slice(0, 5);
-
-  const filings = extractRecentFilings(submissions);
+  const normalizedQuarterlyPeriods = sortedPeriods(
+    Array.from(quarterlyPeriods.values()).map(withDerivedFields),
+  ).slice(0, 8);
+  const ttmPeriod = buildTtmPeriod(normalizedQuarterlyPeriods);
+  const filings = extractRecentFilings(submissions, 40);
+  const latestFinancialFiling = filings.find((filing) =>
+    FINANCIAL_FORMS.has(filing.form),
+  );
+  const latestAnnualFiling = filings.find((filing) =>
+    ANNUAL_FORMS.has(filing.form),
+  );
+  const latestQuarterlyFiling = filings.find((filing) =>
+    QUARTERLY_FORMS.has(filing.form),
+  );
+  const metrics = buildMetrics(normalizedPeriods, ttmPeriod);
+  const balanceSheetAnalysis = buildBalanceSheetAnalysis(
+    normalizedPeriods,
+    normalizedQuarterlyPeriods,
+  );
+  const dataQuality = buildDataQuality(
+    normalizedPeriods,
+    normalizedQuarterlyPeriods,
+    latestFinancialFiling,
+    facts,
+  );
+  const resolvedPeerComparison = peerComparison ?? emptyPeerComparison(enrichedIdentity);
+  const caveats = buildCaveats(
+    normalizedPeriods,
+    normalizedQuarterlyPeriods,
+    resolvedPeerComparison,
+    facts,
+  );
 
   return {
     identity: enrichedIdentity,
     latestFiling: filings[0],
+    latestFinancialFiling,
+    latestAnnualFiling,
+    latestQuarterlyFiling,
     filings,
     periods: normalizedPeriods,
-    metrics: buildMetrics(normalizedPeriods),
-    caveats: buildCaveats(normalizedPeriods, facts),
+    quarterlyPeriods: normalizedQuarterlyPeriods,
+    ttmPeriod,
+    metrics,
+    changeAnalysis: buildChangeAnalysis(normalizedPeriods, normalizedQuarterlyPeriods),
+    businessDrivers: buildBusinessDrivers(
+      metrics,
+      normalizedPeriods,
+      normalizedQuarterlyPeriods,
+      ttmPeriod,
+    ),
+    balanceSheetAnalysis,
+    peerComparison: resolvedPeerComparison,
+    dataQuality,
+    decisionFramework: buildDecisionFramework(metrics, balanceSheetAnalysis, dataQuality),
+    caveats,
     citations: buildCitations(enrichedIdentity, normalizedPeriods, filings),
     generatedAt: new Date().toISOString(),
   };

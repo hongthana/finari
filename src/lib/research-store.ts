@@ -28,7 +28,7 @@ import type {
 } from "@/lib/types";
 
 const SNAPSHOT_TTL_MS = 24 * 60 * 60 * 1000;
-const MEMO_PROMPT_VERSION = "finari_memo_v2";
+const MEMO_PROMPT_VERSION = "finari_memo_v3";
 
 type StoredSnapshot = {
   snapshotId: string;
@@ -142,6 +142,17 @@ export function computeSnapshotSourceHash(snapshot: CompanySnapshot): string {
       reportDate: filing.reportDate,
     })),
     periods: snapshot.periods,
+    quarterlyPeriods: snapshot.quarterlyPeriods,
+    ttmPeriod: snapshot.ttmPeriod,
+    latestFinancialFiling: snapshot.latestFinancialFiling?.accessionNumber,
+    latestAnnualFiling: snapshot.latestAnnualFiling?.accessionNumber,
+    latestQuarterlyFiling: snapshot.latestQuarterlyFiling?.accessionNumber,
+    changeAnalysis: snapshot.changeAnalysis,
+    businessDrivers: snapshot.businessDrivers,
+    balanceSheetAnalysis: snapshot.balanceSheetAnalysis,
+    peerComparison: snapshot.peerComparison,
+    dataQuality: snapshot.dataQuality,
+    decisionFramework: snapshot.decisionFramework,
     caveats: snapshot.caveats,
   });
 }
@@ -157,7 +168,15 @@ export function computeMemoPromptHash(
     sourceHash: computeSnapshotSourceHash(snapshot),
     identity: snapshot.identity,
     periods: snapshot.periods,
+    quarterlyPeriods: snapshot.quarterlyPeriods,
+    ttmPeriod: snapshot.ttmPeriod,
     metrics: snapshot.metrics,
+    changeAnalysis: snapshot.changeAnalysis,
+    businessDrivers: snapshot.businessDrivers,
+    balanceSheetAnalysis: snapshot.balanceSheetAnalysis,
+    peerComparison: snapshot.peerComparison,
+    dataQuality: snapshot.dataQuality,
+    decisionFramework: snapshot.decisionFramework,
     caveats: snapshot.caveats,
     citations: snapshot.citations,
   });
@@ -213,13 +232,20 @@ function metricFactsFromPeriod(
     ["netIncome", "NetIncomeLoss", "USD"],
     ["assets", "Assets", "USD"],
     ["liabilities", "Liabilities", "USD"],
+    ["currentAssets", "AssetsCurrent", "USD"],
+    ["currentLiabilities", "LiabilitiesCurrent", "USD"],
+    ["workingCapital", "WorkingCapital", "USD"],
     ["equity", "StockholdersEquity", "USD"],
     ["cash", "CashAndCashEquivalentsAtCarryingValue", "USD"],
     ["debt", "Debt", "USD"],
     ["operatingCashFlow", "NetCashProvidedByUsedInOperatingActivities", "USD"],
     ["capitalExpenditure", "PaymentsToAcquirePropertyPlantAndEquipment", "USD"],
     ["freeCashFlow", "FreeCashFlow", "USD"],
-    ["epsDiluted", "EarningsPerShareDiluted", "shares"],
+    ["researchAndDevelopment", "ResearchAndDevelopmentExpense", "USD"],
+    ["sellingGeneralAdministrative", "SellingGeneralAndAdministrativeExpense", "USD"],
+    ["buybacks", "PaymentsForRepurchaseOfCommonStock", "USD"],
+    ["dividends", "PaymentsOfDividendsCommonStock", "USD"],
+    ["epsDiluted", "EarningsPerShareDiluted", "USD/shares"],
     ["sharesDiluted", "WeightedAverageNumberOfDilutedSharesOutstanding", "shares"],
   ];
 
@@ -232,6 +258,9 @@ function metricFactsFromPeriod(
       companyId,
       filingId,
       fiscalYear: period.fiscalYear,
+      periodType: period.periodType ?? "annual",
+      fiscalPeriod: period.fiscalPeriod ?? "FY",
+      periodStartDate: dateOrNull(period.startDate),
       periodEndDate: dateOrNull(period.endDate),
       metricKey,
       usGaapTag,
@@ -241,6 +270,8 @@ function metricFactsFromPeriod(
         sourceHash,
         accessionNumber: period.accessionNumber,
         fiscalYear: period.fiscalYear,
+        periodType: period.periodType ?? "annual",
+        fiscalPeriod: period.fiscalPeriod ?? "FY",
         metricKey,
         value,
       }),
@@ -414,12 +445,21 @@ export async function persistSnapshot(snapshot: CompanySnapshot): Promise<Stored
     filingIds.set(row.accessionNumber, row.id);
   }
 
-  for (const period of snapshot.periods) {
+  const normalizedPeriods = [
+    ...snapshot.periods,
+    ...snapshot.quarterlyPeriods,
+    ...(snapshot.ttmPeriod ? [snapshot.ttmPeriod] : []),
+  ];
+
+  for (const period of normalizedPeriods) {
     await db
       .insert(financialPeriods)
       .values({
         companyId,
         fiscalYear: period.fiscalYear,
+        periodType: period.periodType ?? "annual",
+        fiscalPeriod: period.fiscalPeriod ?? "FY",
+        periodStartDate: dateOrNull(period.startDate),
         periodEndDate: dateOrNull(period.endDate),
         sourceFilingId: period.accessionNumber ? filingIds.get(period.accessionNumber) : null,
         revenue: numberOrNull(period.revenue),
@@ -428,20 +468,33 @@ export async function persistSnapshot(snapshot: CompanySnapshot): Promise<Stored
         netIncome: numberOrNull(period.netIncome),
         assets: numberOrNull(period.assets),
         liabilities: numberOrNull(period.liabilities),
+        currentAssets: numberOrNull(period.currentAssets),
+        currentLiabilities: numberOrNull(period.currentLiabilities),
+        workingCapital: numberOrNull(period.workingCapital),
         equity: numberOrNull(period.equity),
         cash: numberOrNull(period.cash),
         debt: numberOrNull(period.debt),
         operatingCashFlow: numberOrNull(period.operatingCashFlow),
         capitalExpenditure: numberOrNull(period.capitalExpenditure),
         freeCashFlow: numberOrNull(period.freeCashFlow),
+        researchAndDevelopment: numberOrNull(period.researchAndDevelopment),
+        sellingGeneralAdministrative: numberOrNull(period.sellingGeneralAdministrative),
+        buybacks: numberOrNull(period.buybacks),
+        dividends: numberOrNull(period.dividends),
         epsDiluted: numberOrNull(period.epsDiluted),
         sharesDiluted: numberOrNull(period.sharesDiluted),
         caveatsJson: snapshot.caveats,
         sourceHash,
       })
       .onConflictDoUpdate({
-        target: [financialPeriods.companyId, financialPeriods.fiscalYear],
+        target: [
+          financialPeriods.companyId,
+          financialPeriods.periodType,
+          financialPeriods.fiscalYear,
+          financialPeriods.fiscalPeriod,
+        ],
         set: {
+          periodStartDate: dateOrNull(period.startDate),
           periodEndDate: dateOrNull(period.endDate),
           sourceFilingId: period.accessionNumber ? filingIds.get(period.accessionNumber) : null,
           revenue: numberOrNull(period.revenue),
@@ -450,12 +503,19 @@ export async function persistSnapshot(snapshot: CompanySnapshot): Promise<Stored
           netIncome: numberOrNull(period.netIncome),
           assets: numberOrNull(period.assets),
           liabilities: numberOrNull(period.liabilities),
+          currentAssets: numberOrNull(period.currentAssets),
+          currentLiabilities: numberOrNull(period.currentLiabilities),
+          workingCapital: numberOrNull(period.workingCapital),
           equity: numberOrNull(period.equity),
           cash: numberOrNull(period.cash),
           debt: numberOrNull(period.debt),
           operatingCashFlow: numberOrNull(period.operatingCashFlow),
           capitalExpenditure: numberOrNull(period.capitalExpenditure),
           freeCashFlow: numberOrNull(period.freeCashFlow),
+          researchAndDevelopment: numberOrNull(period.researchAndDevelopment),
+          sellingGeneralAdministrative: numberOrNull(period.sellingGeneralAdministrative),
+          buybacks: numberOrNull(period.buybacks),
+          dividends: numberOrNull(period.dividends),
           epsDiluted: numberOrNull(period.epsDiluted),
           sharesDiluted: numberOrNull(period.sharesDiluted),
           caveatsJson: snapshot.caveats,
@@ -466,7 +526,7 @@ export async function persistSnapshot(snapshot: CompanySnapshot): Promise<Stored
   }
 
   await db.delete(financialFacts).where(eq(financialFacts.companyId, companyId));
-  const facts = snapshot.periods.flatMap((period) =>
+  const facts = normalizedPeriods.flatMap((period) =>
     metricFactsFromPeriod(
       companyId,
       period.accessionNumber ? (filingIds.get(period.accessionNumber) ?? null) : null,

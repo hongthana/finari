@@ -90,6 +90,7 @@ const en = {
     assets: "Assets",
     refresh: "Refresh",
     latestFiling: "Latest filing",
+    latestFinancialFiling: "Latest financial filing",
     generated: "Generated",
     fiscalYear: "FY",
     tooltips: {
@@ -103,6 +104,167 @@ const en = {
         "Free cash flow after operating cash flow and capital expenditure. Use it to judge cash generation.",
       assets:
         "Total assets on the balance sheet. Use it to understand the company asset base.",
+    },
+  },
+  decision: {
+    badge: "Decision screen",
+    badgeTooltip:
+      "A filing-only investor screen that highlights the core evidence, main risk, and metric to watch next.",
+    heading: "Decision screen from the latest financial filing",
+    subtitle:
+      "Use this as a practical screen before valuation: it does not decide for you, but it tells you what the filing most clearly supports and what still needs proof.",
+    finalTakeaway: "Final takeaway",
+    strongestEvidence: "Strongest evidence",
+    mainRisk: "Main risk",
+    watchNext: "Metric to watch next",
+    latestFinancialFiling: "Latest financial filing",
+    dataConfidence: "Data confidence",
+    notAvailable: "n/a",
+    takeaways: {
+      constructive:
+        "Constructive filing profile: the latest standardized SEC facts support business quality, but the final investment decision still depends on valuation and risk fit.",
+      mixed:
+        "Mixed filing profile: the business has useful strengths, but the evidence is not one-sided enough to rely on without further review.",
+      caution:
+        "Caution filing profile: at least one decision-critical area is under pressure, so require stronger proof before relying on the investment case.",
+      limited:
+        "Limited filing profile: standardized data is too incomplete for a high-confidence screen, so open the filing before making decisions.",
+    },
+    evidence: {
+      "cash-generation": "cash generation",
+      "data-quality": "data quality",
+      "financial-scale": "financial scale",
+      "profit-quality": "profit quality",
+    },
+    risks: {
+      "balance-sheet": "balance-sheet flexibility",
+      "data-quality": "data quality",
+      growth: "growth pressure",
+      "margin-durability": "margin durability",
+      "valuation-needed": "valuation still needed",
+    },
+    tooltips: {
+      takeaway:
+        "Overall filing read from growth, profitability, cash flow, balance-sheet, and data-quality signals.",
+      evidence:
+        "The strongest standardized SEC evidence supporting the current filing read.",
+      risk: "The main risk area the next investor review should focus on.",
+      watch:
+        "The next metric that can confirm or weaken the filing-based read.",
+      filing:
+        "The latest 10-K or 10-Q family filing used as the primary financial-filing anchor.",
+      confidence:
+        "How complete and comparable the standardized SEC facts are for this screen.",
+    },
+  },
+  analysis: {
+    quarterlyTitle: "Quarterly and TTM trend",
+    quarterlySubtitle:
+      "Latest quarters and trailing twelve months from standardized SEC facts where comparable data is available.",
+    quarter: "Quarter",
+    ttm: "TTM",
+    revenue: "Revenue",
+    netIncome: "Net income",
+    fcf: "FCF",
+    opMargin: "Op margin",
+    noTtm: "TTM is unavailable until four comparable quarters are available.",
+    changeTitle: "What changed since the last filing",
+    changeSubtitle:
+      "Quarter-over-quarter and year-over-year comparisons from normalized SEC facts.",
+    latestQuarter: "Latest quarter",
+    latestAnnual: "Latest annual",
+    current: "Current",
+    previous: "Previous",
+    change: "Change",
+    noComparable: "No clean comparison available.",
+    driversTitle: "Business-driver read",
+    driversSubtitle:
+      "Deterministic reads from tagged facts: growth, profitability, cash generation, capital allocation, liquidity, and leverage.",
+    driverLabels: {
+      growth: "Growth",
+      profitability: "Profitability",
+      "cash-generation": "Cash generation",
+      "capital-allocation": "Capital allocation",
+      liquidity: "Liquidity",
+      leverage: "Leverage",
+    },
+    driverDescriptions: {
+      growth:
+        "Revenue momentum. Positive is easier when sales are expanding without weakening margins.",
+      profitability:
+        "Operating profitability. Higher operating margin gives the business more room to absorb pressure.",
+      "cash-generation":
+        "Free-cash-flow conversion. Cash-backed profit is more decision-useful than accounting profit alone.",
+      "capital-allocation":
+        "Buybacks and dividends relative to cash generation. High payout can reduce flexibility.",
+      liquidity:
+        "Near-term balance-sheet flexibility. Current assets should comfortably cover current liabilities.",
+      leverage:
+        "Balance-sheet obligations relative to assets. Higher liabilities reduce room for error.",
+    },
+    primaryValue: "Primary value",
+    secondaryValue: "Secondary value",
+    balanceTitle: "Balance-sheet strength",
+    balanceSubtitle:
+      "Latest available balance-sheet metrics from quarterly data when available, otherwise annual data.",
+    cash: "Cash",
+    debt: "Debt",
+    netCash: "Net cash",
+    workingCapital: "Working capital",
+    cashToDebt: "Cash / debt",
+    liabilitiesToAssets: "Liabilities / assets",
+    debtToEquity: "Debt / equity",
+    peersTitle: "SEC-industry peer comparison",
+    peersSubtitle:
+      "Same-SIC peer medians from bounded SEC-only Finari coverage. Treat limited peer coverage as directional.",
+    peerCount: (count: number) => `${count} same-SIC peers`,
+    metric: "Metric",
+    company: "Company",
+    peerMedian: "Peer median",
+    limitedPeerCoverage:
+      "Peer coverage is limited. Use this as a directional comparison, not a complete industry ranking.",
+    noPeerMetrics: "No same-SIC peer metrics are available yet.",
+    dataQualityTitle: "Data-quality checks",
+    dataQualitySubtitle:
+      "Confidence score based on available financial filings, annual comparability, quarterly coverage, and US-GAAP facts.",
+    score: "Score",
+    confidence: "Confidence",
+    confidenceLabels: {
+      High: "High",
+      Medium: "Medium",
+      Low: "Low",
+    },
+    checkLabels: {
+      "financial-filing": "Latest financial filing found",
+      "annual-comparability": "Annual comparability",
+      "core-annual-tags": "Core annual tags",
+      "quarterly-coverage": "Quarterly coverage",
+      "us-gaap": "US-GAAP facts",
+    },
+    checkDescriptions: {
+      "financial-filing":
+        "A 10-K/10-Q family filing is available as the analysis anchor.",
+      "annual-comparability":
+        "At least two annual periods are available for trend comparison.",
+      "core-annual-tags":
+        "Revenue, net income, assets, and operating cash flow were available.",
+      "quarterly-coverage":
+        "At least four comparable quarters are available for TTM analysis.",
+      "us-gaap": "The SEC response includes standardized US-GAAP facts.",
+    },
+    tooltips: {
+      quarterly:
+        "Quarterly facts are used only when standardized SEC tags support comparable quarter values.",
+      change:
+        "Change detection compares the latest available period with the prior comparable period.",
+      drivers:
+        "Business-driver reads translate normalized metrics into decision-relevant themes.",
+      balance:
+        "Balance-sheet strength focuses on liquidity, debt, and liabilities from the latest available filing period.",
+      peers:
+        "Peer comparison uses same-SIC companies from a bounded SEC-only seed universe.",
+      dataQuality:
+        "Data confidence explains whether missing or incomplete SEC tags should limit reliance on the screen.",
     },
   },
   advisor: {
@@ -350,7 +512,7 @@ const en = {
     disclaimer:
       "Finari is educational research software. It does not provide personalized investment advice, buy/sell recommendations, price targets, or suitability analysis.",
     aiInstruction:
-      "Write a concise institutional-grade equity research memo in English for retail investors. Use only the supplied SEC-derived facts and caveats. Do not include buy/sell recommendations, price targets, or personalized investment advice. Return strict JSON with sections: [{title, body, signal}] where signal is positive, neutral, negative, or unknown.",
+      "Write a concise institutional-grade equity research memo in English for retail investors. Use only the supplied SEC-derived facts, quarterly/TTM fields, peer comparison, data-quality checks, decision framework, citations, and caveats. Do not include buy/sell recommendations, price targets, or personalized investment advice. Return strict JSON with sections: [{title, body, signal}] where signal is positive, neutral, negative, or unknown.",
     signal: {
       positive:
         "The current filing profile screens as constructive, but it still needs valuation and business-quality review.",
@@ -365,6 +527,9 @@ const en = {
       institutionalRead: "Institutional read",
       trajectory: "Financial trajectory",
       balanceSheet: "Balance sheet and cash flow",
+      decisionScreen: "Decision screen",
+      quarterlyTtm: "Quarterly and TTM read",
+      peerAndConfidence: "Peer and data confidence",
       riskQuestions: "Risk questions",
     },
     fallback: {
@@ -390,6 +555,14 @@ const en = {
         `Reported assets were ${assets}, liabilities were ${liabilities}, cash was ${cash}, and free cash flow was ${freeCashFlow}. Treat free cash flow as a screening estimate because XBRL tag conventions can vary by issuer.`,
       balanceSheetUnavailable:
         "Balance sheet and cash-flow screening is unavailable until a filing period can be normalized.",
+      decision: (takeaway: string, evidence: string, risk: string, watchMetric: string) =>
+        `Decision screen: ${takeaway} Strongest evidence is ${evidence}; main risk is ${risk}; the next metric to watch is ${watchMetric}.`,
+      quarterly: (periodLabel: string, revenue: string, netIncome: string, fcf: string) =>
+        `Latest TTM or quarterly read: ${periodLabel} revenue was ${revenue}, net income was ${netIncome}, and FCF was ${fcf}.`,
+      quarterlyUnavailable:
+        "Quarterly and TTM analysis is limited because comparable quarterly facts were not available.",
+      peerDataQuality: (peerCount: number, confidence: string) =>
+        `Peer comparison uses ${peerCount} same-SIC SEC peers from bounded Finari coverage. Data confidence is ${confidence}, so missing tags or limited peers should affect how much weight the screen receives.`,
       reviewCaveats: (caveats: string) =>
         `Review these before relying on the memo: ${caveats}`,
       defaultQuestions:
@@ -453,6 +626,12 @@ const en = {
   caveats: {
     fewerPeriods:
       "Finari found fewer than two comparable annual periods, so trend analysis is limited.",
+    fewerQuarters:
+      "Finari found fewer than four comparable quarterly periods, so TTM analysis is limited.",
+    peerLimited:
+      "SEC industry peer coverage is limited, so peer comparison should be treated as directional.",
+    peerFewerThanThree:
+      "Fewer than three same-SIC peer snapshots are available from SEC data.",
     noAnnualFacts: "No annual financial-statement facts were found for this company.",
     noUsGaap:
       "The company did not expose standard US-GAAP facts in the SEC response.",
@@ -496,6 +675,7 @@ const th: Dictionary = {
     assets: "Assets",
     refresh: "รีเฟรช",
     latestFiling: "Filing ล่าสุด",
+    latestFinancialFiling: "Financial filing ล่าสุด",
     generated: "สร้างเมื่อ",
     fiscalYear: "FY",
     tooltips: {
@@ -509,6 +689,167 @@ const th: Dictionary = {
         "Free cash flow หลัง operating cash flow และ capital expenditure ใช้ดูการสร้างเงินสด",
       assets:
         "สินทรัพย์รวมในงบดุล ใช้ดูฐานสินทรัพย์ของบริษัท",
+    },
+  },
+  decision: {
+    badge: "หน้าช่วยตัดสินใจ",
+    badgeTooltip:
+      "ตัวกรองสำหรับนักลงทุนจาก filing เท่านั้น ช่วยชี้หลักฐานสำคัญ ความเสี่ยงหลัก และ metric ที่ควรติดตามต่อ",
+    heading: "หน้าช่วยตัดสินใจจาก financial filing ล่าสุด",
+    subtitle:
+      "ใช้ส่วนนี้ก่อนดู valuation: ระบบไม่ได้ตัดสินใจแทนคุณ แต่บอกว่า filing สนับสนุนมุมมองใดชัดที่สุด และจุดไหนยังต้องมีหลักฐานเพิ่ม",
+    finalTakeaway: "ข้อสรุปหลัก",
+    strongestEvidence: "หลักฐานที่แข็งแรงที่สุด",
+    mainRisk: "ความเสี่ยงหลัก",
+    watchNext: "Metric ที่ควรดูต่อ",
+    latestFinancialFiling: "Financial filing ล่าสุด",
+    dataConfidence: "ความมั่นใจของข้อมูล",
+    notAvailable: "n/a",
+    takeaways: {
+      constructive:
+        "ภาพจาก filing ค่อนข้างสร้างสรรค์: standardized SEC facts ล่าสุดสนับสนุนคุณภาพธุรกิจ แต่การตัดสินใจจริงยังต้องดู valuation และความเสี่ยงที่เหมาะกับคุณ",
+      mixed:
+        "ภาพจาก filing ยังผสมกัน: ธุรกิจมีจุดแข็งที่ใช้ได้ แต่หลักฐานยังไม่ชัดด้านเดียวพอที่จะใช้โดยไม่ตรวจเพิ่ม",
+      caution:
+        "ภาพจาก filing ต้องระวัง: มีอย่างน้อยหนึ่งประเด็นสำคัญที่กดดัน จึงควรต้องการหลักฐานเพิ่มก่อนเชื่อ investment case",
+      limited:
+        "ข้อมูลจาก filing ยังจำกัด: standardized data ยังไม่พอสำหรับ screen ที่มั่นใจสูง ควรเปิด filing อ่านเพิ่มก่อนตัดสินใจ",
+    },
+    evidence: {
+      "cash-generation": "การสร้างเงินสด",
+      "data-quality": "คุณภาพข้อมูล",
+      "financial-scale": "ขนาดธุรกิจ",
+      "profit-quality": "คุณภาพกำไร",
+    },
+    risks: {
+      "balance-sheet": "ความยืดหยุ่นของงบดุล",
+      "data-quality": "คุณภาพข้อมูล",
+      growth: "แรงกดดันด้านการเติบโต",
+      "margin-durability": "ความยั่งยืนของ margin",
+      "valuation-needed": "ยังต้องดู valuation",
+    },
+    tooltips: {
+      takeaway:
+        "ภาพรวมจาก filing โดยดู growth, profitability, cash flow, งบดุล, และคุณภาพข้อมูลร่วมกัน",
+      evidence:
+        "หลักฐานจาก standardized SEC data ที่สนับสนุนมุมมองปัจจุบันมากที่สุด",
+      risk: "จุดเสี่ยงหลักที่ควรตรวจต่อในการตัดสินใจลงทุน",
+      watch:
+        "Metric ถัดไปที่จะช่วยยืนยันหรือทำให้มุมมองจาก filing อ่อนลง",
+      filing:
+        "10-K หรือ 10-Q family filing ล่าสุดที่ใช้เป็นหลักของการวิเคราะห์งบการเงิน",
+      confidence:
+        "ความครบถ้วนและการเทียบกันได้ของ standardized SEC facts สำหรับหน้าจอนี้",
+    },
+  },
+  analysis: {
+    quarterlyTitle: "แนวโน้มรายไตรมาสและ TTM",
+    quarterlySubtitle:
+      "ไตรมาสล่าสุดและ trailing twelve months จาก standardized SEC facts เมื่อข้อมูลเทียบกันได้",
+    quarter: "ไตรมาส",
+    ttm: "TTM",
+    revenue: "Revenue",
+    netIncome: "Net income",
+    fcf: "FCF",
+    opMargin: "Op margin",
+    noTtm: "ยังคำนวณ TTM ไม่ได้จนกว่าจะมีไตรมาสที่เทียบกันได้ครบสี่ไตรมาส",
+    changeTitle: "อะไรเปลี่ยนไปจาก filing ก่อนหน้า",
+    changeSubtitle:
+      "เปรียบเทียบไตรมาสล่าสุดกับไตรมาสก่อน และปีล่าสุดกับปีก่อน จาก normalized SEC facts",
+    latestQuarter: "ไตรมาสล่าสุด",
+    latestAnnual: "ปีล่าสุด",
+    current: "ปัจจุบัน",
+    previous: "ก่อนหน้า",
+    change: "เปลี่ยนแปลง",
+    noComparable: "ยังไม่มีข้อมูลเปรียบเทียบที่สะอาดพอ",
+    driversTitle: "ตัวขับเคลื่อนธุรกิจ",
+    driversSubtitle:
+      "อ่านจาก tagged facts แบบ deterministic: growth, profitability, cash generation, capital allocation, liquidity, และ leverage",
+    driverLabels: {
+      growth: "Growth",
+      profitability: "Profitability",
+      "cash-generation": "Cash generation",
+      "capital-allocation": "Capital allocation",
+      liquidity: "Liquidity",
+      leverage: "Leverage",
+    },
+    driverDescriptions: {
+      growth:
+        "แรงส่งของ revenue จะดูดีขึ้นเมื่อยอดขายโตโดยไม่กดดัน margin",
+      profitability:
+        "ความสามารถทำกำไรจากการดำเนินงาน Operating margin ที่สูงช่วยให้ธุรกิจรับแรงกดดันได้มากขึ้น",
+      "cash-generation":
+        "การเปลี่ยนกำไรเป็น free cash flow กำไรที่มีเงินสดรองรับมีประโยชน์ต่อการตัดสินใจมากกว่าแค่กำไรทางบัญชี",
+      "capital-allocation":
+        "Buybacks และ dividends เทียบกับเงินสดที่ธุรกิจสร้างได้ หากจ่ายสูงเกินไปอาจลดความยืดหยุ่น",
+      liquidity:
+        "ความยืดหยุ่นระยะสั้นของงบดุล Current assets ควรมากพอเมื่อเทียบกับ current liabilities",
+      leverage:
+        "ภาระผูกพันในงบดุลเทียบกับสินทรัพย์ หนี้สินสูงทำให้มี room for error น้อยลง",
+    },
+    primaryValue: "ค่าหลัก",
+    secondaryValue: "ค่าเสริม",
+    balanceTitle: "ความแข็งแรงของงบดุล",
+    balanceSubtitle:
+      "ใช้ตัวเลขงบดุลล่าสุดจากไตรมาส ถ้ามีข้อมูลรายไตรมาส มิฉะนั้นใช้ตัวเลขรายปี",
+    cash: "Cash",
+    debt: "Debt",
+    netCash: "Net cash",
+    workingCapital: "Working capital",
+    cashToDebt: "Cash / debt",
+    liabilitiesToAssets: "Liabilities / assets",
+    debtToEquity: "Debt / equity",
+    peersTitle: "เทียบกับ peer ในอุตสาหกรรม SEC",
+    peersSubtitle:
+      "เทียบ median ของบริษัท same-SIC จาก Finari coverage ที่จำกัดและใช้ข้อมูล SEC เท่านั้น หาก peer coverage น้อยให้ใช้เป็นสัญญาณประกอบ",
+    peerCount: (count: number) => `${count} peer same-SIC`,
+    metric: "Metric",
+    company: "บริษัท",
+    peerMedian: "Peer median",
+    limitedPeerCoverage:
+      "Peer coverage ยังจำกัด ใช้เป็นการเทียบเชิงทิศทาง ไม่ใช่ industry ranking ที่ครบถ้วน",
+    noPeerMetrics: "ยังไม่มี metric ของ peer same-SIC ที่ใช้ได้",
+    dataQualityTitle: "ตรวจคุณภาพข้อมูล",
+    dataQualitySubtitle:
+      "คะแนนความมั่นใจจาก financial filing, การเทียบรายปี, quarterly coverage, และ US-GAAP facts ที่มีอยู่",
+    score: "คะแนน",
+    confidence: "ความมั่นใจ",
+    confidenceLabels: {
+      High: "สูง",
+      Medium: "ปานกลาง",
+      Low: "ต่ำ",
+    },
+    checkLabels: {
+      "financial-filing": "พบ financial filing ล่าสุด",
+      "annual-comparability": "เทียบรายปีได้",
+      "core-annual-tags": "Core annual tags",
+      "quarterly-coverage": "Quarterly coverage",
+      "us-gaap": "US-GAAP facts",
+    },
+    checkDescriptions: {
+      "financial-filing":
+        "มี 10-K/10-Q family filing เป็นจุดยึดของการวิเคราะห์",
+      "annual-comparability":
+        "มีงวดรายปีอย่างน้อยสองปีสำหรับเทียบ trend",
+      "core-annual-tags":
+        "มี revenue, net income, assets, และ operating cash flow",
+      "quarterly-coverage":
+        "มีไตรมาสที่เทียบกันได้อย่างน้อยสี่ไตรมาสสำหรับ TTM",
+      "us-gaap": "SEC response มี standardized US-GAAP facts",
+    },
+    tooltips: {
+      quarterly:
+        "ใช้ quarterly facts เฉพาะเมื่อ standardized SEC tags รองรับตัวเลขไตรมาสที่เทียบกันได้",
+      change:
+        "Change detection เทียบงวดล่าสุดกับงวดก่อนหน้าที่เทียบกันได้",
+      drivers:
+        "Business-driver read แปล normalized metrics ให้เป็นหัวข้อที่ใช้ตัดสินใจได้",
+      balance:
+        "ความแข็งแรงของงบดุลดู liquidity, debt, และ liabilities จากงวดล่าสุดที่มีข้อมูล",
+      peers:
+        "Peer comparison ใช้บริษัท same-SIC จาก seed universe ที่จำกัดและอ้างอิง SEC เท่านั้น",
+      dataQuality:
+        "Data confidence บอกว่าข้อมูล SEC tags ที่ขาดหรือไม่ครบควรจำกัดการใช้ screen แค่ไหน",
     },
   },
   advisor: {
@@ -755,7 +1096,7 @@ const th: Dictionary = {
     disclaimer:
       "Finari เป็นซอฟต์แวร์วิจัยเพื่อการศึกษา ไม่ใช่คำแนะนำการลงทุนเฉพาะบุคคล คำแนะนำให้ซื้อหรือขาย ราคาเป้าหมาย หรือการวิเคราะห์ความเหมาะสมรายบุคคล",
     aiInstruction:
-      "เขียน equity research memo ระดับสถาบันเป็นภาษาไทยแบบมืออาชีพและเข้าใจง่ายสำหรับนักลงทุนรายย่อย ใช้เฉพาะข้อมูล SEC-derived facts และ caveats ที่ให้มาเท่านั้น ห้ามให้คำแนะนำซื้อหรือขาย ห้ามให้ราคาเป้าหมาย และห้ามให้คำแนะนำการลงทุนเฉพาะบุคคล ส่งกลับเป็น strict JSON พร้อม sections: [{title, body, signal}] โดย signal ต้องเป็น positive, neutral, negative, หรือ unknown",
+      "เขียน equity research memo ระดับสถาบันเป็นภาษาไทยแบบมืออาชีพและเข้าใจง่ายสำหรับนักลงทุนรายย่อย ใช้เฉพาะข้อมูล SEC-derived facts, quarterly/TTM fields, peer comparison, data-quality checks, decision framework, citations, และ caveats ที่ให้มาเท่านั้น ห้ามให้คำแนะนำซื้อหรือขาย ห้ามให้ราคาเป้าหมาย และห้ามให้คำแนะนำการลงทุนเฉพาะบุคคล ส่งกลับเป็น strict JSON พร้อม sections: [{title, body, signal}] โดย signal ต้องเป็น positive, neutral, negative, หรือ unknown",
     signal: {
       positive:
         "ภาพจาก filing ล่าสุดดูเป็นบวกในเชิง screening แต่ยังต้องตรวจสอบ valuation และคุณภาพธุรกิจเพิ่มเติม",
@@ -770,6 +1111,9 @@ const th: Dictionary = {
       institutionalRead: "มุมมองแบบสถาบัน",
       trajectory: "แนวโน้มทางการเงิน",
       balanceSheet: "งบดุลและกระแสเงินสด",
+      decisionScreen: "หน้าช่วยตัดสินใจ",
+      quarterlyTtm: "มุมมองรายไตรมาสและ TTM",
+      peerAndConfidence: "Peer และความมั่นใจของข้อมูล",
       riskQuestions: "คำถามด้านความเสี่ยง",
     },
     fallback: {
@@ -795,6 +1139,14 @@ const th: Dictionary = {
         `Reported assets อยู่ที่ ${assets}, liabilities อยู่ที่ ${liabilities}, cash อยู่ที่ ${cash}, และ free cash flow อยู่ที่ ${freeCashFlow}. ควรมอง free cash flow เป็น screening estimate เพราะ XBRL tag conventions อาจต่างกันตามบริษัท`,
       balanceSheetUnavailable:
         "ยังไม่สามารถ screen งบดุลและ cash flow ได้จนกว่าจะ normalize filing period ได้",
+      decision: (takeaway: string, evidence: string, risk: string, watchMetric: string) =>
+        `หน้าช่วยตัดสินใจ: ${takeaway} หลักฐานที่แข็งแรงที่สุดคือ ${evidence}; ความเสี่ยงหลักคือ ${risk}; metric ที่ควรดูต่อคือ ${watchMetric}.`,
+      quarterly: (periodLabel: string, revenue: string, netIncome: string, fcf: string) =>
+        `มุมมอง TTM หรือไตรมาสล่าสุด: ${periodLabel} มี revenue ${revenue}, net income ${netIncome}, และ FCF ${fcf}.`,
+      quarterlyUnavailable:
+        "การวิเคราะห์รายไตรมาสและ TTM ยังจำกัด เพราะไม่มี quarterly facts ที่เทียบกันได้ครบ",
+      peerDataQuality: (peerCount: number, confidence: string) =>
+        `Peer comparison ใช้ peer same-SIC ${peerCount} บริษัทจาก Finari coverage ที่จำกัดและอ้างอิง SEC เท่านั้น ความมั่นใจของข้อมูลอยู่ที่ ${confidence} ดังนั้น missing tags หรือ peer coverage ที่จำกัดควรมีผลต่อน้ำหนักที่ใช้กับ screen นี้`,
       reviewCaveats: (caveats: string) =>
         `ตรวจสอบประเด็นเหล่านี้ก่อนใช้ memo: ${caveats}`,
       defaultQuestions:
@@ -858,6 +1210,12 @@ const th: Dictionary = {
   caveats: {
     fewerPeriods:
       "Finari พบงวดรายปีที่เทียบกันได้น้อยกว่าสองงวด ทำให้การวิเคราะห์ trend มีข้อจำกัด",
+    fewerQuarters:
+      "Finari พบงวดรายไตรมาสที่เทียบกันได้น้อยกว่าสี่งวด ทำให้การวิเคราะห์ TTM มีข้อจำกัด",
+    peerLimited:
+      "Peer coverage จาก SEC industry ยังจำกัด จึงควรใช้ peer comparison เป็นสัญญาณประกอบเชิงทิศทาง",
+    peerFewerThanThree:
+      "มี peer snapshots แบบ same-SIC จากข้อมูล SEC น้อยกว่าสามบริษัท",
     noAnnualFacts: "ไม่พบ annual financial-statement facts สำหรับบริษัทนี้",
     noUsGaap:
       "บริษัทไม่ได้แสดง standard US-GAAP facts ใน SEC response",
@@ -886,6 +1244,18 @@ export function translateCaveat(caveat: string, locale: Locale): string {
 
   if (caveat === dictionaries.en.caveats.fewerPeriods) {
     return t.caveats.fewerPeriods;
+  }
+
+  if (caveat === dictionaries.en.caveats.fewerQuarters) {
+    return t.caveats.fewerQuarters;
+  }
+
+  if (caveat === dictionaries.en.caveats.peerLimited) {
+    return t.caveats.peerLimited;
+  }
+
+  if (caveat === dictionaries.en.caveats.peerFewerThanThree) {
+    return t.caveats.peerFewerThanThree;
   }
 
   if (caveat === dictionaries.en.caveats.noAnnualFacts) {

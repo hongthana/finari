@@ -47,12 +47,40 @@ function sentenceForSignal(signal: TrendSignal, locale: Locale): string {
   return t.memo.signal.unknown;
 }
 
+function recordValue<T extends Record<string, string>>(
+  record: T,
+  key: string,
+  fallback: string,
+): string {
+  return record[key as keyof T] ?? fallback;
+}
+
+function periodLabel(snapshot: CompanySnapshot, locale: Locale): string {
+  const t = getDictionary(locale);
+  const period = snapshot.ttmPeriod ?? snapshot.quarterlyPeriods[0];
+
+  if (!period) {
+    return t.advisor.latestPeriod;
+  }
+
+  if (period.periodType === "ttm") {
+    return t.analysis.ttm;
+  }
+
+  if (period.periodType === "quarterly" && period.fiscalPeriod) {
+    return `${period.fiscalYear} ${period.fiscalPeriod}`;
+  }
+
+  return `${t.snapshot.fiscalYear} ${period.fiscalYear}`;
+}
+
 function fallbackSections(
   snapshot: CompanySnapshot,
   locale: Locale,
 ): MemoSection[] {
   const t = getDictionary(locale);
   const latest = snapshot.periods[0];
+  const latestRollingPeriod = snapshot.ttmPeriod ?? snapshot.quarterlyPeriods[0];
   const prior = snapshot.periods[1];
   const signal = summarizeMetricSignal(snapshot.metrics);
   const metricHighlights = snapshot.metrics
@@ -80,6 +108,28 @@ function fallbackSections(
       ),
     },
     {
+      title: t.memo.sections.decisionScreen,
+      signal: snapshot.decisionFramework.signal,
+      body: t.memo.fallback.decision(
+        recordValue(
+          t.decision.takeaways,
+          snapshot.decisionFramework.takeaway,
+          snapshot.decisionFramework.takeaway,
+        ),
+        recordValue(
+          t.decision.evidence,
+          snapshot.decisionFramework.strongestEvidence,
+          snapshot.decisionFramework.strongestEvidence,
+        ),
+        recordValue(
+          t.decision.risks,
+          snapshot.decisionFramework.mainRisk,
+          snapshot.decisionFramework.mainRisk,
+        ),
+        snapshot.decisionFramework.watchMetric,
+      ),
+    },
+    {
       title: t.memo.sections.trajectory,
       signal:
         latest?.revenue && prior?.revenue && latest.revenue > prior.revenue
@@ -95,6 +145,18 @@ function fallbackSections(
         : t.memo.fallback.trajectoryUnavailable,
     },
     {
+      title: t.memo.sections.quarterlyTtm,
+      signal: latestRollingPeriod ? "neutral" : "unknown",
+      body: latestRollingPeriod
+        ? t.memo.fallback.quarterly(
+            periodLabel(snapshot, locale),
+            compactCurrency(latestRollingPeriod.revenue),
+            compactCurrency(latestRollingPeriod.netIncome),
+            compactCurrency(latestRollingPeriod.freeCashFlow),
+          )
+        : t.memo.fallback.quarterlyUnavailable,
+    },
+    {
       title: t.memo.sections.balanceSheet,
       signal:
         latest?.freeCashFlow && latest.freeCashFlow > 0 ? "positive" : "neutral",
@@ -106,6 +168,14 @@ function fallbackSections(
             compactCurrency(latest.freeCashFlow),
           )
         : t.memo.fallback.balanceSheetUnavailable,
+    },
+    {
+      title: t.memo.sections.peerAndConfidence,
+      signal: snapshot.dataQuality.signal,
+      body: t.memo.fallback.peerDataQuality(
+        snapshot.peerComparison.peerCount,
+        t.analysis.confidenceLabels[snapshot.dataQuality.label],
+      ),
     },
     {
       title: t.memo.sections.riskQuestions,
@@ -122,7 +192,11 @@ function buildPrompt(snapshot: CompanySnapshot, locale: Locale): string {
   const t = getDictionary(locale);
   const latest = snapshot.periods[0];
   const periods = snapshot.periods.map((period) => ({
+    periodType: period.periodType,
     fiscalYear: period.fiscalYear,
+    fiscalPeriod: period.fiscalPeriod,
+    periodStartDate: period.startDate,
+    periodEndDate: period.endDate,
     revenue: period.revenue,
     grossProfit: period.grossProfit,
     operatingIncome: period.operatingIncome,
@@ -137,6 +211,31 @@ function buildPrompt(snapshot: CompanySnapshot, locale: Locale): string {
     freeCashFlow: period.freeCashFlow,
     epsDiluted: period.epsDiluted,
   }));
+  const quarterlyPeriods = snapshot.quarterlyPeriods.slice(0, 8).map((period) => ({
+    periodType: period.periodType,
+    fiscalYear: period.fiscalYear,
+    fiscalPeriod: period.fiscalPeriod,
+    periodStartDate: period.startDate,
+    periodEndDate: period.endDate,
+    revenue: period.revenue,
+    grossProfit: period.grossProfit,
+    operatingIncome: period.operatingIncome,
+    netIncome: period.netIncome,
+    assets: period.assets,
+    liabilities: period.liabilities,
+    currentAssets: period.currentAssets,
+    currentLiabilities: period.currentLiabilities,
+    workingCapital: period.workingCapital,
+    cash: period.cash,
+    debt: period.debt,
+    operatingCashFlow: period.operatingCashFlow,
+    capitalExpenditure: period.capitalExpenditure,
+    freeCashFlow: period.freeCashFlow,
+    researchAndDevelopment: period.researchAndDevelopment,
+    sellingGeneralAdministrative: period.sellingGeneralAdministrative,
+    buybacks: period.buybacks,
+    dividends: period.dividends,
+  }));
 
   return JSON.stringify(
     {
@@ -145,7 +244,15 @@ function buildPrompt(snapshot: CompanySnapshot, locale: Locale): string {
       company: snapshot.identity,
       latestFiscalYear: latest?.fiscalYear,
       periods,
+      quarterlyPeriods,
+      ttmPeriod: snapshot.ttmPeriod,
       metrics: snapshot.metrics,
+      changeAnalysis: snapshot.changeAnalysis,
+      businessDrivers: snapshot.businessDrivers,
+      balanceSheetAnalysis: snapshot.balanceSheetAnalysis,
+      peerComparison: snapshot.peerComparison,
+      dataQuality: snapshot.dataQuality,
+      decisionFramework: snapshot.decisionFramework,
       caveats: snapshot.caveats,
       citations: snapshot.citations,
     },
@@ -294,7 +401,7 @@ async function generateAiSections(
               sections: {
                 type: "array",
                 minItems: 4,
-                maxItems: 6,
+                maxItems: 7,
                 items: {
                   type: "object",
                   additionalProperties: false,

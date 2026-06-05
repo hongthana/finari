@@ -40,19 +40,29 @@ describe("FinariApp", () => {
     expect(
       screen.getByRole("img", { name: /Revenue\. Top-line sales reported/ }),
     ).toBeInTheDocument();
+    expect(screen.getByText("Decision screen")).toBeInTheDocument();
+    expect(
+      screen.getByText("Decision screen from the latest financial filing"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Plain-English summary")).toBeInTheDocument();
     expect(screen.getByText("What the latest filing means for investors")).toBeInTheDocument();
     expect(
       screen.getByRole("img", { name: /Growth and earnings: positive/ }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
+      screen.getAllByText(
         "Trend improved in the latest annual comparison. The up arrow means revenue and/or earnings are rising.",
-      ),
-    ).toBeInTheDocument();
+      ).length,
+    ).toBeGreaterThan(0);
     expect(screen.getByText("Decision takeaway")).toBeInTheDocument();
     expect(screen.getByText("Investor questions with filing-backed answers")).toBeInTheDocument();
     expect(screen.getByText("Are earnings gains durable?")).toBeInTheDocument();
+    expect(screen.getByText("Quarterly and TTM trend")).toBeInTheDocument();
+    expect(screen.getByText("What changed since the last filing")).toBeInTheDocument();
+    expect(screen.getByText("Business-driver read")).toBeInTheDocument();
+    expect(screen.getByText("Balance-sheet strength")).toBeInTheDocument();
+    expect(screen.getByText("SEC-industry peer comparison")).toBeInTheDocument();
+    expect(screen.getByText("Data-quality checks")).toBeInTheDocument();
     expect(screen.getByText("Revenue growth")).toBeInTheDocument();
     expect(
       screen.getByRole("img", { name: /Annual statement screen\. Year-by-year/ }),
@@ -90,18 +100,28 @@ describe("FinariApp", () => {
     expect(
       screen.getByRole("img", { name: /Revenue\. ยอดขายรวมจาก annual filing ล่าสุด/ }),
     ).toBeInTheDocument();
+    expect(screen.getByText("หน้าช่วยตัดสินใจ")).toBeInTheDocument();
+    expect(
+      screen.getByText("หน้าช่วยตัดสินใจจาก financial filing ล่าสุด"),
+    ).toBeInTheDocument();
     expect(screen.getByText("สรุปให้อ่านง่าย")).toBeInTheDocument();
     expect(screen.getByText("งบล่าสุดบอกอะไรสำหรับนักลงทุน")).toBeInTheDocument();
     expect(
       screen.getByRole("img", { name: /การเติบโตและกำไร: positive/ }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
+      screen.getAllByText(
         "แนวโน้มดีขึ้นในการเทียบปีล่าสุด ลูกศรขึ้นหมายถึง revenue และ/หรือ earnings กำลังเพิ่มขึ้น",
-      ),
-    ).toBeInTheDocument();
+      ).length,
+    ).toBeGreaterThan(0);
     expect(screen.getByText("ข้อสรุปเพื่อการตัดสินใจ")).toBeInTheDocument();
     expect(screen.getByText("คำถามนักลงทุนพร้อมคำตอบจาก filing")).toBeInTheDocument();
+    expect(screen.getByText("แนวโน้มรายไตรมาสและ TTM")).toBeInTheDocument();
+    expect(screen.getByText("อะไรเปลี่ยนไปจาก filing ก่อนหน้า")).toBeInTheDocument();
+    expect(screen.getByText("ตัวขับเคลื่อนธุรกิจ")).toBeInTheDocument();
+    expect(screen.getByText("ความแข็งแรงของงบดุล")).toBeInTheDocument();
+    expect(screen.getByText("เทียบกับ peer ในอุตสาหกรรม SEC")).toBeInTheDocument();
+    expect(screen.getByText("ตรวจคุณภาพข้อมูล")).toBeInTheDocument();
     expect(
       screen.getByRole("img", { name: /สรุปงบการเงินรายปี\. ตารางการเงินรายปี/ }),
     ).toBeInTheDocument();

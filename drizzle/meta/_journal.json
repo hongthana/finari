@@ -15,6 +15,13 @@
       "when": 1780623754013,
       "tag": "0001_wild_zaran",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780644178658,
+      "tag": "0002_vengeful_firebrand",
+      "breakpoints": true
     }
   ]
 }

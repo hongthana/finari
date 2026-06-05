@@ -35,6 +35,20 @@ describe("research store", () => {
     );
   });
 
+  it("changes memo hashes when upgraded analysis inputs change", () => {
+    const modified = {
+      ...fixtureSnapshot,
+      decisionFramework: {
+        ...fixtureSnapshot.decisionFramework,
+        watchMetric: "Revenue growth",
+      },
+    };
+
+    expect(computeMemoPromptHash(modified, "en")).not.toEqual(
+      computeMemoPromptHash(fixtureSnapshot, "en"),
+    );
+  });
+
   it("stores and retrieves a fresh snapshot from the memory fallback", async () => {
     const freshSnapshot = {
       ...fixtureSnapshot,
