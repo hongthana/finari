@@ -92,9 +92,23 @@ const en = {
     latestFiling: "Latest filing",
     generated: "Generated",
     fiscalYear: "FY",
+    tooltips: {
+      company:
+        "Company identity from SEC submissions: exchange, industry code, ticker, CIK, and fiscal year.",
+      revenue:
+        "Top-line sales reported in the latest annual filing. Use it to understand business scale.",
+      netIncome:
+        "Bottom-line profit after expenses and taxes. Use it to judge earnings power.",
+      fcf:
+        "Free cash flow after operating cash flow and capital expenditure. Use it to judge cash generation.",
+      assets:
+        "Total assets on the balance sheet. Use it to understand the company asset base.",
+    },
   },
   advisor: {
     badge: "Plain-English summary",
+    badgeTooltip:
+      "Plain-language filing interpretation designed to help retail investors understand the latest facts.",
     heading: "What the latest filing means for investors",
     intro:
       "Use this as a filing-based decision screen: first judge business quality, then decide whether the current stock price gives enough margin of safety.",
@@ -290,6 +304,12 @@ const en = {
     netIncome: "Net income",
     liabilities: "Liabilities",
     assets: "Assets",
+    tooltips: {
+      revenueNetIncome:
+        "Trend chart showing whether sales and profits are moving together across annual filings.",
+      cashBalance:
+        "Balance and cash-flow chart showing cash generation against assets and liabilities.",
+    },
   },
   table: {
     title: "Annual statement screen",
@@ -302,9 +322,13 @@ const en = {
     fcf: "FCF",
     debt: "Debt",
     eps: "EPS",
+    tooltip:
+      "Year-by-year financial table for comparing normalized SEC facts across fiscal periods.",
   },
   memo: {
     badge: "Filing-backed memo",
+    badgeTooltip:
+      "Memo narrative grounded in normalized SEC facts, source links, and caveats.",
     title: "Analyst memo",
     subtitle: "Grounded in normalized SEC facts and source links.",
     generate: "Generate memo",
@@ -374,6 +398,8 @@ const en = {
   },
   waitlist: {
     workspaceBadge: "Workspace",
+    workspaceTooltip:
+      "Private workspace actions for signed-in users, including saving company research.",
     saveResearchTitle: "Save company research",
     signIn: "Sign in",
     saveResearch: "Save research",
@@ -381,6 +407,8 @@ const en = {
     saved: "Research saved to your Finari workspace.",
     saveFailed: "This research could not be saved right now.",
     earlyAccessBadge: "Early access",
+    earlyAccessTooltip:
+      "Waitlist for future product features such as alerts, exports, valuation, and watchlists.",
     earlyAccessTitle: "Save research, alerts, and exports",
     emailPlaceholder: "you@example.com",
     join: "Join waitlist",
@@ -399,6 +427,8 @@ const en = {
       "Portfolio watchlist",
     ],
     toolsTitle: "Workspace tools",
+    toolsTooltip:
+      "Upcoming workflow tools planned for a fuller investor research workspace.",
     tools: [
       "Saved company research",
       "Filing and metric alerts",
@@ -408,7 +438,11 @@ const en = {
   },
   sources: {
     title: "Source links",
+    titleTooltip:
+      "Direct filing and source links used to ground this research screen.",
     caveatsTitle: "Normalization caveats",
+    caveatsTooltip:
+      "Data-quality notes explaining missing, inconsistent, or non-comparable filing tags.",
     coreFactsAvailable: "Core annual facts were available in standard SEC tags.",
   },
   errors: {
@@ -464,9 +498,23 @@ const th: Dictionary = {
     latestFiling: "Filing ล่าสุด",
     generated: "สร้างเมื่อ",
     fiscalYear: "FY",
+    tooltips: {
+      company:
+        "ข้อมูลระบุตัวบริษัทจาก SEC submissions เช่น exchange, industry code, ticker, CIK, และ fiscal year",
+      revenue:
+        "ยอดขายรวมจาก annual filing ล่าสุด ใช้ดูขนาดของธุรกิจ",
+      netIncome:
+        "กำไรสุทธิหลังค่าใช้จ่ายและภาษี ใช้ดูความสามารถทำกำไร",
+      fcf:
+        "Free cash flow หลัง operating cash flow และ capital expenditure ใช้ดูการสร้างเงินสด",
+      assets:
+        "สินทรัพย์รวมในงบดุล ใช้ดูฐานสินทรัพย์ของบริษัท",
+    },
   },
   advisor: {
     badge: "สรุปให้อ่านง่าย",
+    badgeTooltip:
+      "คำอธิบาย filing แบบภาษาง่าย ช่วยให้นักลงทุนรายย่อยเข้าใจข้อมูลล่าสุด",
     heading: "งบล่าสุดบอกอะไรสำหรับนักลงทุน",
     intro:
       "ใช้ส่วนนี้เป็นตัวกรองจาก filing: ดูคุณภาพธุรกิจก่อน แล้วค่อยตัดสินใจว่าราคาหุ้นมี margin of safety พอหรือไม่",
@@ -661,6 +709,12 @@ const th: Dictionary = {
     netIncome: "Net income",
     liabilities: "Liabilities",
     assets: "Assets",
+    tooltips: {
+      revenueNetIncome:
+        "กราฟแนวโน้มที่ช่วยดูว่า sales และ profits เคลื่อนไปทางเดียวกันหรือไม่ใน annual filings",
+      cashBalance:
+        "กราฟงบดุลและ cash flow ที่ช่วยเทียบการสร้างเงินสดกับ assets และ liabilities",
+    },
   },
   table: {
     title: "สรุปงบการเงินรายปี",
@@ -673,9 +727,13 @@ const th: Dictionary = {
     fcf: "FCF",
     debt: "Debt",
     eps: "EPS",
+    tooltip:
+      "ตารางการเงินรายปีสำหรับเทียบ normalized SEC facts ข้าม fiscal periods",
   },
   memo: {
     badge: "Memo อ้างอิง filing",
+    badgeTooltip:
+      "Narrative ของ memo อ้างอิง normalized SEC facts, source links, และ caveats",
     title: "Analyst memo",
     subtitle: "อ้างอิง normalized SEC facts และ source links",
     generate: "สร้าง memo",
@@ -745,6 +803,8 @@ const th: Dictionary = {
   },
   waitlist: {
     workspaceBadge: "Workspace",
+    workspaceTooltip:
+      "พื้นที่ส่วนตัวสำหรับผู้ใช้ที่เข้าสู่ระบบ เช่น บันทึกงานวิจัยบริษัท",
     saveResearchTitle: "บันทึกงานวิจัยบริษัท",
     signIn: "เข้าสู่ระบบ",
     saveResearch: "บันทึก research",
@@ -752,6 +812,8 @@ const th: Dictionary = {
     saved: "บันทึกงานวิจัยใน Finari workspace แล้ว",
     saveFailed: "ยังไม่สามารถบันทึกงานวิจัยนี้ได้ในตอนนี้",
     earlyAccessBadge: "Early access",
+    earlyAccessTooltip:
+      "Waitlist สำหรับฟีเจอร์ถัดไป เช่น alerts, exports, valuation, และ watchlists",
     earlyAccessTitle: "บันทึก research, alerts, และ exports",
     emailPlaceholder: "you@example.com",
     join: "เข้าร่วม waitlist",
@@ -770,6 +832,8 @@ const th: Dictionary = {
       "Portfolio watchlist",
     ],
     toolsTitle: "เครื่องมือ workspace",
+    toolsTooltip:
+      "เครื่องมือ workflow ที่วางแผนไว้สำหรับ research workspace ของนักลงทุน",
     tools: [
       "บันทึกงานวิจัยบริษัท",
       "แจ้งเตือน filing และ metrics",
@@ -779,7 +843,11 @@ const th: Dictionary = {
   },
   sources: {
     title: "Source links",
+    titleTooltip:
+      "ลิงก์ filing และ source ที่ใช้รองรับหน้าวิจัยนี้",
     caveatsTitle: "ข้อควรระวังจากการ normalize ข้อมูล",
+    caveatsTooltip:
+      "หมายเหตุคุณภาพข้อมูล อธิบาย tag ที่ขาดหาย ไม่สอดคล้อง หรือเทียบกันยาก",
     coreFactsAvailable: "พบ core annual facts ใน standard SEC tags",
   },
   errors: {

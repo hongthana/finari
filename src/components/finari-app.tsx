@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   CircleHelp,
   Database,
+  DollarSign,
   Download,
   FileText,
   Languages,
@@ -21,6 +22,7 @@ import {
   TrendingDown,
   Sparkles,
   TrendingUp,
+  type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -94,6 +96,7 @@ function signalClasses(signal: TrendSignal): string {
 }
 
 type SignalIconVariant = "status" | "trend";
+type MeaningTone = "sky" | "teal" | "emerald" | "amber" | "zinc";
 
 function signalIcon(signal: TrendSignal, variant: SignalIconVariant = "status") {
   if (variant === "trend") {
@@ -177,6 +180,92 @@ function SignalBadge({
         {tooltip}
       </span>
     </span>
+  );
+}
+
+function meaningClasses(tone: MeaningTone): string {
+  if (tone === "sky") {
+    return "border-sky-200 bg-sky-50 text-sky-800";
+  }
+
+  if (tone === "teal") {
+    return "border-teal-200 bg-teal-50 text-teal-800";
+  }
+
+  if (tone === "emerald") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  }
+
+  if (tone === "amber") {
+    return "border-amber-200 bg-amber-50 text-amber-900";
+  }
+
+  return "border-zinc-200 bg-zinc-50 text-zinc-700";
+}
+
+function MeaningBadge({
+  Icon,
+  label,
+  tooltip,
+  tone = "zinc",
+  className = "p-1.5",
+  tooltipAlign = "left",
+}: {
+  Icon: LucideIcon;
+  label: string;
+  tooltip: string;
+  tone?: MeaningTone;
+  className?: string;
+  tooltipAlign?: "left" | "right";
+}) {
+  const tooltipId = useId();
+  const alignClass = tooltipAlign === "right" ? "right-0" : "left-0";
+
+  return (
+    <span
+      className={`group relative inline-flex shrink-0 rounded-md border ${className} ${meaningClasses(tone)} outline-none transition focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2`}
+      role="img"
+      tabIndex={0}
+      aria-label={`${label}. ${tooltip}`}
+      aria-describedby={tooltipId}
+      title={tooltip}
+    >
+      <Icon className="h-4 w-4" aria-hidden="true" />
+      <span
+        id={tooltipId}
+        role="tooltip"
+        className={`pointer-events-none absolute ${alignClass} top-full z-30 mt-2 hidden w-64 max-w-[calc(100vw-2rem)] break-words rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-left text-xs font-medium leading-5 text-white shadow-lg group-hover:block group-focus-visible:block`}
+      >
+        {tooltip}
+      </span>
+    </span>
+  );
+}
+
+function MeaningPill({
+  Icon,
+  label,
+  tooltip,
+  tone = "zinc",
+}: {
+  Icon: LucideIcon;
+  label: string;
+  tooltip: string;
+  tone?: MeaningTone;
+}) {
+  return (
+    <div
+      className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs font-semibold ${meaningClasses(tone)}`}
+    >
+      <MeaningBadge
+        Icon={Icon}
+        label={label}
+        tooltip={tooltip}
+        tone={tone}
+        className="p-0.5"
+      />
+      {label}
+    </div>
   );
 }
 
@@ -484,10 +573,12 @@ function AdvisorSummary({
     <section className="min-w-0 max-w-full rounded-md border border-zinc-200 bg-white p-4 sm:p-5">
       <div className="grid min-w-0 max-w-full gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(300px,390px)]">
         <div className="min-w-0 max-w-full">
-          <div className="inline-flex items-center gap-2 rounded-md border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800">
-            <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-            {t.advisor.badge}
-          </div>
+          <MeaningPill
+            Icon={ShieldCheck}
+            label={t.advisor.badge}
+            tooltip={t.advisor.badgeTooltip}
+            tone="teal"
+          />
           <h3 className="mt-3 text-base font-semibold text-zinc-950">
             {t.advisor.heading}
           </h3>
@@ -741,6 +832,36 @@ function SnapshotHeader({
   }
 
   const latest = snapshot.periods[0];
+  const snapshotCards = [
+    {
+      label: t.snapshot.revenue,
+      value: compactCurrency(latest?.revenue),
+      Icon: TrendingUp,
+      tooltip: t.snapshot.tooltips.revenue,
+      tone: "teal" as const,
+    },
+    {
+      label: t.snapshot.netIncome,
+      value: compactCurrency(latest?.netIncome),
+      Icon: DollarSign,
+      tooltip: t.snapshot.tooltips.netIncome,
+      tone: "emerald" as const,
+    },
+    {
+      label: t.snapshot.fcf,
+      value: compactCurrency(latest?.freeCashFlow),
+      Icon: Download,
+      tooltip: t.snapshot.tooltips.fcf,
+      tone: "sky" as const,
+    },
+    {
+      label: t.snapshot.assets,
+      value: compactCurrency(latest?.assets),
+      Icon: Database,
+      tooltip: t.snapshot.tooltips.assets,
+      tone: "zinc" as const,
+    },
+  ];
 
   return (
     <section className="min-w-0 max-w-full rounded-md border border-zinc-200 bg-white p-4 sm:p-5">
@@ -757,9 +878,18 @@ function SnapshotHeader({
               </span>
             )}
           </div>
-          <h2 className="mt-3 text-2xl font-semibold tracking-normal text-zinc-950 sm:text-3xl">
-            {snapshot.identity.name}
-          </h2>
+          <div className="mt-3 flex min-w-0 items-start gap-3">
+            <MeaningBadge
+              Icon={Building2}
+              label={snapshot.identity.name}
+              tooltip={t.snapshot.tooltips.company}
+              tone="sky"
+              className="mt-1 p-1.5"
+            />
+            <h2 className="min-w-0 text-2xl font-semibold tracking-normal text-zinc-950 sm:text-3xl">
+              {snapshot.identity.name}
+            </h2>
+          </div>
           <p className="mt-1 text-sm font-medium text-zinc-500">
             {snapshot.identity.ticker} · CIK {snapshot.identity.cik}
             {latest?.fiscalYear
@@ -769,30 +899,29 @@ function SnapshotHeader({
         </div>
 
         <div className="grid min-w-0 max-w-full grid-cols-2 gap-3 sm:grid-cols-4 xl:w-[520px] xl:shrink-0">
-          <div className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3">
-            <p className="text-xs font-medium text-zinc-500">{t.snapshot.revenue}</p>
-            <p className="mt-1 break-words text-lg font-semibold text-zinc-950">
-              {compactCurrency(latest?.revenue)}
-            </p>
-          </div>
-          <div className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3">
-            <p className="text-xs font-medium text-zinc-500">{t.snapshot.netIncome}</p>
-            <p className="mt-1 break-words text-lg font-semibold text-zinc-950">
-              {compactCurrency(latest?.netIncome)}
-            </p>
-          </div>
-          <div className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3">
-            <p className="text-xs font-medium text-zinc-500">{t.snapshot.fcf}</p>
-            <p className="mt-1 break-words text-lg font-semibold text-zinc-950">
-              {compactCurrency(latest?.freeCashFlow)}
-            </p>
-          </div>
-          <div className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3">
-            <p className="text-xs font-medium text-zinc-500">{t.snapshot.assets}</p>
-            <p className="mt-1 break-words text-lg font-semibold text-zinc-950">
-              {compactCurrency(latest?.assets)}
-            </p>
-          </div>
+          {snapshotCards.map(({ label, value, Icon, tooltip, tone }) => (
+            <div
+              key={label}
+              className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="min-w-0 text-xs font-medium text-zinc-500">
+                  {label}
+                </p>
+                <MeaningBadge
+                  Icon={Icon}
+                  label={label}
+                  tooltip={tooltip}
+                  tone={tone}
+                  className="p-1"
+                  tooltipAlign="right"
+                />
+              </div>
+              <p className="mt-1 break-words text-lg font-semibold text-zinc-950">
+                {value}
+              </p>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -916,6 +1045,13 @@ function FinancialCharts({
               {t.charts.annualFacts}
             </p>
           </div>
+          <MeaningBadge
+            Icon={TrendingUp}
+            label={t.charts.revenueNetIncome}
+            tooltip={t.charts.tooltips.revenueNetIncome}
+            tone="teal"
+            tooltipAlign="right"
+          />
         </div>
         <ChartFrame>
           <ResponsiveContainer
@@ -962,13 +1098,22 @@ function FinancialCharts({
       </article>
 
       <article className="min-w-0 rounded-md border border-zinc-200 bg-white p-5">
-        <div>
-          <h3 className="text-base font-semibold text-zinc-950">
-            {t.charts.cashBalance}
-          </h3>
-          <p className="text-sm text-zinc-500">
-            {t.charts.cashBalanceSubtitle}
-          </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-base font-semibold text-zinc-950">
+              {t.charts.cashBalance}
+            </h3>
+            <p className="text-sm text-zinc-500">
+              {t.charts.cashBalanceSubtitle}
+            </p>
+          </div>
+          <MeaningBadge
+            Icon={Database}
+            label={t.charts.cashBalance}
+            tooltip={t.charts.tooltips.cashBalance}
+            tone="sky"
+            tooltipAlign="right"
+          />
         </div>
         <ChartFrame>
           <ResponsiveContainer
@@ -1007,13 +1152,22 @@ function FinancialTable({
 }) {
   return (
     <section className="overflow-hidden rounded-md border border-zinc-200 bg-white">
-      <div className="border-b border-zinc-200 px-5 py-4">
-        <h3 className="text-base font-semibold text-zinc-950">
-          {t.table.title}
-        </h3>
-        <p className="text-sm text-zinc-500">
-          {t.table.subtitle}
-        </p>
+      <div className="flex items-start justify-between gap-3 border-b border-zinc-200 px-5 py-4">
+        <div>
+          <h3 className="text-base font-semibold text-zinc-950">
+            {t.table.title}
+          </h3>
+          <p className="text-sm text-zinc-500">
+            {t.table.subtitle}
+          </p>
+        </div>
+        <MeaningBadge
+          Icon={FileText}
+          label={t.table.title}
+          tooltip={t.table.tooltip}
+          tone="zinc"
+          tooltipAlign="right"
+        />
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[820px] border-collapse text-sm">
@@ -1106,10 +1260,12 @@ function MemoPanel({
     <section className="rounded-md border border-zinc-200 bg-white p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-md border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800">
-            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-            {t.memo.badge}
-          </div>
+          <MeaningPill
+            Icon={Sparkles}
+            label={t.memo.badge}
+            tooltip={t.memo.badgeTooltip}
+            tone="teal"
+          />
           <h3 className="mt-3 text-base font-semibold text-zinc-950">
             {title}
           </h3>
@@ -1313,10 +1469,12 @@ function WaitlistPanel({
   return (
     <aside className="space-y-4">
       <section className="rounded-md border border-zinc-200 bg-white p-5">
-        <div className="inline-flex items-center gap-2 rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-800">
-          <Bookmark className="h-3.5 w-3.5" aria-hidden="true" />
-          {t.waitlist.workspaceBadge}
-        </div>
+        <MeaningPill
+          Icon={Bookmark}
+          label={t.waitlist.workspaceBadge}
+          tooltip={t.waitlist.workspaceTooltip}
+          tone="sky"
+        />
         <h3 className="mt-3 text-base font-semibold text-zinc-950">
           {t.waitlist.saveResearchTitle}
         </h3>
@@ -1356,10 +1514,11 @@ function WaitlistPanel({
       </section>
 
       <section className="rounded-md border border-zinc-200 bg-white p-5">
-        <div className="inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold text-zinc-700">
-          <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />
-          {t.waitlist.earlyAccessBadge}
-        </div>
+        <MeaningPill
+          Icon={LockKeyhole}
+          label={t.waitlist.earlyAccessBadge}
+          tooltip={t.waitlist.earlyAccessTooltip}
+        />
         <h3 className="mt-3 text-base font-semibold text-zinc-950">
           {t.waitlist.earlyAccessTitle}
         </h3>
@@ -1417,9 +1576,18 @@ function WaitlistPanel({
       </section>
 
       <section className="rounded-md border border-zinc-200 bg-white p-5">
-        <h3 className="text-base font-semibold text-zinc-950">
-          {t.waitlist.toolsTitle}
-        </h3>
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="text-base font-semibold text-zinc-950">
+            {t.waitlist.toolsTitle}
+          </h3>
+          <MeaningBadge
+            Icon={Bell}
+            label={t.waitlist.toolsTitle}
+            tooltip={t.waitlist.toolsTooltip}
+            tone="amber"
+            tooltipAlign="right"
+          />
+        </div>
         <div className="mt-4 space-y-3">
           {workspaceTools.map(({ Icon, label }) => (
             <div key={label} className="flex items-center gap-3 text-sm">
@@ -1447,7 +1615,18 @@ function SourcesAndCaveats({
   return (
     <section className="grid gap-4 lg:grid-cols-2">
       <article className="rounded-md border border-zinc-200 bg-white p-5">
-        <h3 className="text-base font-semibold text-zinc-950">{t.sources.title}</h3>
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="text-base font-semibold text-zinc-950">
+            {t.sources.title}
+          </h3>
+          <MeaningBadge
+            Icon={FileText}
+            label={t.sources.title}
+            tooltip={t.sources.titleTooltip}
+            tone="sky"
+            tooltipAlign="right"
+          />
+        </div>
         <div className="mt-4 space-y-3">
           {snapshot.citations.map((citation) => (
             <a
@@ -1475,9 +1654,18 @@ function SourcesAndCaveats({
       </article>
 
       <article className="rounded-md border border-zinc-200 bg-white p-5">
-        <h3 className="text-base font-semibold text-zinc-950">
-          {t.sources.caveatsTitle}
-        </h3>
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="text-base font-semibold text-zinc-950">
+            {t.sources.caveatsTitle}
+          </h3>
+          <MeaningBadge
+            Icon={AlertTriangle}
+            label={t.sources.caveatsTitle}
+            tooltip={t.sources.caveatsTooltip}
+            tone="amber"
+            tooltipAlign="right"
+          />
+        </div>
         <div className="mt-4 space-y-3">
           {snapshot.caveats.length ? (
             snapshot.caveats.map((caveat) => (

@@ -37,6 +37,9 @@ describe("FinariApp", () => {
     await waitFor(() => {
       expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
     });
+    expect(
+      screen.getByRole("img", { name: /Revenue\. Top-line sales reported/ }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Plain-English summary")).toBeInTheDocument();
     expect(screen.getByText("What the latest filing means for investors")).toBeInTheDocument();
     expect(
@@ -51,6 +54,9 @@ describe("FinariApp", () => {
     expect(screen.getByText("Investor questions with filing-backed answers")).toBeInTheDocument();
     expect(screen.getByText("Are earnings gains durable?")).toBeInTheDocument();
     expect(screen.getByText("Revenue growth")).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: /Annual statement screen\. Year-by-year/ }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Join waitlist")).toBeInTheDocument();
   });
 
@@ -81,6 +87,9 @@ describe("FinariApp", () => {
     await waitFor(() => {
       expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
     });
+    expect(
+      screen.getByRole("img", { name: /Revenue\. ยอดขายรวมจาก annual filing ล่าสุด/ }),
+    ).toBeInTheDocument();
     expect(screen.getByText("สรุปให้อ่านง่าย")).toBeInTheDocument();
     expect(screen.getByText("งบล่าสุดบอกอะไรสำหรับนักลงทุน")).toBeInTheDocument();
     expect(
@@ -93,6 +102,9 @@ describe("FinariApp", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("ข้อสรุปเพื่อการตัดสินใจ")).toBeInTheDocument();
     expect(screen.getByText("คำถามนักลงทุนพร้อมคำตอบจาก filing")).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: /สรุปงบการเงินรายปี\. ตารางการเงินรายปี/ }),
+    ).toBeInTheDocument();
     expect(screen.getByText("เข้าร่วม waitlist")).toBeInTheDocument();
   });
 
