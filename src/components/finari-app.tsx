@@ -7,15 +7,18 @@ import {
   Bookmark,
   Building2,
   CheckCircle2,
+  CircleHelp,
   Database,
   Download,
   FileText,
   Languages,
   Loader2,
   LockKeyhole,
+  Minus,
   RefreshCw,
   Search,
   ShieldCheck,
+  TrendingDown,
   Sparkles,
   TrendingUp,
 } from "lucide-react";
@@ -89,7 +92,25 @@ function signalClasses(signal: TrendSignal): string {
   return "border-amber-200 bg-amber-50 text-amber-800";
 }
 
-function signalIcon(signal: TrendSignal) {
+type SignalIconVariant = "status" | "trend";
+
+function signalIcon(signal: TrendSignal, variant: SignalIconVariant = "status") {
+  if (variant === "trend") {
+    if (signal === "positive") {
+      return <TrendingUp className="h-4 w-4" aria-hidden="true" />;
+    }
+
+    if (signal === "negative") {
+      return <TrendingDown className="h-4 w-4" aria-hidden="true" />;
+    }
+
+    if (signal === "unknown") {
+      return <CircleHelp className="h-4 w-4" aria-hidden="true" />;
+    }
+
+    return <Minus className="h-4 w-4" aria-hidden="true" />;
+  }
+
   if (signal === "positive") {
     return <CheckCircle2 className="h-4 w-4" aria-hidden="true" />;
   }
@@ -136,6 +157,29 @@ function describeChange(label: string, value: number | null, t: Dictionary): str
 
 function metricSignal(snapshot: CompanySnapshot, id: string): TrendSignal {
   return snapshot.metrics.find((metric) => metric.id === id)?.signal ?? "unknown";
+}
+
+function growthEarningsSignal(snapshot: CompanySnapshot): TrendSignal {
+  const revenueGrowth = metricValue(snapshot, "revenue-growth");
+  const netIncomeGrowth = metricValue(snapshot, "net-income-growth");
+  const values = [revenueGrowth, netIncomeGrowth].filter(hasNumber);
+
+  if (!values.length) {
+    return "unknown";
+  }
+
+  const hasDecline = values.some((value) => value < -0.005);
+  const hasGrowth = values.some((value) => value > 0.005);
+
+  if (hasDecline && !hasGrowth) {
+    return "negative";
+  }
+
+  if (hasGrowth && !hasDecline) {
+    return "positive";
+  }
+
+  return "neutral";
 }
 
 function roundedPercentValue(value: number | null): string {
@@ -262,22 +306,26 @@ function advisorReads(snapshot: CompanySnapshot, t: Dictionary) {
       )} ${describeChange(t.advisor.labels.revenue, revenueGrowth, t)} ${
         t.advisor.and
       } ${describeChange(t.advisor.labels.netIncome, netIncomeGrowth, t)}.`,
-      signal: metricSignal(snapshot, "revenue-growth"),
+      signal: growthEarningsSignal(snapshot),
+      iconVariant: "trend" as const,
     },
     {
       title: t.advisor.readLabels.quality,
       body: qualityRead(snapshot, t),
       signal: metricSignal(snapshot, "operating-margin"),
+      iconVariant: "status" as const,
     },
     {
       title: t.advisor.readLabels.balance,
       body: balanceSheetRead(snapshot, t),
       signal: metricSignal(snapshot, "liabilities-to-assets"),
+      iconVariant: "status" as const,
     },
     {
       title: t.advisor.readLabels.decision,
       body: decisionTakeaway(snapshot, t),
       signal: "neutral" as const,
+      iconVariant: "status" as const,
     },
   ];
 }
@@ -397,8 +445,10 @@ function AdvisorSummary({
                 <div className="flex items-start gap-3">
                   <span
                     className={`mt-0.5 inline-flex shrink-0 rounded-md border p-1.5 ${signalClasses(read.signal)}`}
+                    role="img"
+                    aria-label={`${read.title}: ${read.signal}`}
                   >
-                    {signalIcon(read.signal)}
+                    {signalIcon(read.signal, read.iconVariant)}
                   </span>
                   <div className="min-w-0">
                     <h4 className="text-sm font-semibold text-zinc-950">
