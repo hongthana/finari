@@ -3,7 +3,7 @@
 const DEFAULT_SOURCE_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies";
 const DEFAULT_DELAY_MS = 2_000;
 const DEFAULT_TIMEOUT_MS = 60_000;
-const DEFAULT_BASE_URL = "https://your-finari-domain.example";
+const DEFAULT_BASE_URL = "http://localhost:3000";
 
 function parseArgs(argv) {
   const args = {
@@ -109,10 +109,10 @@ function printHelp() {
   console.log(`Backfill Finari company research for S&P 500 constituents.
 
 Usage:
-  pnpm backfill:sp500 -- --base-url https://your-finari-domain.example
+  FINARI_BASE_URL=https://your-finari-domain.example pnpm backfill:sp500
 
 Options:
-  --base-url <url>       Finari app URL. Defaults to FINARI_BASE_URL or production.
+  --base-url <url>       Finari app URL. Defaults to FINARI_BASE_URL or localhost.
   --source-url <url>     S&P 500 constituent source. Defaults to Wikipedia.
   --tickers <list>       Comma-separated ticker override, e.g. AAPL,MSFT,NVDA.
   --ticker-file <path>   Newline or comma-separated ticker file override.
