@@ -79,6 +79,9 @@ const en = {
     languageLabel: "Language",
     english: "EN",
     thai: "TH",
+    sp500Label: "S&P 500",
+    sp500Placeholder: "Select S&P 500 ticker",
+    sp500Loading: "Loading S&P 500...",
   },
   snapshot: {
     loading: "Loading SEC filings and normalized company facts...",
@@ -851,6 +854,9 @@ const th: Dictionary = {
     languageLabel: "ภาษา",
     english: "EN",
     thai: "TH",
+    sp500Label: "S&P 500",
+    sp500Placeholder: "เลือก ticker ใน S&P 500",
+    sp500Loading: "กำลังโหลด S&P 500...",
   },
   snapshot: {
     loading: "กำลังโหลด SEC filing และข้อมูลงบการเงินที่ปรับมาตรฐาน...",

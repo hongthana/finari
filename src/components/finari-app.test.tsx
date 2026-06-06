@@ -36,6 +36,81 @@ afterEach(() => {
 });
 
 describe("FinariApp", () => {
+  it("lets users select an S&P 500 ticker from the toolbar", async () => {
+    const user = userEvent.setup();
+    const msftSnapshot = {
+      ...fixtureSnapshot,
+      identity: {
+        ...fixtureSnapshot.identity,
+        ticker: "MSFT",
+        cik: "0000789019",
+        name: "Microsoft Corp.",
+      },
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+
+        if (url === "/api/sp500") {
+          return Response.json({
+            constituents: [
+              { ticker: "AAPL", name: "Apple Inc.", sector: "Information Technology" },
+              { ticker: "MSFT", name: "Microsoft Corp.", sector: "Information Technology" },
+            ],
+          });
+        }
+
+        if (url.startsWith("/api/company/MSFT/events")) {
+          return Response.json({ events: [], generatedAt: new Date().toISOString() });
+        }
+
+        if (url.startsWith("/api/company/MSFT")) {
+          return Response.json({ snapshot: msftSnapshot });
+        }
+
+        if (url.startsWith("/api/company/AAPL/events")) {
+          return Response.json({
+            events: fixtureEvents,
+            generatedAt: "2026-06-05T10:00:00.000Z",
+          });
+        }
+
+        if (url.startsWith("/api/company/AAPL")) {
+          return Response.json({ snapshot: fixtureSnapshot });
+        }
+
+        if (url.startsWith("/api/search")) {
+          return Response.json({ results: [] });
+        }
+
+        if (url === "/api/me") {
+          return Response.json({ user: null });
+        }
+
+        return Response.json({}, { status: 404 });
+      }),
+    );
+
+    render(<FinariApp locale="en" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
+    });
+
+    await user.selectOptions(
+      screen.getByLabelText("S&P 500"),
+      "MSFT",
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Microsoft Corp.")).toBeInTheDocument();
+    });
+    expect(window.location.pathname).toBe("/en");
+    expect(window.location.search).toBe("?ticker=MSFT");
+  }, 10_000);
+
   it("renders the ticker research workflow with a loaded snapshot", async () => {
     vi.stubGlobal(
       "fetch",

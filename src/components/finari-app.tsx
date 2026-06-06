@@ -85,6 +85,11 @@ type Viewer = {
   email?: string | null;
   isAdmin: boolean;
 };
+type Sp500Constituent = {
+  ticker: string;
+  name: string;
+  sector?: string;
+};
 
 const STARTER_TICKERS = ["AAPL", "MSFT", "NVDA", "AMZN", "META"];
 const DEFAULT_TICKER = "AAPL";
@@ -1020,6 +1025,8 @@ function ResearchToolbar({
   query,
   setQuery,
   results,
+  sp500Constituents,
+  sp500State,
   loading,
   activeTicker,
   onSelectTicker,
@@ -1030,6 +1037,8 @@ function ResearchToolbar({
   query: string;
   setQuery: (value: string) => void;
   results: CompanyIdentity[];
+  sp500Constituents: Sp500Constituent[];
+  sp500State: LoadState;
   loading: boolean;
   activeTicker: string;
   onSelectTicker: (ticker: string) => void;
@@ -1132,17 +1141,49 @@ function ResearchToolbar({
             )}
           </form>
 
-          <div className="flex flex-wrap gap-2">
-            {STARTER_TICKERS.map((ticker) => (
-              <button
-                key={ticker}
-                type="button"
-                onClick={() => onSelectTicker(ticker)}
-                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 transition hover:border-teal-500 hover:text-teal-700"
-              >
-                {ticker}
-              </button>
-            ))}
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <label className="sr-only" htmlFor="sp500-selector">
+              {t.toolbar.sp500Label}
+            </label>
+            <select
+              id="sp500-selector"
+              value={
+                sp500Constituents.some((company) => company.ticker === activeTicker)
+                  ? activeTicker
+                  : ""
+              }
+              onChange={(event) => {
+                if (event.target.value) {
+                  onSelectTicker(event.target.value);
+                }
+              }}
+              disabled={sp500State === "loading" || !sp500Constituents.length}
+              className="h-10 min-w-0 rounded-md border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 outline-none transition hover:border-teal-500 focus:border-teal-600 focus:ring-4 focus:ring-teal-100 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500 sm:w-64"
+            >
+              <option value="">
+                {sp500State === "loading"
+                  ? t.toolbar.sp500Loading
+                  : t.toolbar.sp500Placeholder}
+              </option>
+              {sp500Constituents.map((company) => (
+                <option key={company.ticker} value={company.ticker}>
+                  {company.ticker} - {company.name}
+                </option>
+              ))}
+            </select>
+
+            <div className="flex flex-wrap gap-2">
+              {STARTER_TICKERS.map((ticker) => (
+                <button
+                  key={ticker}
+                  type="button"
+                  onClick={() => onSelectTicker(ticker)}
+                  className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 transition hover:border-teal-500 hover:text-teal-700"
+                >
+                  {ticker}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -2918,6 +2959,8 @@ export function FinariApp({
   const normalizedInitialTicker = initialTicker.trim().toUpperCase() || DEFAULT_TICKER;
   const [query, setQuery] = useState(normalizedInitialTicker);
   const [results, setResults] = useState<CompanyIdentity[]>([]);
+  const [sp500Constituents, setSp500Constituents] = useState<Sp500Constituent[]>([]);
+  const [sp500State, setSp500State] = useState<LoadState>("idle");
   const [snapshot, setSnapshot] = useState<CompanySnapshot | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -3225,6 +3268,39 @@ export function FinariApp({
   }, []);
 
   useEffect(() => {
+    let mounted = true;
+
+    async function loadSp500Constituents() {
+      setSp500State("loading");
+      try {
+        const response = await fetch("/api/sp500");
+        const payload = (await response.json()) as {
+          constituents?: Sp500Constituent[];
+        };
+        if (!response.ok || !payload.constituents) {
+          throw new Error("Unable to load S&P 500 constituents");
+        }
+
+        if (mounted) {
+          setSp500Constituents(payload.constituents);
+          setSp500State("ready");
+        }
+      } catch {
+        if (mounted) {
+          setSp500Constituents([]);
+          setSp500State("error");
+        }
+      }
+    }
+
+    void loadSp500Constituents();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const timeout = window.setTimeout(() => {
       void loadCompany(normalizedInitialTicker);
     }, 0);
@@ -3285,6 +3361,8 @@ export function FinariApp({
         query={query}
         setQuery={setQuery}
         results={visibleResults}
+        sp500Constituents={sp500Constituents}
+        sp500State={sp500State}
         loading={loading}
         activeTicker={activeTicker}
         onSelectTicker={(ticker) => void loadCompany(ticker)}

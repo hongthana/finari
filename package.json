@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run src/lib/event-impact.test.ts src/lib/financial-analysis.test.ts src/lib/i18n.test.ts src/lib/research-store.test.ts src/lib/sec.test.ts src/lib/waitlist.test.ts src/middleware.test.ts src/components/finari-app.test.tsx --fileParallelism=false",
+    "test": "vitest run src/lib/event-impact.test.ts src/lib/financial-analysis.test.ts src/lib/i18n.test.ts src/lib/research-store.test.ts src/lib/sec.test.ts src/lib/sp500.test.ts src/lib/waitlist.test.ts src/middleware.test.ts src/components/finari-app.test.tsx --fileParallelism=false",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
