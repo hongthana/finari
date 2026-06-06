@@ -1039,7 +1039,7 @@ function ResearchToolbar({
   const languageHref = `/${alternateLocale}?ticker=${encodeURIComponent(activeTicker)}`;
 
   return (
-    <section className="border-b border-zinc-200 bg-white">
+    <section className="sticky top-0 z-40 border-b border-zinc-200 bg-white/95 shadow-sm shadow-zinc-950/5 backdrop-blur supports-[backdrop-filter]:bg-white/85">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
@@ -1106,7 +1106,7 @@ function ResearchToolbar({
             </button>
 
             {results.length > 0 && (
-              <div className="absolute z-20 mt-2 max-h-72 w-full overflow-auto rounded-md border border-zinc-200 bg-white p-1 shadow-lg">
+              <div className="absolute z-50 mt-2 max-h-72 w-full overflow-auto rounded-md border border-zinc-200 bg-white p-1 shadow-lg">
                 {results.map((company) => (
                   <button
                     key={`${company.cik}-${company.ticker}`}
@@ -3278,7 +3278,7 @@ export function FinariApp({
   }
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-zinc-100 text-zinc-950">
+    <div className="min-h-screen bg-zinc-100 text-zinc-950 [overflow-x:clip]">
       <ResearchToolbar
         locale={locale}
         t={t}
