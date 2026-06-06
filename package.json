@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "backfill:sp500": "node scripts/backfill-sp500.mjs"
   },
   "engines": {
     "node": ">=24.0.0"
