@@ -136,11 +136,28 @@ function numberOrNull(value: number | null | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+const ANNUAL_FORMS = new Set(["10-K", "10-K/A"]);
+const QUARTERLY_FORMS = new Set(["10-Q", "10-Q/A"]);
+const FINANCIAL_FORMS = new Set(["10-K", "10-K/A", "10-Q", "10-Q/A"]);
+
 function isCurrentSnapshotShape(snapshot: CompanySnapshot): boolean {
+  const hasAnnualSourceInFilings = snapshot.filings.some((filing) =>
+    ANNUAL_FORMS.has(filing.form),
+  );
+  const hasQuarterlySourceInFilings = snapshot.filings.some((filing) =>
+    QUARTERLY_FORMS.has(filing.form),
+  );
+  const hasFinancialSourceInFilings = snapshot.filings.some((filing) =>
+    FINANCIAL_FORMS.has(filing.form),
+  );
+
   return Boolean(
     snapshot.caveatChangeAnalysis &&
       snapshot.changeAnalysis?.annual?.some((item) => item.id === "annual-debt") &&
-      snapshot.businessDrivers?.some((driver) => driver.details?.length),
+      snapshot.businessDrivers?.some((driver) => driver.details?.length) &&
+      (!hasAnnualSourceInFilings || Boolean(snapshot.latestAnnualFiling)) &&
+      (!hasQuarterlySourceInFilings || Boolean(snapshot.latestQuarterlyFiling)) &&
+      (!hasFinancialSourceInFilings || Boolean(snapshot.latestFinancialFiling)),
   );
 }
 

@@ -82,6 +82,21 @@ describe("research store", () => {
     expect(fetched?.snapshot.identity.ticker).toBe(freshSnapshot.identity.ticker);
   });
 
+  it("treats legacy snapshots missing filing anchors as stale", async () => {
+    const legacySnapshot = {
+      ...fixtureSnapshot,
+      latestAnnualFiling: undefined,
+      latestQuarterlyFiling: undefined,
+      latestFinancialFiling: undefined,
+      generatedAt: new Date().toISOString(),
+    };
+
+    await persistSnapshot(legacySnapshot);
+    const refreshed = await getFreshStoredSnapshot(legacySnapshot.identity.ticker);
+
+    expect(refreshed).toBeNull();
+  });
+
   it("does not treat expired snapshots as fresh", () => {
     const expired = {
       ...fixtureSnapshot,
