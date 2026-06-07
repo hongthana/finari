@@ -649,7 +649,10 @@ function buildMetrics(periods: FinancialPeriod[], ttmPeriod?: FinancialPeriod): 
   const grossMargin = divide(latest.grossProfit, latest.revenue);
   const operatingMargin = divide(latest.operatingIncome, latest.revenue);
   const netMargin = divide(latest.netIncome, latest.revenue);
-  const fcfMargin = divide(cashPeriod?.freeCashFlow, cashPeriod?.revenue);
+  const fcfMargin = divide(
+    cashPeriod?.freeCashFlow ?? latest.freeCashFlow,
+    cashPeriod?.revenue ?? latest.revenue,
+  );
   const debtToEquity = divide(latest.debt, latest.equity);
   const liabilitiesToAssets = divide(latest.liabilities, latest.assets);
   const returnOnAssets = divide(latest.netIncome, latest.assets);
