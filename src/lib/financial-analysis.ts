@@ -11,6 +11,7 @@ import type {
   BusinessDriver,
   CaveatChangeAnalysis,
   ChangeAnalysis,
+  FilingSummary,
   ChangeItem,
   CompanyIdentity,
   CompanySnapshot,
@@ -1391,14 +1392,9 @@ function buildCaveats(
 function buildCitations(
   identity: CompanyIdentity,
   periods: FinancialPeriod[],
-  filings: ReturnType<typeof extractRecentFilings>,
+  latestAnnualFiling?: FilingSummary,
+  latestQuarterlyFiling?: FilingSummary,
 ): SourceCitation[] {
-  const latestAnnualFiling = filings.find((filing) =>
-    ANNUAL_FORMS.has(filing.form),
-  );
-  const latestQuarterlyFiling = filings.find((filing) =>
-    QUARTERLY_FORMS.has(filing.form),
-  );
   const latestPeriod = periods[0];
   const citations: SourceCitation[] = [];
 
@@ -1561,6 +1557,26 @@ function buildDebtByQuarter(
       currentDebt.get(key)?.fact.accn;
     periods.set(key, period);
   }
+}
+
+function filingFromPeriod(
+  identity: CompanyIdentity,
+  period?: FinancialPeriod,
+): FilingSummary | undefined {
+  if (!period?.form || !period.accessionNumber) {
+    return undefined;
+  }
+
+  const cikNumber = String(Number(identity.cik));
+  const accessionPath = period.accessionNumber.replaceAll("-", "");
+  return {
+    accessionNumber: period.accessionNumber,
+    form: period.form,
+    filingDate: period.filedDate ?? "",
+    reportDate: period.endDate,
+    url: `https://www.sec.gov/Archives/edgar/data/${cikNumber}/${accessionPath}/`,
+    primaryDocument: undefined,
+  };
 }
 
 function emptyPeerComparison(identity: CompanyIdentity): PeerComparison {
@@ -1902,15 +1918,28 @@ export function normalizeCompanySnapshot(
   ).slice(0, 8);
   const ttmPeriod = buildTtmPeriod(normalizedQuarterlyPeriods);
   const filings = extractRecentFilings(submissions, 40);
-  const latestFinancialFiling = filings.find((filing) =>
-    FINANCIAL_FORMS.has(filing.form),
-  );
-  const latestAnnualFiling = filings.find((filing) =>
+  const latestAnnualFromFilings = filings.find((filing) =>
     ANNUAL_FORMS.has(filing.form),
   );
-  const latestQuarterlyFiling = filings.find((filing) =>
+  const latestQuarterlyFromFilings = filings.find((filing) =>
     QUARTERLY_FORMS.has(filing.form),
   );
+  const latestAnnualFromPeriods = normalizedPeriods.find(
+    (period) => period.periodType === "annual" && ANNUAL_FORMS.has(period.form ?? ""),
+  );
+  const latestQuarterlyFromPeriods = normalizedQuarterlyPeriods.find(
+    (period) => period.periodType === "quarterly" && QUARTERLY_FORMS.has(period.form ?? ""),
+  );
+  const latestAnnualFiling =
+    latestAnnualFromFilings ??
+    filingFromPeriod(enrichedIdentity, latestAnnualFromPeriods);
+  const latestQuarterlyFiling =
+    latestQuarterlyFromFilings ??
+    filingFromPeriod(enrichedIdentity, latestQuarterlyFromPeriods);
+  const latestFinancialFiling =
+    filings.find((filing) => FINANCIAL_FORMS.has(filing.form)) ??
+    latestAnnualFiling ??
+    latestQuarterlyFiling;
   const metrics = buildMetrics(normalizedPeriods, ttmPeriod);
   const balanceSheetAnalysis = buildBalanceSheetAnalysis(
     normalizedPeriods,
@@ -1954,7 +1983,7 @@ export function normalizeCompanySnapshot(
     dataQuality,
     decisionFramework: buildDecisionFramework(metrics, balanceSheetAnalysis, dataQuality),
     caveats,
-    citations: buildCitations(enrichedIdentity, normalizedPeriods, filings),
+    citations: buildCitations(enrichedIdentity, normalizedPeriods, latestAnnualFiling, latestQuarterlyFiling),
     generatedAt: new Date().toISOString(),
   };
 }
