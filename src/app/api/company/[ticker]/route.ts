@@ -4,13 +4,16 @@ import { companyLookupError, getCompanySnapshotForTicker } from "@/lib/research-
 export const runtime = "nodejs";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ ticker: string }> },
 ) {
   const { ticker } = await context.params;
+  const { searchParams } = new URL(request.url);
+  const forceRefresh =
+    searchParams.get("refresh") === "1" || searchParams.get("refresh") === "true";
 
   try {
-    const snapshot = await getCompanySnapshotForTicker(ticker);
+    const snapshot = await getCompanySnapshotForTicker(ticker, { forceRefresh });
     return Response.json({ snapshot });
   } catch (error) {
     const lookupError = companyLookupError(error, ticker);

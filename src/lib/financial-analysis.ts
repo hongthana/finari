@@ -139,6 +139,49 @@ function previousQuarter(period: string): QuarterName | null {
   return index > 0 ? QUARTER_ORDER[index - 1] : null;
 }
 
+function fiscalYearEndMonth(fiscalYearEnd?: string): number | null {
+  const raw = fiscalYearEnd?.trim();
+  if (!raw || raw.length < 2) {
+    return null;
+  }
+
+  const month = Number(raw.slice(0, 2));
+  return Number.isInteger(month) && month >= 1 && month <= 12 ? month : null;
+}
+
+function fiscalYearForEndDate(endDate?: string, fiscalYearEnd?: string): number | null {
+  if (!endDate) {
+    return null;
+  }
+
+  const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(endDate);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const fiscalEndMonth = fiscalYearEndMonth(fiscalYearEnd);
+
+  if (!Number.isInteger(year) || !Number.isInteger(month)) {
+    return null;
+  }
+
+  if (!fiscalEndMonth) {
+    return year;
+  }
+
+  return month > fiscalEndMonth ? year + 1 : year;
+}
+
+function factMatchesFiscalYearEnd(
+  fact: SecFactUnit,
+  fiscalYearEnd?: string,
+): boolean {
+  const factFiscalYear = fiscalYearForEndDate(fact.end, fiscalYearEnd);
+  return factFiscalYear === null || factFiscalYear === fact.fy;
+}
+
 function isAnnualFact(fact: SecFactUnit): boolean {
   const annualFrame = /^CY\d{4}$/.test(fact.frame ?? "");
   return (
@@ -229,6 +272,7 @@ function selectFactsByYear(
   facts: SecCompanyFactsResponse,
   tags: readonly string[],
   preferredUnits: readonly string[],
+  fiscalYearEnd?: string,
 ): Map<number, SelectedFact> {
   const byYear = new Map<number, SelectedFact>();
 
@@ -249,7 +293,11 @@ function selectFactsByYear(
       const unitFacts = concept.units[unit] ?? [];
 
       for (const fact of unitFacts) {
-        if (!isAnnualFact(fact) || !isFiniteNumber(fact.fy)) {
+        if (
+          !isAnnualFact(fact) ||
+          !isFiniteNumber(fact.fy) ||
+          !factMatchesFiscalYearEnd(fact, fiscalYearEnd)
+        ) {
           continue;
         }
 
@@ -268,6 +316,7 @@ function selectFactsByQuarter(
   facts: SecCompanyFactsResponse,
   tags: readonly string[],
   preferredUnits: readonly string[],
+  fiscalYearEnd?: string,
 ): Map<string, SelectedFact> {
   const byQuarter = new Map<string, SelectedFact>();
 
@@ -288,7 +337,12 @@ function selectFactsByQuarter(
       const unitFacts = concept.units[unit] ?? [];
 
       for (const fact of unitFacts) {
-        if (!isQuarterFact(fact) || !isFiniteNumber(fact.fy) || !fact.fp) {
+        if (
+          !isQuarterFact(fact) ||
+          !isFiniteNumber(fact.fy) ||
+          !fact.fp ||
+          !factMatchesFiscalYearEnd(fact, fiscalYearEnd)
+        ) {
           continue;
         }
 
@@ -308,9 +362,10 @@ function selectQuarterlyDurationFacts(
   facts: SecCompanyFactsResponse,
   tags: readonly string[],
   preferredUnits: readonly string[],
-  annualFacts = selectFactsByYear(facts, tags, preferredUnits),
+  fiscalYearEnd?: string,
+  annualFacts = selectFactsByYear(facts, tags, preferredUnits, fiscalYearEnd),
 ): Map<string, SelectedFactValue> {
-  const selected = selectFactsByQuarter(facts, tags, preferredUnits);
+  const selected = selectFactsByQuarter(facts, tags, preferredUnits, fiscalYearEnd);
   const values = new Map<string, SelectedFactValue>();
 
   for (const [key, selectedFact] of selected) {
@@ -1385,10 +1440,26 @@ function buildCitations(
 function buildDebtByYear(
   periods: Map<number, FinancialPeriod>,
   facts: SecCompanyFactsResponse,
+  fiscalYearEnd?: string,
 ): void {
-  const currentDebt = selectFactsByYear(facts, FACT_TAGS.debtCurrent, ["USD"]);
-  const noncurrentDebt = selectFactsByYear(facts, FACT_TAGS.debtNoncurrent, ["USD"]);
-  const totalDebt = selectFactsByYear(facts, FACT_TAGS.debtTotal, ["USD"]);
+  const currentDebt = selectFactsByYear(
+    facts,
+    FACT_TAGS.debtCurrent,
+    ["USD"],
+    fiscalYearEnd,
+  );
+  const noncurrentDebt = selectFactsByYear(
+    facts,
+    FACT_TAGS.debtNoncurrent,
+    ["USD"],
+    fiscalYearEnd,
+  );
+  const totalDebt = selectFactsByYear(
+    facts,
+    FACT_TAGS.debtTotal,
+    ["USD"],
+    fiscalYearEnd,
+  );
 
   for (const fiscalYear of new Set([
     ...Array.from(currentDebt.keys()),
@@ -1427,10 +1498,26 @@ function buildDebtByYear(
 function buildDebtByQuarter(
   periods: Map<string, FinancialPeriod>,
   facts: SecCompanyFactsResponse,
+  fiscalYearEnd?: string,
 ): void {
-  const currentDebt = selectFactsByQuarter(facts, FACT_TAGS.debtCurrent, ["USD"]);
-  const noncurrentDebt = selectFactsByQuarter(facts, FACT_TAGS.debtNoncurrent, ["USD"]);
-  const totalDebt = selectFactsByQuarter(facts, FACT_TAGS.debtTotal, ["USD"]);
+  const currentDebt = selectFactsByQuarter(
+    facts,
+    FACT_TAGS.debtCurrent,
+    ["USD"],
+    fiscalYearEnd,
+  );
+  const noncurrentDebt = selectFactsByQuarter(
+    facts,
+    FACT_TAGS.debtNoncurrent,
+    ["USD"],
+    fiscalYearEnd,
+  );
+  const totalDebt = selectFactsByQuarter(
+    facts,
+    FACT_TAGS.debtTotal,
+    ["USD"],
+    fiscalYearEnd,
+  );
 
   for (const key of new Set([
     ...Array.from(currentDebt.keys()),
@@ -1615,184 +1702,193 @@ export function normalizeCompanySnapshot(
   const enrichedIdentity = enrichIdentityFromSubmissions(identity, submissions);
   const periods = new Map<number, FinancialPeriod>();
   const quarterlyPeriods = new Map<string, FinancialPeriod>();
+  const fiscalYearEnd = enrichedIdentity.fiscalYearEnd;
+  const annualFacts = (tags: readonly string[], preferredUnits: readonly string[]) =>
+    selectFactsByYear(facts, tags, preferredUnits, fiscalYearEnd);
+  const quarterlyFacts = (tags: readonly string[], preferredUnits: readonly string[]) =>
+    selectFactsByQuarter(facts, tags, preferredUnits, fiscalYearEnd);
+  const quarterlyDurationFacts = (
+    tags: readonly string[],
+    preferredUnits: readonly string[],
+  ) => selectQuarterlyDurationFacts(facts, tags, preferredUnits, fiscalYearEnd);
 
   addAnnualFactValues(
     periods,
     "revenue",
-    selectFactsByYear(facts, FACT_TAGS.revenue, ["USD"]),
+    annualFacts(FACT_TAGS.revenue, ["USD"]),
   );
   addAnnualFactValues(
     periods,
     "grossProfit",
-    selectFactsByYear(facts, FACT_TAGS.grossProfit, ["USD"]),
+    annualFacts(FACT_TAGS.grossProfit, ["USD"]),
   );
   addAnnualFactValues(
     periods,
     "operatingIncome",
-    selectFactsByYear(facts, FACT_TAGS.operatingIncome, ["USD"]),
+    annualFacts(FACT_TAGS.operatingIncome, ["USD"]),
   );
   addAnnualFactValues(
     periods,
     "netIncome",
-    selectFactsByYear(facts, FACT_TAGS.netIncome, ["USD"]),
+    annualFacts(FACT_TAGS.netIncome, ["USD"]),
   );
-  addAnnualFactValues(periods, "assets", selectFactsByYear(facts, FACT_TAGS.assets, ["USD"]));
+  addAnnualFactValues(periods, "assets", annualFacts(FACT_TAGS.assets, ["USD"]));
   addAnnualFactValues(
     periods,
     "liabilities",
-    selectFactsByYear(facts, FACT_TAGS.liabilities, ["USD"]),
+    annualFacts(FACT_TAGS.liabilities, ["USD"]),
   );
   addAnnualFactValues(
     periods,
     "currentAssets",
-    selectFactsByYear(facts, FACT_TAGS.currentAssets, ["USD"]),
+    annualFacts(FACT_TAGS.currentAssets, ["USD"]),
   );
   addAnnualFactValues(
     periods,
     "currentLiabilities",
-    selectFactsByYear(facts, FACT_TAGS.currentLiabilities, ["USD"]),
+    annualFacts(FACT_TAGS.currentLiabilities, ["USD"]),
   );
-  addAnnualFactValues(periods, "equity", selectFactsByYear(facts, FACT_TAGS.equity, ["USD"]));
-  addAnnualFactValues(periods, "cash", selectFactsByYear(facts, FACT_TAGS.cash, ["USD"]));
+  addAnnualFactValues(periods, "equity", annualFacts(FACT_TAGS.equity, ["USD"]));
+  addAnnualFactValues(periods, "cash", annualFacts(FACT_TAGS.cash, ["USD"]));
   addAnnualFactValues(
     periods,
     "operatingCashFlow",
-    selectFactsByYear(facts, FACT_TAGS.operatingCashFlow, ["USD"]),
+    annualFacts(FACT_TAGS.operatingCashFlow, ["USD"]),
   );
   addAnnualFactValues(
     periods,
     "capitalExpenditure",
-    selectFactsByYear(facts, FACT_TAGS.capitalExpenditure, ["USD"]),
+    annualFacts(FACT_TAGS.capitalExpenditure, ["USD"]),
     (value) => Math.abs(value),
   );
   addAnnualFactValues(
     periods,
     "researchAndDevelopment",
-    selectFactsByYear(facts, FACT_TAGS.researchAndDevelopment, ["USD"]),
+    annualFacts(FACT_TAGS.researchAndDevelopment, ["USD"]),
   );
   addAnnualFactValues(
     periods,
     "sellingGeneralAdministrative",
-    selectFactsByYear(facts, FACT_TAGS.sellingGeneralAdministrative, ["USD"]),
+    annualFacts(FACT_TAGS.sellingGeneralAdministrative, ["USD"]),
   );
   addAnnualFactValues(
     periods,
     "buybacks",
-    selectFactsByYear(facts, FACT_TAGS.buybacks, ["USD"]),
+    annualFacts(FACT_TAGS.buybacks, ["USD"]),
     (value) => Math.abs(value),
   );
   addAnnualFactValues(
     periods,
     "dividends",
-    selectFactsByYear(facts, FACT_TAGS.dividends, ["USD"]),
+    annualFacts(FACT_TAGS.dividends, ["USD"]),
     (value) => Math.abs(value),
   );
   addAnnualFactValues(
     periods,
     "epsDiluted",
-    selectFactsByYear(facts, FACT_TAGS.epsDiluted, ["USD/shares"]),
+    annualFacts(FACT_TAGS.epsDiluted, ["USD/shares"]),
   );
   addAnnualFactValues(
     periods,
     "sharesDiluted",
-    selectFactsByYear(facts, FACT_TAGS.sharesDiluted, ["shares"]),
+    annualFacts(FACT_TAGS.sharesDiluted, ["shares"]),
   );
-  buildDebtByYear(periods, facts);
+  buildDebtByYear(periods, facts, fiscalYearEnd);
 
   addQuarterlyFactValues(
     quarterlyPeriods,
     "revenue",
-    selectQuarterlyDurationFacts(facts, FACT_TAGS.revenue, ["USD"]),
+    quarterlyDurationFacts(FACT_TAGS.revenue, ["USD"]),
   );
   addQuarterlyFactValues(
     quarterlyPeriods,
     "grossProfit",
-    selectQuarterlyDurationFacts(facts, FACT_TAGS.grossProfit, ["USD"]),
+    quarterlyDurationFacts(FACT_TAGS.grossProfit, ["USD"]),
   );
   addQuarterlyFactValues(
     quarterlyPeriods,
     "operatingIncome",
-    selectQuarterlyDurationFacts(facts, FACT_TAGS.operatingIncome, ["USD"]),
+    quarterlyDurationFacts(FACT_TAGS.operatingIncome, ["USD"]),
   );
   addQuarterlyFactValues(
     quarterlyPeriods,
     "netIncome",
-    selectQuarterlyDurationFacts(facts, FACT_TAGS.netIncome, ["USD"]),
+    quarterlyDurationFacts(FACT_TAGS.netIncome, ["USD"]),
   );
   addQuarterlyInstantFactValues(
     quarterlyPeriods,
     "assets",
-    selectFactsByQuarter(facts, FACT_TAGS.assets, ["USD"]),
+    quarterlyFacts(FACT_TAGS.assets, ["USD"]),
   );
   addQuarterlyInstantFactValues(
     quarterlyPeriods,
     "liabilities",
-    selectFactsByQuarter(facts, FACT_TAGS.liabilities, ["USD"]),
+    quarterlyFacts(FACT_TAGS.liabilities, ["USD"]),
   );
   addQuarterlyInstantFactValues(
     quarterlyPeriods,
     "currentAssets",
-    selectFactsByQuarter(facts, FACT_TAGS.currentAssets, ["USD"]),
+    quarterlyFacts(FACT_TAGS.currentAssets, ["USD"]),
   );
   addQuarterlyInstantFactValues(
     quarterlyPeriods,
     "currentLiabilities",
-    selectFactsByQuarter(facts, FACT_TAGS.currentLiabilities, ["USD"]),
+    quarterlyFacts(FACT_TAGS.currentLiabilities, ["USD"]),
   );
   addQuarterlyInstantFactValues(
     quarterlyPeriods,
     "equity",
-    selectFactsByQuarter(facts, FACT_TAGS.equity, ["USD"]),
+    quarterlyFacts(FACT_TAGS.equity, ["USD"]),
   );
   addQuarterlyInstantFactValues(
     quarterlyPeriods,
     "cash",
-    selectFactsByQuarter(facts, FACT_TAGS.cash, ["USD"]),
+    quarterlyFacts(FACT_TAGS.cash, ["USD"]),
   );
   addQuarterlyFactValues(
     quarterlyPeriods,
     "operatingCashFlow",
-    selectQuarterlyDurationFacts(facts, FACT_TAGS.operatingCashFlow, ["USD"]),
+    quarterlyDurationFacts(FACT_TAGS.operatingCashFlow, ["USD"]),
   );
   addQuarterlyFactValues(
     quarterlyPeriods,
     "capitalExpenditure",
-    selectQuarterlyDurationFacts(facts, FACT_TAGS.capitalExpenditure, ["USD"]),
+    quarterlyDurationFacts(FACT_TAGS.capitalExpenditure, ["USD"]),
     (value) => Math.abs(value),
   );
   addQuarterlyFactValues(
     quarterlyPeriods,
     "researchAndDevelopment",
-    selectQuarterlyDurationFacts(facts, FACT_TAGS.researchAndDevelopment, ["USD"]),
+    quarterlyDurationFacts(FACT_TAGS.researchAndDevelopment, ["USD"]),
   );
   addQuarterlyFactValues(
     quarterlyPeriods,
     "sellingGeneralAdministrative",
-    selectQuarterlyDurationFacts(facts, FACT_TAGS.sellingGeneralAdministrative, ["USD"]),
+    quarterlyDurationFacts(FACT_TAGS.sellingGeneralAdministrative, ["USD"]),
   );
   addQuarterlyFactValues(
     quarterlyPeriods,
     "buybacks",
-    selectQuarterlyDurationFacts(facts, FACT_TAGS.buybacks, ["USD"]),
+    quarterlyDurationFacts(FACT_TAGS.buybacks, ["USD"]),
     (value) => Math.abs(value),
   );
   addQuarterlyFactValues(
     quarterlyPeriods,
     "dividends",
-    selectQuarterlyDurationFacts(facts, FACT_TAGS.dividends, ["USD"]),
+    quarterlyDurationFacts(FACT_TAGS.dividends, ["USD"]),
     (value) => Math.abs(value),
   );
   addQuarterlyFactValues(
     quarterlyPeriods,
     "epsDiluted",
-    selectQuarterlyDurationFacts(facts, FACT_TAGS.epsDiluted, ["USD/shares"]),
+    quarterlyDurationFacts(FACT_TAGS.epsDiluted, ["USD/shares"]),
   );
   addQuarterlyFactValues(
     quarterlyPeriods,
     "sharesDiluted",
-    selectQuarterlyDurationFacts(facts, FACT_TAGS.sharesDiluted, ["shares"]),
+    quarterlyDurationFacts(FACT_TAGS.sharesDiluted, ["shares"]),
   );
-  buildDebtByQuarter(quarterlyPeriods, facts);
+  buildDebtByQuarter(quarterlyPeriods, facts, fiscalYearEnd);
 
   const normalizedPeriods = Array.from(periods.values())
     .map(withDerivedFields)

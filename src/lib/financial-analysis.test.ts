@@ -88,6 +88,60 @@ describe("financial analysis", () => {
     expect(snapshot.citations[0].url).toContain("Archives/edgar/data/320193");
   });
 
+  it("ignores prior-period comparison facts from newer SEC filings", () => {
+    const facts = structuredClone(fixtureFacts);
+    const revenueFacts =
+      facts.facts?.["us-gaap"]?.RevenueFromContractWithCustomerExcludingAssessedTax
+        .units?.USD;
+
+    expect(revenueFacts).toBeDefined();
+
+    revenueFacts!.push(
+      {
+        fy: 2025,
+        fp: "FY",
+        form: "10-K",
+        filed: "2025-10-31",
+        start: "2023-09-28",
+        end: "2024-09-27",
+        frame: "CY2024",
+        accn: "0000320193-25-000079",
+        val: 390_000_000_000,
+      },
+      {
+        fy: 2025,
+        fp: "Q2",
+        form: "10-Q",
+        filed: "2026-05-01",
+        start: "2023-12-31",
+        end: "2024-03-30",
+        frame: "CY2024Q1",
+        accn: "0000320193-26-000013",
+        val: 88_000_000_000,
+      },
+    );
+
+    const snapshot = normalizeCompanySnapshot(
+      fixtureIdentity,
+      fixtureSubmissions,
+      facts,
+    );
+
+    expect(snapshot.periods[0]).toMatchObject({
+      fiscalYear: 2025,
+      revenue: 410_000_000_000,
+      endDate: "2025-09-27",
+    });
+    expect(
+      snapshot.quarterlyPeriods.find(
+        (period) => period.fiscalYear === 2025 && period.fiscalPeriod === "Q2",
+      ),
+    ).toMatchObject({
+      revenue: 97_000_000_000,
+      endDate: "2025-03-29",
+    });
+  });
+
   it("surfaces caveats when required facts are missing", () => {
     const snapshot = normalizeCompanySnapshot(fixtureIdentity, fixtureSubmissions, {
       cik: 320193,

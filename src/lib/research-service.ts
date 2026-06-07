@@ -146,10 +146,15 @@ async function fetchAndPersistSnapshot(ticker: string) {
   });
 }
 
-export async function getCompanySnapshotForTicker(ticker: string): Promise<CompanySnapshot> {
-  const stored = await getFreshStoredSnapshot(ticker);
-  if (stored) {
-    return stored.snapshot;
+export async function getCompanySnapshotForTicker(
+  ticker: string,
+  options: { forceRefresh?: boolean } = {},
+): Promise<CompanySnapshot> {
+  if (!options.forceRefresh) {
+    const stored = await getFreshStoredSnapshot(ticker);
+    if (stored) {
+      return stored.snapshot;
+    }
   }
 
   const refreshed = await fetchAndPersistSnapshot(ticker);
