@@ -449,6 +449,13 @@ const en = {
       confidence: string,
     ) =>
       `Possible financial impact: ${impact.toLowerCase()} signal for ${drivers}. Watch ${watchMetric} in the next filing. Confidence: ${confidence.toLowerCase()}.`,
+    whatHappenedSummary: (
+      eventType: string,
+      drivers: string,
+      impact: string,
+      watchMetric: string,
+    ) =>
+      `This ${eventType.toLowerCase()} event may matter because it is a ${impact.toLowerCase()} signal for ${drivers}. Watch ${watchMetric} in the next filing to confirm whether it affects the business.`,
     investorMeaning: (impact: string, drivers: string, horizon: string) =>
       `Investor meaning: treat this as a ${impact.toLowerCase()} signal for ${drivers}. It may affect ${horizon.toLowerCase()}, so confirm the effect in future filings before relying on it.`,
     aiInstruction:
@@ -1221,6 +1228,13 @@ const th: Dictionary = {
       confidence: string,
     ) =>
       `ผลกระทบที่อาจเกิดขึ้น: เป็นสัญญาณ${impact}ต่อ ${drivers} ควรดู ${watchMetric} ใน filing ถัดไป ความมั่นใจ: ${confidence}`,
+    whatHappenedSummary: (
+      eventType: string,
+      drivers: string,
+      impact: string,
+      watchMetric: string,
+    ) =>
+      `เหตุการณ์ประเภท${eventType}นี้อาจสำคัญ เพราะเป็นสัญญาณ${impact}ต่อ ${drivers} นักลงทุนควรดู ${watchMetric} ใน filing ถัดไปเพื่อยืนยันว่ากระทบธุรกิจจริงหรือไม่`,
     investorMeaning: (impact: string, drivers: string, horizon: string) =>
       `ความหมายสำหรับนักลงทุน: มองเป็นสัญญาณ${impact}ต่อ ${drivers} และอาจกระทบ ${horizon} จึงควรยืนยันผลจริงใน filing ถัดไปก่อนใช้ตัดสินใจ`,
     aiInstruction:

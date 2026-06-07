@@ -697,6 +697,14 @@ function EventImpactCard({
   const driverLabels = event.drivers.map((driver) =>
     recordValue(t.events.driverLabels, driver, driver),
   );
+  const driverSummary = driverLabels.join(", ");
+  const localizedEventBrief = t.events.whatHappenedSummary(
+    eventType,
+    driverSummary,
+    impact,
+    watchMetric,
+  );
+  const eventBrief = locale === "th" ? localizedEventBrief : event.summary || localizedEventBrief;
   const publishedAt = new Date(event.publishedAt).toLocaleString(
     locale === "th" ? "th-TH" : "en-US",
   );
@@ -745,11 +753,9 @@ function EventImpactCard({
               </span>
             )}
           </div>
-          {event.summary && (
-            <p className="mt-1 break-words text-sm leading-6 text-zinc-600">
-              {event.summary}
-            </p>
-          )}
+          <p className="mt-1 break-words text-sm leading-6 text-zinc-600">
+            {eventBrief}
+          </p>
 
           <dl className="mt-4 grid gap-3 text-xs text-zinc-600 md:grid-cols-2">
             <div>
