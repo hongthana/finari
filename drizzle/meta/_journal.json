@@ -29,6 +29,13 @@
       "when": 1780651289838,
       "tag": "0003_event_impacts",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780818384708,
+      "tag": "0004_slim_imperial_guard",
+      "breakpoints": true
     }
   ]
 }

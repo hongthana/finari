@@ -71,6 +71,7 @@ NEWS_RSS_URL_TEMPLATE="https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticke
 NEWS_API_KEY=""
 AUTH_SECRET="replace-with-a-long-random-secret"
 AUTH_URL="http://localhost:3000"
+ALERTS_CRON_SECRET="replace-with-a-long-random-secret"
 EMAIL_FROM="Finari <research@example.com>"
 RESEND_API_KEY=""
 OPENAI_API_KEY=""
@@ -87,6 +88,7 @@ Important notes:
 - `REDIS_URL` is optional for local development, but recommended for cache and lock behavior.
 - `AUTH_SECRET` must be a long random value in production.
 - `AUTH_URL` should match the deployed app URL in production.
+- `ALERTS_CRON_SECRET` must match the GitHub Actions secret used by the scheduled alert-delivery workflow.
 - `EMAIL_FROM` must use a sender domain verified by the email provider.
 - `RESEND_API_KEY` is required for production magic-link delivery.
 - `OPENAI_API_KEY` is optional; without it, Finari returns deterministic fallback memos and event analysis.
@@ -156,7 +158,7 @@ Core durable tables include:
 - Financial data: `financial_facts`, `financial_periods`
 - Research: `research_snapshots`, `research_memos`, `research_refresh_runs`
 - Events: `company_events`, `event_impacts`
-- Product data: `watchlists`, `watchlist_items`, `saved_research`, `alert_preferences`, `waitlist_leads`
+- Product data: `watchlists`, `watchlist_items`, `saved_research`, `alert_preferences`, `alert_deliveries`, `waitlist_leads`
 - Audit and cost control: `ai_usage_events`
 
 Redis is used only for short-lived cache, rate-limit state, and refresh locks. Do not store durable research or user data in Redis.
@@ -211,6 +213,8 @@ Authenticated user routes:
 - `GET /api/alerts`
 - `POST /api/alerts`
 - `PATCH /api/alerts/[id]`
+- `GET /api/alerts/deliveries`
+- `PATCH /api/alerts/deliveries/[id]`
 - `GET /api/valuation/[ticker]`
 - `GET /api/workspace/export`
 
@@ -219,8 +223,10 @@ Admin routes:
 - `POST /api/admin/company/[ticker]/memo?locale=en|th`
 - `POST /api/admin/company/[ticker]/events/refresh?locale=en|th`
 - `PATCH /api/admin/company/[ticker]/events/[eventId]`
+- `POST /api/admin/alerts/deliver` (admin session or `Authorization: Bearer <ALERTS_CRON_SECRET>` for scheduled delivery)
 
 Admin authorization is based on the signed-in user's email matching `ADMIN_EMAILS`.
+The alert-delivery route also accepts the cron secret so GitHub Actions can trigger it automatically on a schedule.
 
 ## Research Backfill
 
@@ -294,6 +300,12 @@ GitHub Actions currently run:
 
 - `ci`: lint, typecheck, tests, and build
 - `Gitleaks`: full git-history and checked-out file secret scanning
+- `alert-delivery`: scheduled `POST /api/admin/alerts/deliver` trigger using `ALERTS_CRON_SECRET`
+
+For the scheduled alert-delivery workflow:
+
+- Set the repository variable `FINARI_BASE_URL` to the deployed app URL.
+- Set the repository secret `ALERTS_CRON_SECRET` to the same value used by the app runtime.
 
 ## Localization
 

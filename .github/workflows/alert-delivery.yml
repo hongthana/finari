@@ -1,0 +1,40 @@
+name: Alert delivery
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: alert-delivery
+  cancel-in-progress: false
+
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger alert delivery
+        env:
+          FINARI_BASE_URL: ${{ vars.FINARI_BASE_URL }}
+          ALERTS_CRON_SECRET: ${{ secrets.ALERTS_CRON_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${FINARI_BASE_URL:-}" ]; then
+            echo "FINARI_BASE_URL is required"
+            exit 1
+          fi
+
+          if [ -z "${ALERTS_CRON_SECRET:-}" ]; then
+            echo "ALERTS_CRON_SECRET is required"
+            exit 1
+          fi
+
+          curl --fail --silent --show-error \
+            --request POST \
+            --url "${FINARI_BASE_URL%/}/api/admin/alerts/deliver" \
+            --header "Authorization: Bearer ${ALERTS_CRON_SECRET}"

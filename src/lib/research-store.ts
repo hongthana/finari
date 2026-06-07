@@ -5,6 +5,7 @@ import { getDb, hasDatabase } from "@/db/client";
 import {
   aiUsageEvents,
   alertPreferences,
+  alertDeliveries,
   companies,
   companyTickers,
   filings,
@@ -26,8 +27,10 @@ import type {
   WorkspaceExportPayload,
   AlertCondition,
   AlertConfig,
+  AlertDelivery,
   AlertPreference,
   FinancialPeriod,
+  MetricUnit,
   ResearchMemo,
   SourceCitation,
 } from "@/lib/types";
@@ -116,6 +119,33 @@ type AlertPreferenceRecord = {
   updatedAt: string | Date;
 };
 
+type AlertDeliveryRecord = {
+  id: string;
+  userId: string;
+  alertPreferenceId: string;
+  companyId: string;
+  companyName: string;
+  ticker: string;
+  alertType: string;
+  channel: "in-app";
+  status: "queued" | "read" | "dismissed";
+  emailStatus: "queued" | "sent" | "failed" | "skipped";
+  emailError: string | null;
+  subject: string;
+  body: string;
+  payloadJson: Record<string, unknown>;
+  dedupeKey: string;
+  currentValue: number | null;
+  previousValue: number | null;
+  threshold: number;
+  condition: AlertCondition;
+  unit: MetricUnit;
+  deliveredAt: string | Date;
+  readAt: string | Date | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+};
+
 type WatchlistMemoryItem = {
   id: string;
   userId: string;
@@ -141,6 +171,7 @@ const memoryState = globalThis as typeof globalThis & {
   __finariWatchlists?: WatchlistMemoryItem[];
   __finariWatchlistItems?: WatchlistItemMemory[];
   __finariAlertPreferences?: AlertPreferenceRecord[];
+  __finariAlertDeliveries?: AlertDeliveryRecord[];
 };
 
 function getSnapshotMemory() {
@@ -176,6 +207,11 @@ function getWatchlistItemsMemory() {
 function getAlertPreferenceMemory() {
   memoryState.__finariAlertPreferences ??= [];
   return memoryState.__finariAlertPreferences;
+}
+
+function getAlertDeliveryMemory() {
+  memoryState.__finariAlertDeliveries ??= [];
+  return memoryState.__finariAlertDeliveries;
 }
 
 function normalizeTicker(ticker: string): string {
@@ -1371,6 +1407,56 @@ export async function listAlertPreferences(userId: string) {
   }));
 }
 
+export async function listEnabledAlertPreferencesForDelivery() {
+  if (!hasDatabase()) {
+    return getAlertPreferenceMemory()
+      .filter((alert) => alert.enabled)
+      .map((alert) => ({
+        ...normalizeAlertRecordToDto(alert),
+        companyName: alert.ticker,
+        email: null,
+      }));
+  }
+
+  const rows = await getDb()
+    .select({
+      id: alertPreferences.id,
+      userId: alertPreferences.userId,
+      companyId: alertPreferences.companyId,
+      alertType: alertPreferences.alertType,
+      configJson: alertPreferences.configJson,
+      enabled: alertPreferences.enabled,
+      lastTriggeredAt: alertPreferences.lastTriggeredAt,
+      createdAt: alertPreferences.createdAt,
+      updatedAt: alertPreferences.updatedAt,
+      ticker: companyTickers.ticker,
+      companyName: companies.legalName,
+      email: users.email,
+    })
+    .from(alertPreferences)
+    .innerJoin(users, eq(alertPreferences.userId, users.id))
+    .innerJoin(companies, eq(alertPreferences.companyId, companies.id))
+    .innerJoin(companyTickers, eq(alertPreferences.companyId, companyTickers.companyId))
+    .where(and(eq(alertPreferences.enabled, true), eq(companyTickers.isActive, true)))
+    .orderBy(desc(alertPreferences.createdAt));
+
+  return rows.map((row) => ({
+    id: row.id,
+    userId: row.userId,
+    ticker: row.ticker,
+    alertType: row.alertType,
+    config: normalizeAlertConfig(row.configJson),
+    enabled: row.enabled,
+    lastTriggeredAt: row.lastTriggeredAt ? row.lastTriggeredAt.toISOString() : null,
+    createdAt:
+      row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+    updatedAt:
+      row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
+    companyName: row.companyName,
+    email: row.email,
+  }));
+}
+
 export async function getAlertPreference(input: { userId: string; alertId: string }) {
   if (!hasDatabase()) {
     const record = getAlertPreferenceMemory().find(
@@ -1464,6 +1550,292 @@ export async function patchAlertPreference(input: {
   return getAlertPreference({ userId: input.userId, alertId: row.id });
 }
 
+export async function markAlertPreferenceTriggered(input: {
+  userId: string;
+  alertId: string;
+  triggeredAt: Date;
+}): Promise<void> {
+  if (!hasDatabase()) {
+    const record = getAlertPreferenceMemory().find(
+      (alert) => alert.userId === input.userId && alert.id === input.alertId,
+    );
+    if (!record) {
+      return;
+    }
+    record.lastTriggeredAt = input.triggeredAt;
+    record.updatedAt = input.triggeredAt.toISOString();
+    return;
+  }
+
+  await getDb()
+    .update(alertPreferences)
+    .set({
+      lastTriggeredAt: input.triggeredAt,
+      updatedAt: input.triggeredAt,
+    })
+    .where(and(eq(alertPreferences.id, input.alertId), eq(alertPreferences.userId, input.userId)));
+}
+
+export async function recordAlertDelivery(input: {
+  userId: string;
+  alertPreferenceId: string;
+  companyId: string;
+  companyName: string;
+  ticker: string;
+  alertType: string;
+  channel: "in-app";
+  status: "queued" | "read" | "dismissed";
+  emailStatus: "queued" | "sent" | "failed" | "skipped";
+  emailError: string | null;
+  subject: string;
+  body: string;
+  payloadJson: Record<string, unknown>;
+  dedupeKey: string;
+  currentValue: number | null;
+  previousValue: number | null;
+  threshold: number;
+  condition: AlertCondition;
+  unit: MetricUnit;
+  deliveredAt: Date;
+}): Promise<AlertDelivery | null> {
+  if (!hasDatabase()) {
+    const existing = getAlertDeliveryMemory().find((delivery) => delivery.dedupeKey === input.dedupeKey);
+    if (existing) {
+      return null;
+    }
+
+    const now = input.deliveredAt.toISOString();
+    const record: AlertDeliveryRecord = {
+      id: crypto.randomUUID(),
+      userId: input.userId,
+      alertPreferenceId: input.alertPreferenceId,
+      companyId: input.companyId,
+      companyName: input.companyName,
+      ticker: input.ticker,
+      alertType: input.alertType,
+      channel: input.channel,
+      status: input.status,
+      emailStatus: input.emailStatus,
+      emailError: input.emailError,
+      subject: input.subject,
+      body: input.body,
+      payloadJson: input.payloadJson,
+      dedupeKey: input.dedupeKey,
+      currentValue: input.currentValue,
+      previousValue: input.previousValue,
+      threshold: input.threshold,
+      condition: input.condition,
+      unit: input.unit,
+      deliveredAt: now,
+      readAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    getAlertDeliveryMemory().push(record);
+    return normalizeAlertDeliveryRecordToDto(record);
+  }
+
+  const [row] = await getDb()
+    .insert(alertDeliveries)
+    .values({
+      userId: input.userId,
+      alertPreferenceId: input.alertPreferenceId,
+      companyId: input.companyId,
+      ticker: input.ticker,
+      alertType: input.alertType,
+      channel: input.channel,
+      status: input.status,
+      emailStatus: input.emailStatus,
+      emailError: input.emailError,
+      subject: input.subject,
+      body: input.body,
+      payloadJson: input.payloadJson as Record<string, unknown>,
+      dedupeKey: input.dedupeKey,
+      currentValue: input.currentValue,
+      previousValue: input.previousValue,
+      threshold: input.threshold,
+      condition: input.condition,
+      unit: input.unit,
+      deliveredAt: input.deliveredAt,
+    })
+    .onConflictDoNothing({
+      target: alertDeliveries.dedupeKey,
+    })
+    .returning();
+
+  if (!row) {
+    return null;
+  }
+
+  return normalizeAlertDeliveryRow(row, {
+    companyName: input.companyName,
+  });
+}
+
+export async function updateAlertDeliveryEmailStatus(input: {
+  userId: string;
+  alertDeliveryId: string;
+  emailStatus: "queued" | "sent" | "failed" | "skipped";
+  emailError: string | null;
+}): Promise<AlertDelivery | null> {
+  if (!hasDatabase()) {
+    const record = getAlertDeliveryMemory().find(
+      (delivery) => delivery.userId === input.userId && delivery.id === input.alertDeliveryId,
+    );
+    if (!record) {
+      return null;
+    }
+    record.emailStatus = input.emailStatus;
+    record.emailError = input.emailError;
+    record.updatedAt = new Date().toISOString();
+    return normalizeAlertDeliveryRecordToDto(record);
+  }
+
+  const [row] = await getDb()
+    .update(alertDeliveries)
+    .set({
+      emailStatus: input.emailStatus,
+      emailError: input.emailError,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(eq(alertDeliveries.id, input.alertDeliveryId), eq(alertDeliveries.userId, input.userId)),
+    )
+    .returning();
+
+  if (!row) {
+    return null;
+  }
+
+  return getAlertDelivery({ userId: input.userId, alertDeliveryId: row.id });
+}
+
+export async function markAlertDeliveryRead(input: {
+  userId: string;
+  alertDeliveryId: string;
+  readAt: Date;
+}): Promise<AlertDelivery | null> {
+  if (!hasDatabase()) {
+    const record = getAlertDeliveryMemory().find(
+      (delivery) => delivery.userId === input.userId && delivery.id === input.alertDeliveryId,
+    );
+    if (!record) {
+      return null;
+    }
+    record.status = "read";
+    record.readAt = input.readAt;
+    record.updatedAt = input.readAt.toISOString();
+    return normalizeAlertDeliveryRecordToDto(record);
+  }
+
+  const [row] = await getDb()
+    .update(alertDeliveries)
+    .set({
+      status: "read",
+      readAt: input.readAt,
+      updatedAt: input.readAt,
+    })
+    .where(
+      and(eq(alertDeliveries.id, input.alertDeliveryId), eq(alertDeliveries.userId, input.userId)),
+    )
+    .returning();
+
+  if (!row) {
+    return null;
+  }
+
+  return getAlertDelivery({ userId: input.userId, alertDeliveryId: row.id });
+}
+
+export async function getAlertDelivery(input: {
+  userId: string;
+  alertDeliveryId: string;
+}): Promise<AlertDelivery | null> {
+  if (!hasDatabase()) {
+    const record = getAlertDeliveryMemory().find(
+      (delivery) => delivery.userId === input.userId && delivery.id === input.alertDeliveryId,
+    );
+    return record ? normalizeAlertDeliveryRecordToDto(record) : null;
+  }
+
+  const [row] = await getDb()
+    .select({
+      id: alertDeliveries.id,
+      userId: alertDeliveries.userId,
+      alertPreferenceId: alertDeliveries.alertPreferenceId,
+      companyId: alertDeliveries.companyId,
+      ticker: alertDeliveries.ticker,
+      alertType: alertDeliveries.alertType,
+      channel: alertDeliveries.channel,
+      status: alertDeliveries.status,
+      emailStatus: alertDeliveries.emailStatus,
+      emailError: alertDeliveries.emailError,
+      subject: alertDeliveries.subject,
+      body: alertDeliveries.body,
+      payloadJson: alertDeliveries.payloadJson,
+      dedupeKey: alertDeliveries.dedupeKey,
+      currentValue: alertDeliveries.currentValue,
+      previousValue: alertDeliveries.previousValue,
+      threshold: alertDeliveries.threshold,
+      condition: alertDeliveries.condition,
+      unit: alertDeliveries.unit,
+      deliveredAt: alertDeliveries.deliveredAt,
+      readAt: alertDeliveries.readAt,
+      createdAt: alertDeliveries.createdAt,
+      updatedAt: alertDeliveries.updatedAt,
+      companyName: companies.legalName,
+    })
+    .from(alertDeliveries)
+    .innerJoin(companies, eq(alertDeliveries.companyId, companies.id))
+    .where(and(eq(alertDeliveries.id, input.alertDeliveryId), eq(alertDeliveries.userId, input.userId)))
+    .limit(1);
+
+  return row ? normalizeAlertDeliveryRow(row) : null;
+}
+
+export async function listAlertDeliveries(userId: string) {
+  if (!hasDatabase()) {
+    return getAlertDeliveryMemory()
+      .filter((delivery) => delivery.userId === userId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map((delivery) => normalizeAlertDeliveryRecordToDto(delivery));
+  }
+
+  const rows = await getDb()
+    .select({
+      id: alertDeliveries.id,
+      userId: alertDeliveries.userId,
+      alertPreferenceId: alertDeliveries.alertPreferenceId,
+      companyId: alertDeliveries.companyId,
+      ticker: alertDeliveries.ticker,
+      alertType: alertDeliveries.alertType,
+      channel: alertDeliveries.channel,
+      status: alertDeliveries.status,
+      emailStatus: alertDeliveries.emailStatus,
+      emailError: alertDeliveries.emailError,
+      subject: alertDeliveries.subject,
+      body: alertDeliveries.body,
+      payloadJson: alertDeliveries.payloadJson,
+      dedupeKey: alertDeliveries.dedupeKey,
+      currentValue: alertDeliveries.currentValue,
+      previousValue: alertDeliveries.previousValue,
+      threshold: alertDeliveries.threshold,
+      condition: alertDeliveries.condition,
+      unit: alertDeliveries.unit,
+      deliveredAt: alertDeliveries.deliveredAt,
+      readAt: alertDeliveries.readAt,
+      createdAt: alertDeliveries.createdAt,
+      updatedAt: alertDeliveries.updatedAt,
+      companyName: companies.legalName,
+    })
+    .from(alertDeliveries)
+    .innerJoin(companies, eq(alertDeliveries.companyId, companies.id))
+    .where(eq(alertDeliveries.userId, userId))
+    .orderBy(desc(alertDeliveries.createdAt));
+
+  return rows.map((row) => normalizeAlertDeliveryRow(row));
+}
+
 export async function buildWorkspaceExportPayload(
   input: {
     scope: "memo" | "snapshot";
@@ -1535,6 +1907,108 @@ function normalizeAlertRecordToDto(
   };
 }
 
+function normalizeAlertDeliveryRecordToDto(record: AlertDeliveryRecord): AlertDelivery {
+  return {
+    id: record.id,
+    userId: record.userId,
+    alertPreferenceId: record.alertPreferenceId,
+    companyName: record.companyName,
+    ticker: record.ticker,
+    alertType: record.alertType,
+    channel: record.channel,
+    status: record.status,
+    emailStatus: record.emailStatus,
+    emailError: record.emailError,
+    title: record.subject,
+    body: record.body,
+    payload: record.payloadJson,
+    dedupeKey: record.dedupeKey,
+    currentValue: record.currentValue,
+    previousValue: record.previousValue,
+    threshold: record.threshold,
+    condition: record.condition,
+    unit: record.unit,
+    deliveredAt:
+      typeof record.deliveredAt === "string"
+        ? record.deliveredAt
+        : record.deliveredAt.toISOString(),
+    readAt:
+      record.readAt === null
+        ? null
+        : typeof record.readAt === "string"
+          ? record.readAt
+          : record.readAt.toISOString(),
+    createdAt:
+      typeof record.createdAt === "string" ? record.createdAt : record.createdAt.toISOString(),
+    updatedAt:
+      typeof record.updatedAt === "string" ? record.updatedAt : record.updatedAt.toISOString(),
+  };
+}
+
+function normalizeAlertDeliveryRow(
+  row: {
+    id: string;
+    userId: string;
+    alertPreferenceId: string;
+    companyId: string;
+    ticker: string;
+    alertType: string;
+    channel: string;
+    status: string;
+    emailStatus: string;
+    emailError: string | null;
+    subject: string;
+    body: string;
+    payloadJson: unknown;
+    dedupeKey: string;
+    currentValue: number | null;
+    previousValue: number | null;
+    threshold: number;
+    condition: string;
+    unit: string;
+    deliveredAt: Date | string;
+    readAt: Date | string | null;
+    createdAt: Date | string;
+    updatedAt: Date | string;
+    companyName?: string;
+  },
+  overrides: Partial<{ companyName: string }> = {},
+): AlertDelivery {
+  return {
+    id: row.id,
+    userId: row.userId,
+    alertPreferenceId: row.alertPreferenceId,
+    companyName: overrides.companyName ?? row.companyName ?? row.ticker,
+    ticker: row.ticker,
+    alertType: row.alertType,
+    channel: "in-app",
+    status: row.status as AlertDelivery["status"],
+    emailStatus: row.emailStatus as AlertDelivery["emailStatus"],
+    emailError: row.emailError,
+    title: row.subject,
+    body: row.body,
+    payload: (row.payloadJson ?? {}) as Record<string, unknown>,
+    dedupeKey: row.dedupeKey,
+    currentValue: row.currentValue,
+    previousValue: row.previousValue,
+    threshold: row.threshold,
+    condition: row.condition as AlertCondition,
+    unit: row.unit as MetricUnit,
+    deliveredAt:
+      typeof row.deliveredAt === "string" ? row.deliveredAt : row.deliveredAt.toISOString(),
+    readAt:
+      row.readAt === null
+        ? null
+        : typeof row.readAt === "string"
+          ? row.readAt
+          : row.readAt.toISOString(),
+    createdAt:
+      typeof row.createdAt === "string" ? row.createdAt : row.createdAt.toISOString(),
+    updatedAt:
+      typeof row.updatedAt === "string" ? row.updatedAt : row.updatedAt.toISOString(),
+  };
+}
+
 const ALERT_CONDITIONS = new Set([
   "above",
   "below",
@@ -1570,4 +2044,5 @@ export function resetResearchStoreForTests(): void {
   memoryState.__finariWatchlists = [];
   memoryState.__finariWatchlistItems = [];
   memoryState.__finariAlertPreferences = [];
+  memoryState.__finariAlertDeliveries = [];
 }

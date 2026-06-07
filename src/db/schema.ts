@@ -543,6 +543,46 @@ export const alertPreferences = pgTable(
   }),
 );
 
+export const alertDeliveries = pgTable(
+  "alert_deliveries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    alertPreferenceId: uuid("alert_preference_id")
+      .notNull()
+      .references(() => alertPreferences.id, { onDelete: "cascade" }),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    ticker: text("ticker").notNull(),
+    alertType: text("alert_type").notNull(),
+    channel: text("channel").default("in-app").notNull(),
+    status: text("status").default("queued").notNull(),
+    emailStatus: text("email_status").default("queued").notNull(),
+    emailError: text("email_error"),
+    subject: text("subject").notNull(),
+    body: text("body").notNull(),
+    payloadJson: jsonb("payload_json").$type<Record<string, unknown>>().default({}).notNull(),
+    dedupeKey: text("dedupe_key").notNull(),
+    currentValue: doublePrecision("current_value"),
+    previousValue: doublePrecision("previous_value"),
+    threshold: doublePrecision("threshold").notNull(),
+    condition: text("condition").notNull(),
+    unit: text("unit").notNull(),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }).defaultNow().notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userCreatedIdx: index("alert_deliveries_user_created_idx").on(table.userId, table.createdAt),
+    userUnreadIdx: index("alert_deliveries_user_read_idx").on(table.userId, table.readAt),
+    dedupeKeyIdx: uniqueIndex("alert_deliveries_dedupe_key_idx").on(table.dedupeKey),
+  }),
+);
+
 export const waitlistLeads = pgTable("waitlist_leads", {
   id: uuid("id").defaultRandom().primaryKey(),
   email: text("email").notNull().unique(),

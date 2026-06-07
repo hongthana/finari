@@ -1192,26 +1192,26 @@ function ResearchToolbar({
     process.env.NEXT_PUBLIC_GITHUB_REPO_URL ?? "https://github.com/hongthana/finari";
 
   return (
-    <section className="sticky top-0 z-40 border-b border-zinc-200 bg-white/95 shadow-sm shadow-zinc-950/5 backdrop-blur supports-[backdrop-filter]:bg-white/85">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <section className="relative z-40 border-b border-zinc-200 bg-white/95 shadow-sm shadow-zinc-950/5 backdrop-blur supports-[backdrop-filter]:bg-white/85 lg:sticky lg:top-0">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-3 sm:gap-5 sm:px-6 sm:py-5 lg:px-8">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-zinc-950 text-white">
-                <TrendingUp className="h-5 w-5" aria-hidden="true" />
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-zinc-950 text-white sm:h-9 sm:w-9">
+                <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.14em] text-teal-700">
                   {t.toolbar.product}
                 </p>
-                <h1 className="text-xl font-semibold tracking-normal text-zinc-950 sm:text-2xl">
+                <h1 className="text-lg font-semibold leading-tight tracking-normal text-zinc-950 sm:text-2xl">
                   {t.toolbar.headline}
                 </h1>
               </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-zinc-600">
+          <div className="hidden flex-wrap items-center gap-2 text-xs font-medium text-zinc-600 sm:flex">
             <Link
               href={repoUrl}
               target="_blank"
@@ -1244,7 +1244,7 @@ function ResearchToolbar({
           </div>
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+        <div className="grid gap-2 sm:gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
           <form onSubmit={onSubmit} className="relative">
             <Search
               className="pointer-events-none absolute left-3 top-3.5 h-5 w-5 text-zinc-400"
@@ -1254,18 +1254,19 @@ function ResearchToolbar({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={t.toolbar.placeholder}
-              className="h-12 w-full rounded-md border border-zinc-300 bg-white pl-10 pr-28 text-base font-medium text-zinc-950 outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
+              className="h-12 w-full rounded-md border border-zinc-300 bg-white pl-10 pr-14 text-base font-medium text-zinc-950 outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100 sm:pr-28"
             />
             <button
               type="submit"
-              className="absolute right-1.5 top-1.5 inline-flex h-9 items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 text-sm font-semibold text-white transition hover:bg-zinc-800"
+              aria-label={t.toolbar.research}
+              className="absolute right-1.5 top-1.5 inline-flex h-9 w-10 items-center justify-center gap-2 rounded-md bg-zinc-950 text-sm font-semibold text-white transition hover:bg-zinc-800 sm:w-auto sm:px-4"
             >
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               ) : (
                 <Search className="h-4 w-4" aria-hidden="true" />
               )}
-              {t.toolbar.research}
+              <span className="hidden sm:inline">{t.toolbar.research}</span>
             </button>
 
             {results.length > 0 && (
@@ -1326,7 +1327,7 @@ function ResearchToolbar({
               ))}
             </select>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="hidden flex-wrap gap-2 sm:flex">
               {STARTER_TICKERS.map((ticker) => (
                 <button
                   key={ticker}
@@ -2825,7 +2826,7 @@ function WaitlistPanel({
   const [alertThreshold, setAlertThreshold] = useState("0");
   const [alertNotes, setAlertNotes] = useState("");
 
-  async function loadSavedResearch() {
+  const loadSavedResearch = useCallback(async () => {
     if (!snapshot) {
       return;
     }
@@ -2853,9 +2854,9 @@ function WaitlistPanel({
       setSavedResearchState("error");
       setSavedResearchMessage(t.waitlist.loadSavedResearchFailed);
     }
-  }
+  }, [snapshot, t.waitlist.loadSavedResearchFailed]);
 
-  async function loadWatchlistItems(watchlistId: string) {
+  const loadWatchlistItems = useCallback(async (watchlistId: string) => {
     const response = await fetch(
       `/api/watchlists/${encodeURIComponent(watchlistId)}/items`,
     );
@@ -2869,9 +2870,9 @@ function WaitlistPanel({
     }
 
     return payload.items ?? [];
-  }
+  }, [t.waitlist.watchlistLoadFailed]);
 
-  async function loadWatchlistsAndItems() {
+  const loadWatchlistsAndItems = useCallback(async () => {
     if (!snapshot) {
       return;
     }
@@ -2908,9 +2909,9 @@ function WaitlistPanel({
       setWatchlistMessage(t.waitlist.watchlistLoadFailed);
       setWatchlistItems([]);
     }
-  }
+  }, [snapshot, t.waitlist.watchlistLoadFailed]);
 
-  async function loadAlerts() {
+  const loadAlerts = useCallback(async () => {
     if (!snapshot) {
       return;
     }
@@ -2938,9 +2939,9 @@ function WaitlistPanel({
       setAlertsState("error");
       setAlertsMessage(t.waitlist.alertLoadFailed);
     }
-  }
+  }, [snapshot, t.waitlist.alertLoadFailed]);
 
-  async function loadValuation() {
+  const loadValuation = useCallback(async () => {
     if (!snapshot) {
       return;
     }
@@ -2975,9 +2976,13 @@ function WaitlistPanel({
           : t.waitlist.valuationUnavailable,
       );
     }
-  }
+  }, [
+    snapshot,
+    t.waitlist.valuationNotConfigured,
+    t.waitlist.valuationUnavailable,
+  ]);
 
-  async function loadWorkspaceData() {
+  const loadWorkspaceData = useCallback(async () => {
     if (!snapshot) {
       return;
     }
@@ -2997,12 +3002,19 @@ function WaitlistPanel({
 
     await Promise.all([loadSavedResearch(), loadWatchlistsAndItems(), loadAlerts()]);
     void loadValuation();
-  }
+  }, [
+    loadAlerts,
+    loadSavedResearch,
+    loadValuation,
+    loadWatchlistsAndItems,
+    snapshot,
+    viewer,
+  ]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadWorkspaceData();
-  }, [snapshot?.identity.ticker, viewer?.id]);
+  }, [loadWorkspaceData]);
 
   useEffect(() => {
     if (!snapshot || !viewer || !watchlistId) {
@@ -3026,14 +3038,20 @@ function WaitlistPanel({
     };
 
     void run();
-  }, [snapshot?.identity.ticker, watchlistId, viewer?.id]);
+  }, [
+    loadWatchlistItems,
+    snapshot,
+    t.waitlist.watchlistLoadFailed,
+    viewer,
+    watchlistId,
+  ]);
 
   useEffect(() => {
     if (snapshot && valuationState === "idle") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       void loadValuation();
     }
-  }, [snapshot?.identity.ticker, valuationState]);
+  }, [loadValuation, snapshot, valuationState]);
 
   async function saveResearch() {
     if (!snapshot) {

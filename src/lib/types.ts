@@ -314,6 +314,42 @@ export interface AlertPreference {
   updatedAt: string;
 }
 
+export interface AlertDelivery {
+  id: string;
+  userId: string;
+  alertPreferenceId: string;
+  companyName: string;
+  ticker: string;
+  alertType: string;
+  channel: "in-app";
+  status: "queued" | "read" | "dismissed";
+  emailStatus: "queued" | "sent" | "failed" | "skipped";
+  emailError: string | null;
+  title: string;
+  body: string;
+  payload: Record<string, unknown>;
+  dedupeKey: string;
+  currentValue: number | null;
+  previousValue: number | null;
+  threshold: number;
+  condition: AlertCondition;
+  unit: MetricUnit;
+  deliveredAt: string;
+  readAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AlertDeliveryJobSummary {
+  scanned: number;
+  triggered: number;
+  queued: number;
+  emailSent: number;
+  emailFailed: number;
+  skipped: number;
+  deduped: number;
+}
+
 export interface WaitlistLead {
   email: string;
   investorProfile: string;
