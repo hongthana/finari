@@ -109,6 +109,22 @@ pnpm dev
 
 The app starts on `http://localhost:3000` unless the port is occupied.
 
+For non-technical users who want everything ready with one command:
+
+```bash
+pnpm bootstrap:one-click
+```
+
+This single command:
+
+1. Installs dependencies
+2. Runs migrations
+3. Starts Finari if not already running
+4. Warm-loads all S&P 500 ticker analyses into your local database
+5. Shuts down the temporary local server when done
+
+Before running it, make sure `.env.local` is set with `DATABASE_URL` and `SEC_USER_AGENT`.
+
 For a fully cloned repo where you want all current ticker analyses available immediately, run:
 
 ```bash
