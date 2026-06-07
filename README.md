@@ -109,7 +109,7 @@ pnpm dev
 
 The app starts on `http://localhost:3000` unless the port is occupied.
 
-For non-technical users who want everything ready with one command:
+For non-technical users on Windows, macOS, or Linux who want everything ready with one command:
 
 ```bash
 pnpm bootstrap:one-click

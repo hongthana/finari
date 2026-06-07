@@ -17,7 +17,7 @@
     "db:studio": "drizzle-kit studio",
     "backfill:sp500": "node scripts/backfill-sp500.mjs",
     "bootstrap:sp500": "node scripts/bootstrap-sp500.mjs",
-    "bootstrap:one-click": "bash scripts/bootstrap-onboarding.sh",
+    "bootstrap:one-click": "node scripts/bootstrap-onboarding.mjs",
     "bootstrap:repo": "pnpm db:migrate && pnpm bootstrap:sp500 -- --delay-ms 3000 --max-failures 30"
   },
   "engines": {
