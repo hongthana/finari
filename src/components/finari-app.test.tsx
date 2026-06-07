@@ -299,6 +299,10 @@ describe("FinariApp", () => {
     expect(screen.getByText(/แหล่งที่มา: Example News/)).toBeInTheDocument();
     expect(screen.queryByText(/Source: Example News/)).not.toBeInTheDocument();
     expect(
+      screen.getByText(/ความหมายสำหรับนักลงทุน: มองเป็นสัญญาณบวกต่อ Revenue, Margin/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/sentiment and fundamentals/)).not.toBeInTheDocument();
+    expect(
       screen.getAllByText(
         "แนวโน้มดีขึ้นในการเทียบปีล่าสุด ลูกศรขึ้นหมายถึง revenue และ/หรือ earnings กำลังเพิ่มขึ้น",
       ).length,
