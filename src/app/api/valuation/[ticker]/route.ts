@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { jsonError, validationError } from "@/lib/api";
+import { requireInvitationAccess } from "@/lib/site-access";
 import { getValuationForTicker } from "@/lib/valuation";
 
 export const runtime = "nodejs";
@@ -18,6 +19,11 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ ticker: string }> },
 ) {
+  const blocked = await requireInvitationAccess();
+  if (blocked) {
+    return blocked;
+  }
+
   try {
     const { ticker } = await context.params.then((raw) => paramsSchema.parse(raw));
     const valuation = await getValuationForTicker(ticker);

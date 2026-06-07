@@ -2,6 +2,7 @@ import { jsonError } from "@/lib/api";
 import { getCompanyEventImpacts } from "@/lib/event-impact";
 import { normalizeLocale } from "@/lib/i18n";
 import { getCurrentUser } from "@/lib/session";
+import { requireInvitationAccess } from "@/lib/site-access";
 
 export const runtime = "nodejs";
 
@@ -9,6 +10,11 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ ticker: string }> },
 ) {
+  const blocked = await requireInvitationAccess();
+  if (blocked) {
+    return blocked;
+  }
+
   const { ticker } = await context.params;
   const url = new URL(request.url);
   const locale = normalizeLocale(url.searchParams.get("locale"));

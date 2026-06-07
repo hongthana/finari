@@ -7,6 +7,7 @@ import { getDb, hasDatabase } from "@/db/client";
 import { accounts, sessions, users, verificationTokens } from "@/db/schema";
 import { sendMagicLinkEmail } from "@/lib/email";
 import { getAuthSecret, getEmailFrom } from "@/lib/env";
+import { isInvitedEmail } from "@/lib/invitations";
 
 export function getAuthOptions(): NextAuthOptions {
   const databaseEnabled = hasDatabase();
@@ -21,6 +22,9 @@ export function getAuthOptions(): NextAuthOptions {
         }) as Adapter)
       : undefined,
     callbacks: {
+      signIn({ user }) {
+        return isInvitedEmail(user.email);
+      },
       session({ session, user }) {
         if (session.user) {
           session.user.id = user.id;

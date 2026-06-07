@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { FinariApp } from "@/components/finari-app";
+import { isInvitationOnlyEnabled } from "@/lib/env";
 import { getDictionary, isLocale, type Locale } from "@/lib/i18n";
+import { getCurrentUser } from "@/lib/session";
 
 type PageProps = {
   params: Promise<{ locale: string }>;
@@ -31,11 +33,20 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function LocalizedHome({ params, searchParams }: PageProps) {
   const locale = await getLocale(params);
   const resolvedSearchParams = await searchParams;
+  const ticker = normalizeTicker(resolvedSearchParams?.ticker);
+
+  if (isInvitationOnlyEnabled()) {
+    const user = await getCurrentUser();
+    if (!user) {
+      const callbackUrl = `/${locale}${ticker === "AAPL" ? "" : `?ticker=${encodeURIComponent(ticker)}`}`;
+      redirect(`/api/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+    }
+  }
 
   return (
     <FinariApp
       locale={locale}
-      initialTicker={normalizeTicker(resolvedSearchParams?.ticker)}
+      initialTicker={ticker}
     />
   );
 }

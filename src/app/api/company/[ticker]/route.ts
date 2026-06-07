@@ -1,5 +1,6 @@
 import { jsonError } from "@/lib/api";
 import { companyLookupError, getCompanySnapshotForTicker } from "@/lib/research-service";
+import { requireInvitationAccess } from "@/lib/site-access";
 
 export const runtime = "nodejs";
 
@@ -7,6 +8,11 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ ticker: string }> },
 ) {
+  const blocked = await requireInvitationAccess();
+  if (blocked) {
+    return blocked;
+  }
+
   const { ticker } = await context.params;
   const { searchParams } = new URL(request.url);
   const forceRefresh =

@@ -71,6 +71,8 @@ NEWS_RSS_URL_TEMPLATE="https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticke
 NEWS_API_KEY=""
 AUTH_SECRET="replace-with-a-long-random-secret"
 AUTH_URL="http://localhost:3000"
+FINARI_INVITATION_ONLY="false"
+FINARI_INVITED_EMAILS=""
 ALERTS_CRON_SECRET="replace-with-a-long-random-secret"
 EMAIL_FROM="Finari <research@example.com>"
 RESEND_API_KEY=""
@@ -88,6 +90,7 @@ Important notes:
 - `REDIS_URL` is optional for local development, but recommended for cache and lock behavior.
 - `AUTH_SECRET` must be a long random value in production.
 - `AUTH_URL` should match the deployed app URL in production.
+- Set `FINARI_INVITATION_ONLY=true` and `FINARI_INVITED_EMAILS` to a comma-separated email allowlist to make `www.finari.co` invitation-only. `ADMIN_EMAILS` are also allowed.
 - `ALERTS_CRON_SECRET` must match the GitHub Actions secret used by the scheduled alert-delivery workflow.
 - `EMAIL_FROM` must use a sender domain verified by the email provider.
 - `RESEND_API_KEY` is required for production magic-link delivery.
