@@ -109,6 +109,18 @@ pnpm dev
 
 The app starts on `http://localhost:3000` unless the port is occupied.
 
+For a fully cloned repo where you want all current ticker analyses available immediately, run:
+
+```bash
+# In one terminal: start the app
+pnpm dev
+
+# In another terminal: run full S&P 500 bootstrap
+pnpm bootstrap:repo
+```
+
+`bootstrap:repo` runs migrations (if needed) and then warms all S&P 500 company snapshots in a conservative pace.
+
 ## Database
 
 The database schema is managed by Drizzle migrations in `drizzle/`.
@@ -206,6 +218,18 @@ Run the full S&P 500 backfill conservatively:
 
 ```bash
 FINARI_BASE_URL=https://your-finari-domain.example pnpm backfill:sp500 -- --delay-ms 3000 --max-failures 25
+```
+
+Or use the new shorthand bootstrap script:
+
+```bash
+pnpm bootstrap:sp500
+```
+
+Run bootstrap against a deployment or different locale by passing any standard backfill flags:
+
+```bash
+FINARI_BASE_URL=https://your-finari-domain.example pnpm bootstrap:sp500 -- --locale th --include-events
 ```
 
 Resume after the last successful ticker from the JSONL report:

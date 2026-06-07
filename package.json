@@ -15,7 +15,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "backfill:sp500": "node scripts/backfill-sp500.mjs"
+    "backfill:sp500": "node scripts/backfill-sp500.mjs",
+    "bootstrap:sp500": "node scripts/bootstrap-sp500.mjs",
+    "bootstrap:repo": "pnpm db:migrate && pnpm bootstrap:sp500 -- --delay-ms 3000 --max-failures 30"
   },
   "engines": {
     "node": ">=24.0.0"
