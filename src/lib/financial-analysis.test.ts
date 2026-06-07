@@ -45,6 +45,9 @@ describe("financial analysis", () => {
     });
     expect(snapshot.metrics.find((metric) => metric.id === "revenue-growth")?.value)
       .toBeCloseTo(0.051, 3);
+    expect(
+      snapshot.metrics.find((metric) => metric.id === "free-cash-flow-margin")?.value,
+    ).toBeCloseTo(0.259, 3);
     expect(snapshot.changeAnalysis.quarterly[0]).toMatchObject({
       id: "quarterly-revenue",
       signal: "positive",
