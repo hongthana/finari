@@ -3044,7 +3044,7 @@ export function FinariApp({
     }
   }, [locale, t.events.unavailable]);
 
-  const loadCompany = useCallback(async (ticker: string) => {
+  const loadCompany = useCallback(async (ticker: string, options: { forceRefresh?: boolean } = {}) => {
     const normalized = ticker.trim().toUpperCase();
     if (!normalized) {
       return;
@@ -3070,7 +3070,15 @@ export function FinariApp({
     setLoadError(null);
 
     try {
-      const response = await fetch(`/api/company/${encodeURIComponent(normalized)}`);
+      const params = new URLSearchParams();
+      if (options.forceRefresh) {
+        params.set("refresh", "1");
+      }
+      const response = await fetch(
+        `/api/company/${encodeURIComponent(normalized)}${
+          params.size ? `?${params.toString()}` : ""
+        }`,
+      );
       const payload = (await response.json()) as {
         snapshot?: CompanySnapshot;
         error?: string;
@@ -3398,7 +3406,11 @@ export function FinariApp({
             snapshot={snapshot}
             loading={loading}
             error={loadError}
-            onRefresh={() => void loadCompany(snapshot?.identity.ticker ?? activeTicker)}
+            onRefresh={() =>
+              void loadCompany(snapshot?.identity.ticker ?? activeTicker, {
+                forceRefresh: true,
+              })
+            }
             t={t}
             locale={locale}
           />
