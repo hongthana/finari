@@ -36,6 +36,60 @@ afterEach(() => {
 });
 
 describe("FinariApp", () => {
+  it("localizes the event brief in Thai instead of showing the English feed snippet", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+
+        if (url === "/api/sp500") {
+          return Response.json({
+            constituents: [
+              { ticker: "AAPL", name: "Apple Inc.", sector: "Information Technology" },
+            ],
+          });
+        }
+
+        if (url.startsWith("/api/company/AAPL/events")) {
+          return Response.json({
+            events: fixtureEvents,
+            generatedAt: "2026-06-05T10:00:00.000Z",
+          });
+        }
+
+        if (url.startsWith("/api/company/AAPL")) {
+          return Response.json({ snapshot: fixtureSnapshot });
+        }
+
+        if (url.startsWith("/api/search")) {
+          return Response.json({ results: [] });
+        }
+
+        if (url === "/api/me") {
+          return Response.json({ user: null });
+        }
+
+        return Response.json({}, { status: 404 });
+      }),
+    );
+
+    render(<FinariApp locale="th" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/เหตุการณ์ประเภทเฉพาะบริษัทนี้อาจสำคัญ/),
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByText("เกิดอะไรขึ้น")).toBeInTheDocument();
+    expect(
+      screen.queryByText("The event could affect demand and gross margin."),
+    ).not.toBeInTheDocument();
+  });
+
   it("lets users select an S&P 500 ticker from the toolbar", async () => {
     const user = userEvent.setup();
     const msftSnapshot = {
