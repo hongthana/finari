@@ -296,6 +296,8 @@ describe("FinariApp", () => {
       ).toBeInTheDocument();
     });
     expect(screen.getByText("Apple launches new product pricing plan")).toBeInTheDocument();
+    expect(screen.getByText(/แหล่งที่มา: Example News/)).toBeInTheDocument();
+    expect(screen.queryByText(/Source: Example News/)).not.toBeInTheDocument();
     expect(
       screen.getAllByText(
         "แนวโน้มดีขึ้นในการเทียบปีล่าสุด ลูกศรขึ้นหมายถึง revenue และ/หรือ earnings กำลังเพิ่มขึ้น",
