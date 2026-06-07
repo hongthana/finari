@@ -76,6 +76,8 @@ RESEND_API_KEY=""
 OPENAI_API_KEY=""
 OPENAI_MODEL="gpt-4.1-mini"
 ADMIN_EMAILS="admin@example.com"
+FMP_API_KEY=""
+FMP_BASE_URL="https://financialmodelingprep.com/api/v3"
 ```
 
 Important notes:
@@ -205,6 +207,12 @@ Authenticated user routes:
 - `GET /api/watchlists`
 - `POST /api/watchlists`
 - `POST /api/watchlists/[id]/items`
+- `GET /api/watchlists/[id]/items`
+- `GET /api/alerts`
+- `POST /api/alerts`
+- `PATCH /api/alerts/[id]`
+- `GET /api/valuation/[ticker]`
+- `GET /api/workspace/export`
 
 Admin routes:
 

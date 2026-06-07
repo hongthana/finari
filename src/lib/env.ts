@@ -43,3 +43,14 @@ export function getAuthUrl(): string {
 export function getEmailFrom(): string {
   return process.env.EMAIL_FROM?.trim() || "Finari <research@finari.local>";
 }
+
+export function getFmpApiKey(): string {
+  return process.env.FMP_API_KEY?.trim() || "";
+}
+
+export function getFmpBaseUrl(): string {
+  return (
+    process.env.FMP_BASE_URL?.trim() ||
+    "https://financialmodelingprep.com/api/v3"
+  );
+}

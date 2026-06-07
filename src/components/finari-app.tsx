@@ -69,11 +69,13 @@ import type {
   CompanyEventImpact,
   CompanySnapshot,
   DataQualityCheck,
+  AlertPreference,
   FinancialMetric,
   FinancialPeriod,
   MetricUnit,
   PeerMetricComparison,
   ResearchMemo,
+  ValuationSnapshot,
   TrendSignal,
 } from "@/lib/types";
 
@@ -85,6 +87,108 @@ type Viewer = {
   email?: string | null;
   isAdmin: boolean;
 };
+
+type WorkspaceWatchlist = {
+  id: string;
+  name: string;
+  isDefault: boolean;
+};
+
+type WorkspaceWatchlistItem = {
+  id: string;
+  companyId: string;
+  watchlistId: string;
+  company: {
+    ticker: string;
+    name: string;
+  };
+  addedAt: string;
+};
+
+type WorkspaceAlert = Pick<
+  AlertPreference,
+  "id" | "ticker" | "alertType" | "config" | "enabled" | "createdAt" | "lastTriggeredAt"
+>;
+
+type WorkspaceValuation = ValuationSnapshot | null;
+
+type WorkspaceSavedResearch = {
+  id: string;
+  title: string;
+  notes: string | null;
+  createdAt: string;
+  ticker: string;
+  companyName: string;
+};
+
+type WorkspacePanelState = "idle" | "loading" | "ready" | "error";
+
+const ALERT_TYPES = [
+  "revenue",
+  "net-income",
+  "fcf",
+  "cash",
+  "debt",
+  "working-capital",
+  "debt-to-equity",
+  "roe",
+  "custom",
+];
+
+const ALERT_CONDITIONS = [
+  "above",
+  "below",
+  "change-above",
+  "change-below",
+  "above-or-equal",
+  "below-or-equal",
+];
+
+function buildDownload(fileName: string, content: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.rel = "noreferrer";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function formatValuationMetric(
+  value: number | null,
+  fallback: string,
+  options: { compact?: boolean; percent?: boolean } = {},
+) {
+  if (value === null || Number.isNaN(value)) {
+    return fallback;
+  }
+
+  if (options.percent) {
+    return formatPercent(value / 100);
+  }
+
+  if (options.compact) {
+    return compactNumber(value);
+  }
+
+  return compactCurrency(value);
+}
+
+function formatLocaleDate(value: string, locale: Locale) {
+  return new Date(value).toLocaleString(
+    locale === "th" ? "th-TH" : "en-US",
+    {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    },
+  );
+}
 
 function GitHubIcon({ className }: { className?: string }) {
   return (
@@ -2676,11 +2780,13 @@ function WaitlistPanel({
   snapshot,
   memo,
   locale,
+  viewer,
   t,
 }: {
   snapshot: CompanySnapshot | null;
   memo: ResearchMemo | null;
   locale: Locale;
+  viewer: Viewer | null;
   t: Dictionary;
 }) {
   const [email, setEmail] = useState("");
@@ -2694,12 +2800,240 @@ function WaitlistPanel({
   );
   const [message, setMessage] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const workspaceTools = [
-    { Icon: Bookmark, label: t.waitlist.tools[0] },
-    { Icon: Bell, label: t.waitlist.tools[1] },
-    { Icon: Download, label: t.waitlist.tools[2] },
-    { Icon: LockKeyhole, label: t.waitlist.tools[3] },
-  ];
+  const [savedResearch, setSavedResearch] = useState<WorkspaceSavedResearch[]>([]);
+  const [savedResearchState, setSavedResearchState] = useState<WorkspacePanelState>(
+    "idle",
+  );
+  const [savedResearchMessage, setSavedResearchMessage] = useState<string | null>(
+    null,
+  );
+  const [watchlists, setWatchlists] = useState<WorkspaceWatchlist[]>([]);
+  const [watchlistId, setWatchlistId] = useState<string | null>(null);
+  const [watchlistItems, setWatchlistItems] = useState<WorkspaceWatchlistItem[]>([]);
+  const [watchlistState, setWatchlistState] = useState<WorkspacePanelState>("idle");
+  const [watchlistMessage, setWatchlistMessage] = useState<string | null>(null);
+  const [alerts, setAlerts] = useState<WorkspaceAlert[]>([]);
+  const [alertsState, setAlertsState] = useState<WorkspacePanelState>("idle");
+  const [alertsMessage, setAlertsMessage] = useState<string | null>(null);
+  const [valuation, setValuation] = useState<WorkspaceValuation>(null);
+  const [valuationState, setValuationState] = useState<WorkspacePanelState>("idle");
+  const [valuationMessage, setValuationMessage] = useState<string | null>(null);
+  const [exportState, setExportState] = useState<WorkspacePanelState>("idle");
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [alertType, setAlertType] = useState(ALERT_TYPES[0]);
+  const [alertCondition, setAlertCondition] = useState(ALERT_CONDITIONS[0]);
+  const [alertThreshold, setAlertThreshold] = useState("0");
+  const [alertNotes, setAlertNotes] = useState("");
+
+  async function loadSavedResearch() {
+    if (!snapshot) {
+      return;
+    }
+
+    setSavedResearchState("loading");
+    setSavedResearchMessage(null);
+
+    try {
+      const response = await fetch("/api/research/saved");
+      const payload = (await response.json().catch(() => ({}))) as {
+        saved?: WorkspaceSavedResearch[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error || t.waitlist.loadSavedResearchFailed);
+      }
+
+      const filtered = (payload.saved ?? []).filter(
+        (item) => item.ticker === snapshot.identity.ticker,
+      );
+      setSavedResearch(filtered);
+      setSavedResearchState("ready");
+    } catch {
+      setSavedResearchState("error");
+      setSavedResearchMessage(t.waitlist.loadSavedResearchFailed);
+    }
+  }
+
+  async function loadWatchlistItems(watchlistId: string) {
+    const response = await fetch(
+      `/api/watchlists/${encodeURIComponent(watchlistId)}/items`,
+    );
+    const payload = (await response.json().catch(() => ({}))) as {
+      items?: WorkspaceWatchlistItem[];
+      error?: string;
+    };
+
+    if (!response.ok) {
+      throw new Error(payload.error || t.waitlist.watchlistLoadFailed);
+    }
+
+    return payload.items ?? [];
+  }
+
+  async function loadWatchlistsAndItems() {
+    if (!snapshot) {
+      return;
+    }
+
+    setWatchlistState("loading");
+    setWatchlistMessage(null);
+
+    try {
+      const response = await fetch("/api/watchlists");
+      const payload = (await response.json().catch(() => ({}))) as {
+        watchlists?: WorkspaceWatchlist[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error || t.waitlist.watchlistLoadFailed);
+      }
+
+      const items = payload.watchlists ?? [];
+      setWatchlists(items);
+      const activeWatchlist =
+        items.find((item) => item.isDefault) ?? items[0] ?? null;
+      setWatchlistId(activeWatchlist?.id ?? null);
+
+      if (!activeWatchlist) {
+        setWatchlistItems([]);
+        setWatchlistState("ready");
+        return;
+      }
+
+      setWatchlistState("ready");
+    } catch {
+      setWatchlistState("error");
+      setWatchlistMessage(t.waitlist.watchlistLoadFailed);
+      setWatchlistItems([]);
+    }
+  }
+
+  async function loadAlerts() {
+    if (!snapshot) {
+      return;
+    }
+
+    setAlertsState("loading");
+    setAlertsMessage(null);
+
+    try {
+      const response = await fetch("/api/alerts");
+      const payload = (await response.json().catch(() => ({}))) as {
+        alerts?: WorkspaceAlert[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error || t.waitlist.alertLoadFailed);
+      }
+
+      const currentTickerAlerts = (payload.alerts ?? []).filter(
+        (alert) => alert.ticker === snapshot.identity.ticker,
+      );
+      setAlerts(currentTickerAlerts);
+      setAlertsState("ready");
+    } catch {
+      setAlertsState("error");
+      setAlertsMessage(t.waitlist.alertLoadFailed);
+    }
+  }
+
+  async function loadValuation() {
+    if (!snapshot) {
+      return;
+    }
+
+    setValuationState("loading");
+    setValuationMessage(null);
+
+    try {
+      const response = await fetch(
+        `/api/valuation/${encodeURIComponent(snapshot.identity.ticker)}`,
+      );
+      const payload = (await response.json().catch(() => ({}))) as {
+        valuation?: WorkspaceValuation;
+        error?: string;
+      };
+
+      if (!response.ok) {
+        if (response.status === 503) {
+          throw new Error(t.waitlist.valuationNotConfigured);
+        }
+        throw new Error(payload.error || t.waitlist.valuationUnavailable);
+      }
+
+      setValuation(payload.valuation ?? null);
+      setValuationState("ready");
+    } catch (error) {
+      setValuationState("error");
+      setValuation(null);
+      setValuationMessage(
+        error instanceof Error
+          ? error.message
+          : t.waitlist.valuationUnavailable,
+      );
+    }
+  }
+
+  async function loadWorkspaceData() {
+    if (!snapshot) {
+      return;
+    }
+
+    if (!viewer) {
+      setSavedResearch([]);
+      setAlerts([]);
+      setWatchlists([]);
+      setWatchlistId(null);
+      setWatchlistItems([]);
+      setSavedResearchState("idle");
+      setAlertsState("idle");
+      setWatchlistState("idle");
+      setValuationState("idle");
+      return;
+    }
+
+    await Promise.all([loadSavedResearch(), loadWatchlistsAndItems(), loadAlerts()]);
+    void loadValuation();
+  }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadWorkspaceData();
+  }, [snapshot?.identity.ticker, viewer?.id]);
+
+  useEffect(() => {
+    if (!snapshot || !viewer || !watchlistId) {
+      return;
+    }
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setWatchlistState("loading");
+    setWatchlistMessage(null);
+
+    const run = async () => {
+      try {
+        const items = await loadWatchlistItems(watchlistId);
+        setWatchlistItems(items);
+        setWatchlistState("ready");
+      } catch {
+        setWatchlistState("error");
+        setWatchlistMessage(t.waitlist.watchlistLoadFailed);
+        setWatchlistItems([]);
+      }
+    };
+
+    void run();
+  }, [snapshot?.identity.ticker, watchlistId, viewer?.id]);
+
+  useEffect(() => {
+    if (snapshot && valuationState === "idle") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void loadValuation();
+    }
+  }, [snapshot?.identity.ticker, valuationState]);
 
   async function saveResearch() {
     if (!snapshot) {
@@ -2733,9 +3067,231 @@ function WaitlistPanel({
 
       setSaveState("ready");
       setSaveMessage(t.waitlist.saved);
+      await loadSavedResearch();
     } catch {
       setSaveState("error");
       setSaveMessage(t.waitlist.saveFailed);
+    }
+  }
+
+  async function addToWatchlist() {
+    if (!snapshot || !watchlistId) {
+      return;
+    }
+
+    setWatchlistState("loading");
+    setWatchlistMessage(null);
+
+    try {
+      const response = await fetch(
+        `/api/watchlists/${encodeURIComponent(watchlistId)}/items`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ticker: snapshot.identity.ticker,
+          }),
+        },
+      );
+
+      if (response.status === 401) {
+        setWatchlistState("error");
+        setWatchlistMessage(t.waitlist.signInToUse);
+        return;
+      }
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        item?: WorkspaceWatchlistItem;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.item) {
+        throw new Error(payload.error || t.waitlist.watchlistAddFailed);
+      }
+
+      setWatchlistMessage(
+        response.status === 201
+          ? t.waitlist.watchlistAdded
+          : t.waitlist.watchlistDuplicate,
+      );
+      const addedItem = payload.item;
+      if (!addedItem) {
+        throw new Error(payload.error || t.waitlist.watchlistAddFailed);
+      }
+
+      setWatchlistItems((current) => {
+        const exists = current.some((row) => row.id === addedItem.id);
+        if (exists) {
+          return current;
+        }
+
+        return [addedItem, ...current];
+      });
+      setWatchlistState("ready");
+    } catch {
+      setWatchlistState("error");
+      setWatchlistMessage(t.waitlist.watchlistAddFailed);
+    }
+  }
+
+  async function createOrUpdateAlert(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!snapshot) {
+      return;
+    }
+
+    const threshold = Number(alertThreshold);
+    if (!Number.isFinite(threshold)) {
+      setAlertsMessage(t.waitlist.alertLoadFailed);
+      return;
+    }
+
+    setAlertsState("loading");
+    setAlertsMessage(null);
+
+    try {
+      const response = await fetch("/api/alerts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticker: snapshot.identity.ticker,
+          alertType,
+          threshold,
+          condition: alertCondition,
+          enabled: true,
+          notes: alertNotes.trim() || undefined,
+        }),
+      });
+
+      if (response.status === 401) {
+        setAlertsState("error");
+        setAlertsMessage(t.waitlist.alertToggleDisabled);
+        return;
+      }
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        alert?: WorkspaceAlert;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.alert) {
+        throw new Error(payload.error || t.waitlist.alertLoadFailed);
+      }
+
+      const alert = payload.alert;
+      if (!alert) {
+        throw new Error(payload.error || t.waitlist.alertLoadFailed);
+      }
+
+      setAlerts((current) => {
+        const rest = current.filter((row) => row.id !== alert.id);
+        return [alert, ...rest].sort((a, b) =>
+          b.createdAt.localeCompare(a.createdAt),
+        );
+      });
+
+      setAlertsMessage(
+        response.status === 201
+          ? t.waitlist.alertSaved
+          : t.waitlist.alertUpdated,
+      );
+      setAlertsState("ready");
+    } catch {
+      setAlertsState("error");
+      setAlertsMessage(t.waitlist.alertLoadFailed);
+    }
+  }
+
+  async function toggleAlert(alert: WorkspaceAlert) {
+    if (!snapshot) {
+      return;
+    }
+
+    setAlertsState("loading");
+    setAlertsMessage(null);
+
+    try {
+      const response = await fetch(`/api/alerts/${encodeURIComponent(alert.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: !alert.enabled }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        alert?: WorkspaceAlert;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.alert) {
+        throw new Error(payload.error || t.waitlist.alertLoadFailed);
+      }
+
+      setAlerts((current) =>
+        current.map((row) =>
+          row.id === payload.alert?.id
+            ? {
+                ...row,
+                enabled: payload.alert.enabled,
+              }
+            : row,
+        ),
+      );
+      setAlertsState("ready");
+    } catch {
+      setAlertsState("error");
+      setAlertsMessage(t.waitlist.alertLoadFailed);
+    }
+  }
+
+  async function exportWorkspace(scope: "memo" | "snapshot", format: "json" | "csv") {
+    if (!snapshot || !viewer) {
+      return;
+    }
+
+    if (scope === "memo" && !memo) {
+      setExportMessage(t.waitlist.exportMemoUnavailable);
+      setExportState("error");
+      return;
+    }
+
+    setExportState("loading");
+    setExportMessage(null);
+
+    try {
+      const response = await fetch(
+        `/api/workspace/export?scope=${encodeURIComponent(scope)}&ticker=${encodeURIComponent(snapshot.identity.ticker)}&locale=${locale}&format=${format}`,
+      );
+      if (!response.ok) {
+        throw new Error(t.waitlist.exportFailed);
+      }
+
+      if (format === "csv") {
+        const csv = await response.text();
+        buildDownload(
+          `finari-${snapshot.identity.ticker.toUpperCase()}-${scope}-export.csv`,
+          csv,
+          "text/csv; charset=utf-8",
+        );
+      } else {
+        const body = (await response.json()) as {
+          payload?: {
+            scope: string;
+            [key: string]: unknown;
+          };
+        };
+        const payloadText = JSON.stringify(body.payload ?? body, null, 2);
+        buildDownload(
+          `finari-${snapshot.identity.ticker.toUpperCase()}-${scope}-export.json`,
+          payloadText,
+          "application/json",
+        );
+      }
+
+      setExportState("ready");
+      setExportMessage(t.waitlist.exportSaved);
+    } catch {
+      setExportState("error");
+      setExportMessage(t.waitlist.exportFailed);
     }
   }
 
@@ -2782,16 +3338,18 @@ function WaitlistPanel({
           {t.waitlist.saveResearchTitle}
         </h3>
         <div className="mt-4 grid gap-2">
-          <Link
-            href="/api/auth/signin"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-4 text-sm font-semibold text-zinc-800 transition hover:border-teal-500 hover:text-teal-700"
-          >
-            <LockKeyhole className="h-4 w-4" aria-hidden="true" />
-            {t.waitlist.signIn}
-          </Link>
+          {!viewer && (
+            <Link
+              href="/api/auth/signin"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-4 text-sm font-semibold text-zinc-800 transition hover:border-teal-500 hover:text-teal-700"
+            >
+              <LockKeyhole className="h-4 w-4" aria-hidden="true" />
+              {t.waitlist.signIn}
+            </Link>
+          )}
           <button
             type="button"
-            disabled={!snapshot || saveState === "loading"}
+            disabled={!viewer || !snapshot || saveState === "loading"}
             onClick={() => void saveResearch()}
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
           >
@@ -2892,14 +3450,450 @@ function WaitlistPanel({
           />
         </div>
         <div className="mt-4 space-y-3">
-          {workspaceTools.map(({ Icon, label }) => (
-            <div key={label} className="flex items-center gap-3 text-sm">
-              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-100 text-zinc-700">
-                <Icon className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <span className="font-medium text-zinc-700">{label}</span>
-            </div>
-          ))}
+          <article className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+            <h4 className="text-sm font-semibold text-zinc-900">
+              {t.waitlist.savedWorkspaceTitle}
+            </h4>
+            <p className="mt-1 text-xs text-zinc-600">{t.waitlist.savedWorkspaceSubtitle}</p>
+
+            {viewer ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void loadSavedResearch()}
+                  className="mt-3 inline-flex h-9 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800"
+                >
+                  {t.waitlist.viewSavedWorkspace}
+                </button>
+                <div className="mt-3 max-h-44 overflow-auto space-y-2">
+                  {savedResearchState === "loading" ? (
+                    <p className="flex items-center gap-2 text-sm text-zinc-600">
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading saved research
+                    </p>
+                  ) : savedResearch.length ? (
+                    savedResearch.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="rounded-md border border-zinc-200 bg-white p-2 text-sm"
+                      >
+                        <p className="font-medium text-zinc-900">{entry.title}</p>
+                        <p className="text-xs text-zinc-500">
+                          {entry.ticker} · {entry.companyName}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-zinc-500">
+                      {t.waitlist.savedResearchEmpty}
+                    </p>
+                  )}
+                </div>
+                {savedResearchMessage && (
+                  <p
+                    className={`mt-3 rounded-md px-3 py-2 text-sm ${
+                      savedResearchState === "error"
+                        ? "bg-rose-50 text-rose-800"
+                        : "bg-emerald-50 text-emerald-800"
+                    }`}
+                  >
+                    {savedResearchMessage}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="mt-3 text-sm">
+                <Link
+                  href="/api/auth/signin"
+                  className="font-medium text-teal-700 underline underline-offset-2"
+                >
+                  {t.waitlist.signInToUse}
+                </Link>
+              </p>
+            )}
+          </article>
+
+          <article className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+            <h4 className="text-sm font-semibold text-zinc-900">
+              {t.waitlist.watchlistTitle}
+            </h4>
+            <p className="mt-1 text-xs text-zinc-600">{t.waitlist.watchlistAddTitle}</p>
+
+            {viewer ? (
+              <>
+                <div className="mt-3">
+                  <label className="mb-1 block text-xs font-semibold text-zinc-600">
+                    {t.waitlist.watchlistListTitle}
+                  </label>
+                  <select
+                    value={watchlistId ?? ""}
+                    onChange={(event) => setWatchlistId(event.target.value || null)}
+                    className="h-10 w-full rounded-md border border-zinc-300 px-3 text-sm"
+                  >
+                    {watchlists.length ? (
+                      watchlists.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">{t.waitlist.watchlistEmpty}</option>
+                    )}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  disabled={!watchlistId || watchlistState === "loading"}
+                  onClick={() => void addToWatchlist()}
+                  className="mt-3 inline-flex h-9 items-center justify-center gap-2 rounded-md bg-zinc-950 px-3 text-sm font-medium text-white disabled:bg-zinc-300"
+                >
+                  {watchlistState === "loading" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Database className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  {watchlistState === "ready"
+                    ? t.waitlist.watchlistListTitle
+                    : t.waitlist.watchlistAddTitle}
+                </button>
+
+                <div className="mt-3 max-h-44 overflow-auto space-y-2">
+                  {watchlistState === "loading" ? (
+                    <p className="flex items-center gap-2 text-sm text-zinc-600">
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading watchlist
+                    </p>
+                  ) : watchlistItems.length ? (
+                    watchlistItems.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-md border border-zinc-200 bg-white p-2 text-sm"
+                      >
+                        <p className="font-medium text-zinc-900">
+                          {item.company.ticker}
+                        </p>
+                        <p className="text-xs text-zinc-500">{item.company.name}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-zinc-500">{t.waitlist.watchlistEmpty}</p>
+                  )}
+                </div>
+
+                {watchlistMessage && (
+                  <p
+                    className={`mt-3 rounded-md px-3 py-2 text-sm ${
+                      watchlistState === "error"
+                        ? "bg-rose-50 text-rose-800"
+                        : "bg-emerald-50 text-emerald-800"
+                    }`}
+                  >
+                    {watchlistMessage}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="mt-3 text-sm">
+                <Link
+                  href="/api/auth/signin"
+                  className="font-medium text-teal-700 underline underline-offset-2"
+                >
+                  {t.waitlist.signInToUse}
+                </Link>
+              </p>
+            )}
+          </article>
+
+          <article className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+            <h4 className="text-sm font-semibold text-zinc-900">
+              {t.waitlist.alertTitle}
+            </h4>
+            <p className="mt-1 text-xs text-zinc-600">{t.waitlist.alertSubtitle}</p>
+
+            {viewer ? (
+              <>
+                <form
+                  onSubmit={createOrUpdateAlert}
+                  className="mt-3 grid gap-2"
+                >
+                  <div className="grid gap-1">
+                    <label className="text-xs font-semibold text-zinc-600">
+                      {t.waitlist.alertTypeLabel}
+                    </label>
+                    <select
+                      value={alertType}
+                      onChange={(event) => setAlertType(event.target.value as typeof ALERT_TYPES[number])}
+                      className="h-10 w-full rounded-md border border-zinc-300 px-3 text-sm"
+                    >
+                      {ALERT_TYPES.map((type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid gap-1">
+                    <label className="text-xs font-semibold text-zinc-600">
+                      {t.waitlist.alertConditionLabel}
+                    </label>
+                    <select
+                      value={alertCondition}
+                      onChange={(event) => setAlertCondition(event.target.value as typeof ALERT_CONDITIONS[number])}
+                      className="h-10 w-full rounded-md border border-zinc-300 px-3 text-sm"
+                    >
+                      {ALERT_CONDITIONS.map((condition) => (
+                        <option key={condition} value={condition}>
+                          {condition}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid gap-1">
+                    <label className="text-xs font-semibold text-zinc-600">
+                      {t.waitlist.alertThresholdLabel}
+                    </label>
+                    <input
+                      type="text"
+                      value={alertThreshold}
+                      onChange={(event) => setAlertThreshold(event.target.value)}
+                      className="h-10 w-full rounded-md border border-zinc-300 px-3 text-sm"
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <label className="text-xs font-semibold text-zinc-600">
+                      {t.waitlist.alertNotesLabel}
+                    </label>
+                    <textarea
+                      value={alertNotes}
+                      onChange={(event) => setAlertNotes(event.target.value)}
+                      rows={2}
+                      className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={alertsState === "loading"}
+                    className="mt-1 inline-flex h-9 items-center justify-center rounded-md bg-sky-700 px-3 text-sm font-medium text-white disabled:bg-zinc-300"
+                  >
+                    {alertsState === "loading" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Bell className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    {alertsState === "ready" ? t.waitlist.alertSaved : t.waitlist.alertCreate}
+                  </button>
+                </form>
+
+                <div className="mt-3 max-h-44 space-y-2 overflow-auto">
+                  {alertsState === "loading" && !alerts.length ? (
+                    <p className="flex items-center gap-2 text-sm text-zinc-600">
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      Loading alerts
+                    </p>
+                  ) : alerts.length ? (
+                    alerts.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-md border border-zinc-200 bg-white p-2 text-sm"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <p className="font-medium text-zinc-900">{item.alertType}</p>
+                            <p className="text-xs text-zinc-500">
+                              {item.ticker} · {item.config.condition} {item.config.threshold}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void toggleAlert(item)}
+                            className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-800"
+                          >
+                            {item.enabled
+                              ? t.waitlist.alertDisable
+                              : t.waitlist.alertEnable}
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-zinc-500">{t.waitlist.alertLoadFailed}</p>
+                  )}
+                </div>
+
+                {alertsMessage && (
+                  <p
+                    className={`mt-3 rounded-md px-3 py-2 text-sm ${
+                      alertsState === "error"
+                        ? "bg-rose-50 text-rose-800"
+                        : "bg-emerald-50 text-emerald-800"
+                    }`}
+                  >
+                    {alertsMessage}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="mt-3 text-sm">
+                <Link
+                  href="/api/auth/signin"
+                  className="font-medium text-teal-700 underline underline-offset-2"
+                >
+                  {t.waitlist.signInToUse}
+                </Link>
+              </p>
+            )}
+          </article>
+
+          <article className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+            <h4 className="text-sm font-semibold text-zinc-900">
+              {t.waitlist.valuationTitle}
+            </h4>
+            <p className="mt-1 text-xs text-zinc-600">{t.waitlist.valuationDisclaimer}</p>
+
+            {valuationState === "loading" && (
+              <p className="mt-3 flex items-center gap-2 text-sm text-zinc-600">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                {t.waitlist.valuationLoading}
+              </p>
+            )}
+
+            {valuationState === "error" && (
+              <p className="mt-3 rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-800">
+                {valuationMessage}
+              </p>
+            )}
+
+            {valuation && valuationState === "ready" && (
+              <div className="mt-3 space-y-2 text-sm">
+                <p className="text-zinc-500">
+                  {t.waitlist.valuationAsOf}: {formatLocaleDate(valuation.asOf, locale)}
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-md border border-zinc-200 bg-white p-2">
+                    <p className="text-xs text-zinc-500">Market cap</p>
+                    <p className="font-semibold text-zinc-900">
+                      {formatValuationMetric(valuation.marketCap, "—")}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-zinc-200 bg-white p-2">
+                    <p className="text-xs text-zinc-500">P/E</p>
+                    <p className="font-semibold text-zinc-900">
+                      {formatValuationMetric(valuation.priceToEarnings, "—", {
+                        compact: true,
+                      })}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-zinc-200 bg-white p-2">
+                    <p className="text-xs text-zinc-500">P/B</p>
+                    <p className="font-semibold text-zinc-900">
+                      {formatValuationMetric(valuation.priceToBook, "—", {
+                        compact: true,
+                      })}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-zinc-200 bg-white p-2">
+                    <p className="text-xs text-zinc-500">EV/EBITDA</p>
+                    <p className="font-semibold text-zinc-900">
+                      {formatValuationMetric(valuation.enterpriseValueToEbitda, "—", {
+                        compact: true,
+                      })}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-zinc-200 bg-white p-2">
+                    <p className="text-xs text-zinc-500">Debt/Equity</p>
+                    <p className="font-semibold text-zinc-900">
+                      {formatValuationMetric(valuation.debtToEquity, "—", {
+                        compact: true,
+                      })}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-zinc-200 bg-white p-2">
+                    <p className="text-xs text-zinc-500">ROE</p>
+                    <p className="font-semibold text-zinc-900">
+                      {valuation.returnOnEquity === null
+                        ? "—"
+                        : formatPercent(valuation.returnOnEquity / 100)}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-zinc-500">
+                  {t.waitlist.valuationSourceLabel}: {valuation.source}
+                </p>
+              </div>
+            )}
+          </article>
+
+          <article className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+            <h4 className="text-sm font-semibold text-zinc-900">
+              {t.waitlist.exportTitle}
+            </h4>
+            <p className="mt-1 text-xs text-zinc-600">{t.waitlist.exportSubtitle}</p>
+
+            {viewer ? (
+              <>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void exportWorkspace("memo", "json")}
+                    disabled={exportState === "loading" || !memo}
+                    className="inline-flex h-9 items-center gap-2 rounded-md bg-sky-700 px-3 text-sm font-medium text-white disabled:bg-zinc-300"
+                  >
+                    {exportState === "loading" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Download className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    {t.waitlist.exportJson} (memo)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void exportWorkspace("memo", "csv")}
+                    disabled={exportState === "loading" || !memo}
+                    className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-300 px-3 text-sm font-medium text-zinc-800 disabled:border-zinc-200 disabled:bg-zinc-100 disabled:text-zinc-500"
+                  >
+                    {exportState === "loading" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Download className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    {t.waitlist.exportCsv} (memo)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void exportWorkspace("snapshot", "json")}
+                    disabled={exportState === "loading"}
+                    className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-300 px-3 text-sm font-medium text-zinc-800"
+                  >
+                    {exportState === "loading" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Download className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    {t.waitlist.exportJson} (snapshot)
+                  </button>
+                </div>
+
+                {exportMessage && (
+                  <p
+                    className={`mt-3 rounded-md px-3 py-2 text-sm ${
+                      exportState === "error"
+                        ? "bg-rose-50 text-rose-800"
+                        : "bg-emerald-50 text-emerald-800"
+                    }`}
+                  >
+                    {exportMessage}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="mt-3 text-sm">
+                <Link
+                  href="/api/auth/signin"
+                  className="font-medium text-teal-700 underline underline-offset-2"
+                >
+                  {t.waitlist.exportSignedOut}
+                </Link>
+              </p>
+            )}
+          </article>
         </div>
       </section>
     </aside>
@@ -3489,7 +4483,13 @@ export function FinariApp({
         </div>
 
         <div className="min-w-0">
-          <WaitlistPanel snapshot={snapshot} memo={memo} locale={locale} t={t} />
+          <WaitlistPanel
+            snapshot={snapshot}
+            memo={memo}
+            locale={locale}
+            viewer={viewer}
+            t={t}
+          />
         </div>
       </main>
     </div>

@@ -4,6 +4,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { getDb, hasDatabase } from "@/db/client";
 import {
   aiUsageEvents,
+  alertPreferences,
   companies,
   companyTickers,
   filings,
@@ -22,6 +23,10 @@ import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n";
 import type {
   CompanyIdentity,
   CompanySnapshot,
+  WorkspaceExportPayload,
+  AlertCondition,
+  AlertConfig,
+  AlertPreference,
   FinancialPeriod,
   ResearchMemo,
   SourceCitation,
@@ -85,13 +90,57 @@ type WatchlistInput = {
   name?: string;
 };
 
+type WatchlistItemRecord = {
+  id: string;
+  watchlistId: string;
+  companyId: string;
+  notes: string | null;
+  addedAt: Date | string;
+  company: CompanyIdentity;
+};
+
+type WatchlistItemWriteResult = WatchlistItemRecord & {
+  isDuplicate: boolean;
+};
+
+type AlertPreferenceRecord = {
+  id: string;
+  userId: string;
+  companyId: string;
+  ticker: string;
+  alertType: string;
+  configJson: unknown;
+  enabled: boolean;
+  lastTriggeredAt: Date | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+};
+
+type WatchlistMemoryItem = {
+  id: string;
+  userId: string;
+  name: string;
+  isDefault: boolean;
+  createdAt: string | Date;
+};
+
+type WatchlistItemMemory = {
+  id: string;
+  watchlistId: string;
+  companyId: string;
+  notes: string | null;
+  addedAt: string;
+  company: CompanyIdentity;
+};
+
 const memoryState = globalThis as typeof globalThis & {
   __finariSnapshots?: Map<string, StoredSnapshot>;
   __finariMemos?: Map<string, StoredMemo>;
   __finariAiUsageEvents?: Array<Record<string, unknown>>;
   __finariSavedResearch?: Array<Record<string, unknown>>;
-  __finariWatchlists?: Array<Record<string, unknown>>;
-  __finariWatchlistItems?: Array<Record<string, unknown>>;
+  __finariWatchlists?: WatchlistMemoryItem[];
+  __finariWatchlistItems?: WatchlistItemMemory[];
+  __finariAlertPreferences?: AlertPreferenceRecord[];
 };
 
 function getSnapshotMemory() {
@@ -122,6 +171,11 @@ function getWatchlistMemory() {
 function getWatchlistItemsMemory() {
   memoryState.__finariWatchlistItems ??= [];
   return memoryState.__finariWatchlistItems;
+}
+
+function getAlertPreferenceMemory() {
+  memoryState.__finariAlertPreferences ??= [];
+  return memoryState.__finariAlertPreferences;
 }
 
 function normalizeTicker(ticker: string): string {
@@ -1007,18 +1061,102 @@ export async function listWatchlistsForUser(userId: string) {
     .orderBy(desc(watchlists.isDefault), desc(watchlists.createdAt));
 }
 
+export async function getWatchlistByIdForUser(userId: string, watchlistId: string) {
+  if (!hasDatabase()) {
+    return getWatchlistMemory().find(
+      (watchlist) => watchlist.id === watchlistId && watchlist.userId === userId,
+    );
+  }
+
+  const [watchlist] = await getDb()
+    .select()
+    .from(watchlists)
+    .where(and(eq(watchlists.id, watchlistId), eq(watchlists.userId, userId)))
+    .limit(1);
+  return watchlist ?? null;
+}
+
+export async function listWatchlistItems(watchlistId: string, userId: string) {
+  if (!hasDatabase()) {
+    const watchlist = getWatchlistMemory().find(
+      (item) => item.id === watchlistId && item.userId === userId,
+    );
+    if (!watchlist) {
+      return [];
+    }
+
+    return getWatchlistItemsMemory().filter((item) => item.watchlistId === watchlistId);
+  }
+
+  const rows = await getDb()
+    .select({
+      id: watchlistItems.id,
+      watchlistId: watchlistItems.watchlistId,
+      companyId: watchlistItems.companyId,
+      notes: watchlistItems.notes,
+      addedAt: watchlistItems.addedAt,
+      ticker: companyTickers.ticker,
+      companyName: companies.legalName,
+      isActive: companyTickers.isActive,
+    })
+    .from(watchlistItems)
+    .innerJoin(watchlists, eq(watchlistItems.watchlistId, watchlists.id))
+    .innerJoin(companies, eq(watchlistItems.companyId, companies.id))
+    .innerJoin(companyTickers, eq(watchlistItems.companyId, companyTickers.companyId))
+    .where(
+      and(
+        eq(watchlistItems.watchlistId, watchlistId),
+        eq(watchlists.userId, userId),
+        eq(companyTickers.isActive, true),
+      ),
+    )
+    .orderBy(desc(watchlistItems.addedAt));
+
+  return rows.map((row): WatchlistItemRecord => {
+    const company: CompanyIdentity = {
+      cik: "",
+      ticker: row.ticker,
+      name: row.companyName,
+      exchange: undefined,
+    };
+    return {
+      id: row.id,
+      watchlistId: row.watchlistId,
+      companyId: row.companyId,
+      notes: row.notes,
+      addedAt: row.addedAt,
+      company,
+    };
+  });
+}
+
 export async function addCompanyToWatchlist(input: {
   userId: string;
   watchlistId?: string;
   snapshot: StoredSnapshot;
   notes?: string;
-}) {
-  const watchlist =
-    input.watchlistId && hasDatabase()
-      ? { id: input.watchlistId }
-      : await ensureDefaultWatchlist(input.userId);
+}): Promise<WatchlistItemWriteResult> {
+  const watchlist = input.watchlistId
+    ? await getWatchlistByIdForUser(input.userId, input.watchlistId)
+    : await ensureDefaultWatchlist(input.userId);
+
+  if (!watchlist) {
+    throw new Error("Unknown watchlist");
+  }
 
   if (!hasDatabase()) {
+    const existing = getWatchlistItemsMemory().find(
+      (item) =>
+        item.watchlistId === watchlist.id && item.companyId === input.snapshot.companyId,
+    );
+
+    if (existing) {
+      return {
+        ...existing,
+        isDuplicate: true,
+      };
+    }
+
     const record = {
       id: crypto.randomUUID(),
       watchlistId: watchlist.id,
@@ -1026,9 +1164,39 @@ export async function addCompanyToWatchlist(input: {
       notes: input.notes ?? null,
       addedAt: new Date().toISOString(),
       company: input.snapshot.snapshot.identity,
+      isDuplicate: false,
     };
     getWatchlistItemsMemory().push(record);
     return record;
+  }
+
+  const existing = await getDb()
+    .select({
+      id: watchlistItems.id,
+      watchlistId: watchlistItems.watchlistId,
+      companyId: watchlistItems.companyId,
+      notes: watchlistItems.notes,
+      addedAt: watchlistItems.addedAt,
+    })
+    .from(watchlistItems)
+    .where(
+      and(
+        eq(watchlistItems.watchlistId, watchlist.id),
+        eq(watchlistItems.companyId, input.snapshot.companyId),
+      ),
+    )
+    .limit(1);
+
+  if (existing.length > 0) {
+    return {
+      id: existing[0].id,
+      watchlistId: existing[0].watchlistId,
+      companyId: existing[0].companyId,
+      notes: existing[0].notes ?? null,
+      addedAt: existing[0].addedAt,
+      company: input.snapshot.snapshot.identity,
+      isDuplicate: true,
+    };
   }
 
   const [row] = await getDb()
@@ -1038,15 +1206,360 @@ export async function addCompanyToWatchlist(input: {
       companyId: input.snapshot.companyId,
       notes: input.notes,
     })
-    .onConflictDoUpdate({
-      target: [watchlistItems.watchlistId, watchlistItems.companyId],
-      set: {
-        notes: input.notes,
-        addedAt: new Date(),
-      },
-    })
     .returning();
-  return row;
+  return {
+    id: row.id,
+    watchlistId: row.watchlistId,
+    companyId: row.companyId,
+    notes: row.notes ?? null,
+    addedAt: row.addedAt,
+    company: input.snapshot.snapshot.identity,
+    isDuplicate: false,
+  };
+}
+
+export async function upsertAlertPreference(input: {
+  userId: string;
+  ticker: string;
+  alertType: string;
+  config: AlertConfig;
+  enabled: boolean;
+}): Promise<AlertPreference & { isNew: boolean }> {
+  const companyId = await findCompanyIdByTicker(input.ticker);
+  if (!companyId) {
+    throw new Error(`Unknown ticker: ${input.ticker}`);
+  }
+
+  if (!hasDatabase()) {
+    const existing = getAlertPreferenceMemory().find(
+      (alert) =>
+        alert.userId === input.userId &&
+        alert.ticker === input.ticker &&
+        alert.alertType === input.alertType,
+    );
+
+    const now = new Date().toISOString();
+    if (existing) {
+      existing.configJson = input.config;
+      existing.enabled = input.enabled;
+      existing.updatedAt = now;
+      return {
+        ...normalizeAlertRecordToDto(existing),
+        isNew: false,
+      };
+    }
+
+    const record = {
+      id: crypto.randomUUID(),
+      userId: input.userId,
+      companyId,
+      ticker: input.ticker,
+      alertType: input.alertType,
+      configJson: input.config,
+      enabled: input.enabled,
+      lastTriggeredAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    getAlertPreferenceMemory().push(record);
+    return {
+      ...normalizeAlertRecordToDto(record),
+      isNew: true,
+    };
+  }
+
+  const existing = await getDb()
+    .select({ id: alertPreferences.id })
+    .from(alertPreferences)
+    .where(
+      and(
+        eq(alertPreferences.userId, input.userId),
+        eq(alertPreferences.companyId, companyId),
+        eq(alertPreferences.alertType, input.alertType),
+      ),
+    )
+    .limit(1);
+
+  if (existing.length > 0) {
+    const [row] = await getDb()
+      .update(alertPreferences)
+      .set({
+        configJson: input.config as unknown as Record<string, unknown>,
+        enabled: input.enabled,
+        updatedAt: new Date(),
+      })
+      .where(eq(alertPreferences.id, existing[0].id))
+      .returning();
+    return {
+      id: row.id,
+      userId: row.userId,
+      ticker: input.ticker,
+      alertType: row.alertType,
+      config: normalizeAlertConfig(row.configJson),
+      enabled: row.enabled,
+      lastTriggeredAt: row.lastTriggeredAt ? row.lastTriggeredAt.toISOString() : null,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+      isNew: false,
+    };
+  }
+
+  const [row] = await getDb()
+    .insert(alertPreferences)
+      .values({
+        userId: input.userId,
+        companyId,
+        alertType: input.alertType,
+        configJson: input.config as unknown as Record<string, unknown>,
+        enabled: input.enabled,
+      })
+    .returning();
+  return {
+    id: row.id,
+    userId: row.userId,
+    alertType: row.alertType,
+    ticker: input.ticker,
+    config: normalizeAlertConfig(row.configJson),
+    enabled: row.enabled,
+    lastTriggeredAt: row.lastTriggeredAt ? row.lastTriggeredAt.toISOString() : null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    isNew: true,
+  };
+}
+
+export async function listAlertPreferences(userId: string) {
+  if (!hasDatabase()) {
+    return getAlertPreferenceMemory()
+      .filter((alert) => alert.userId === userId)
+      .map((alert) => normalizeAlertRecordToDto(alert));
+  }
+
+  const rows = await getDb()
+    .select({
+      id: alertPreferences.id,
+      userId: alertPreferences.userId,
+      companyId: alertPreferences.companyId,
+      alertType: alertPreferences.alertType,
+      configJson: alertPreferences.configJson,
+      enabled: alertPreferences.enabled,
+      lastTriggeredAt: alertPreferences.lastTriggeredAt,
+      createdAt: alertPreferences.createdAt,
+      updatedAt: alertPreferences.updatedAt,
+      ticker: companyTickers.ticker,
+      companyName: companies.legalName,
+      companyCik: companies.cik,
+    })
+    .from(alertPreferences)
+    .innerJoin(companies, eq(alertPreferences.companyId, companies.id))
+    .innerJoin(companyTickers, eq(alertPreferences.companyId, companyTickers.companyId))
+    .where(eq(alertPreferences.userId, userId))
+    .orderBy(desc(alertPreferences.createdAt));
+
+  return rows.map((row) => ({
+    id: row.id,
+    userId: row.userId,
+    ticker: row.ticker,
+    alertType: row.alertType,
+    config: normalizeAlertConfig(row.configJson),
+    enabled: row.enabled,
+    lastTriggeredAt: row.lastTriggeredAt ? row.lastTriggeredAt.toISOString() : null,
+    createdAt:
+      row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+    updatedAt:
+      row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
+  }));
+}
+
+export async function getAlertPreference(input: { userId: string; alertId: string }) {
+  if (!hasDatabase()) {
+    const record = getAlertPreferenceMemory().find(
+      (alert) => alert.userId === input.userId && alert.id === input.alertId,
+    );
+    if (!record) {
+      return null;
+    }
+    return normalizeAlertRecordToDto(record);
+  }
+
+  const [row] = await getDb()
+    .select({
+      id: alertPreferences.id,
+      userId: alertPreferences.userId,
+      alertType: alertPreferences.alertType,
+      configJson: alertPreferences.configJson,
+      enabled: alertPreferences.enabled,
+      companyId: alertPreferences.companyId,
+      lastTriggeredAt: alertPreferences.lastTriggeredAt,
+      createdAt: alertPreferences.createdAt,
+      updatedAt: alertPreferences.updatedAt,
+      ticker: companyTickers.ticker,
+    })
+    .from(alertPreferences)
+    .innerJoin(companyTickers, eq(alertPreferences.companyId, companyTickers.companyId))
+    .where(and(eq(alertPreferences.id, input.alertId), eq(alertPreferences.userId, input.userId)))
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    userId: row.userId,
+    ticker: row.ticker,
+    alertType: row.alertType,
+    config: normalizeAlertConfig(row.configJson),
+    enabled: row.enabled,
+    lastTriggeredAt: row.lastTriggeredAt ? row.lastTriggeredAt.toISOString() : null,
+    createdAt:
+      row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+    updatedAt:
+      row.updatedAt instanceof Date ? row.updatedAt.toISOString() : String(row.updatedAt),
+  };
+}
+
+export async function patchAlertPreference(input: {
+  userId: string;
+  alertId: string;
+  config?: AlertConfig;
+  enabled?: boolean;
+}) {
+  if (!hasDatabase()) {
+    const record = getAlertPreferenceMemory().find(
+      (alert) => alert.userId === input.userId && alert.id === input.alertId,
+    );
+    if (!record) {
+      return null;
+    }
+    if (input.config) {
+      record.configJson = input.config;
+    }
+    if (typeof input.enabled === "boolean") {
+      record.enabled = input.enabled;
+    }
+    record.updatedAt = new Date().toISOString();
+    return normalizeAlertRecordToDto(record);
+  }
+
+  const updates: Record<string, unknown> = {};
+  if (input.config) {
+    updates.configJson = input.config;
+  }
+  if (typeof input.enabled === "boolean") {
+    updates.enabled = input.enabled;
+  }
+  updates.updatedAt = new Date();
+
+  const [row] = await getDb()
+    .update(alertPreferences)
+    .set(updates)
+    .where(and(eq(alertPreferences.id, input.alertId), eq(alertPreferences.userId, input.userId)))
+    .returning();
+
+  if (!row) {
+    return null;
+  }
+
+  return getAlertPreference({ userId: input.userId, alertId: row.id });
+}
+
+export async function buildWorkspaceExportPayload(
+  input: {
+    scope: "memo" | "snapshot";
+    snapshot: CompanySnapshot;
+    memo?: {
+      memo: ResearchMemo;
+      memoId: string;
+    } | null;
+    locale?: Locale;
+  },
+): Promise<WorkspaceExportPayload> {
+  const latest = input.snapshot.periods[0] ?? {};
+  const balance = input.snapshot.balanceSheetAnalysis;
+
+  return {
+    scope: input.scope,
+    ticker: input.snapshot.identity.ticker,
+    companyName: input.snapshot.identity.name,
+    generatedAt: new Date().toISOString(),
+    snapshotSummary: {
+      latestFiling: input.snapshot.latestFiling?.form
+        ? `${input.snapshot.latestFiling.form} ${input.snapshot.latestFiling.filingDate}`
+        : null,
+      latestFinancialFiling: input.snapshot.latestFinancialFiling?.form
+        ? `${input.snapshot.latestFinancialFiling.form} ${input.snapshot.latestFinancialFiling.filingDate}`
+        : null,
+      latestAnnualFiling: input.snapshot.latestAnnualFiling?.form
+        ? `${input.snapshot.latestAnnualFiling.form} ${input.snapshot.latestAnnualFiling.filingDate}`
+        : null,
+      latestQuarterlyFiling: input.snapshot.latestQuarterlyFiling?.form
+        ? `${input.snapshot.latestQuarterlyFiling.form} ${input.snapshot.latestQuarterlyFiling.filingDate}`
+        : null,
+      latestRevenue: latest?.revenue ?? null,
+      latestNetIncome: latest?.netIncome ?? null,
+      latestFreeCashFlow: latest?.freeCashFlow ?? null,
+      latestDebt: balance?.debt ?? null,
+      balanceSheetSignal: input.snapshot.balanceSheetAnalysis?.signal || "neutral",
+    },
+    memo: input.memo
+      ? {
+          company: input.snapshot.identity,
+          disclaimer: input.memo.memo.disclaimer,
+          mode: input.memo.memo.mode,
+          sections: input.memo.memo.sections,
+        }
+      : undefined,
+  };
+}
+
+function normalizeAlertRecordToDto(
+  record: AlertPreferenceRecord,
+): AlertPreference {
+  return {
+    id: record.id,
+    userId: record.userId,
+    ticker: record.ticker,
+    alertType: record.alertType,
+    config: normalizeAlertConfig(record.configJson),
+    enabled: record.enabled,
+    lastTriggeredAt: record.lastTriggeredAt
+      ? typeof record.lastTriggeredAt === "string"
+        ? record.lastTriggeredAt
+        : record.lastTriggeredAt.toISOString()
+      : null,
+    createdAt:
+      typeof record.createdAt === "string" ? record.createdAt : record.createdAt.toISOString(),
+    updatedAt:
+      typeof record.updatedAt === "string" ? record.updatedAt : record.updatedAt.toISOString(),
+  };
+}
+
+const ALERT_CONDITIONS = new Set([
+  "above",
+  "below",
+  "change-above",
+  "change-below",
+  "above-or-equal",
+  "below-or-equal",
+]);
+
+function isAlertCondition(value: unknown): value is AlertCondition {
+  return typeof value === "string" && ALERT_CONDITIONS.has(value);
+}
+
+function normalizeAlertConfig(value: unknown): AlertConfig {
+  if (typeof value === "object" && value !== null && "threshold" in value && "condition" in value) {
+    const raw = value as Partial<Record<string, unknown>>;
+    const threshold = typeof raw.threshold === "number" && Number.isFinite(raw.threshold) ? raw.threshold : 0;
+    if (isAlertCondition(raw.condition)) {
+      const notes =
+        typeof raw.notes === "string" && raw.notes.trim().length > 0 ? raw.notes.trim() : undefined;
+      return { threshold, condition: raw.condition, notes };
+    }
+  }
+
+  return { threshold: 0, condition: "above" };
 }
 
 export function resetResearchStoreForTests(): void {
@@ -1056,4 +1569,5 @@ export function resetResearchStoreForTests(): void {
   memoryState.__finariSavedResearch = [];
   memoryState.__finariWatchlists = [];
   memoryState.__finariWatchlistItems = [];
+  memoryState.__finariAlertPreferences = [];
 }

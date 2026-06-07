@@ -2,7 +2,10 @@ import { z } from "zod";
 
 import { validationError } from "@/lib/api";
 import { getStoredSnapshotForTicker } from "@/lib/research-service";
-import { addCompanyToWatchlist } from "@/lib/research-store";
+import {
+  addCompanyToWatchlist,
+  listWatchlistItems,
+} from "@/lib/research-store";
 import { getCurrentUserId, unauthorized } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -11,6 +14,20 @@ const addItemSchema = z.object({
   ticker: z.string().trim().min(1).max(12).transform((value) => value.toUpperCase()),
   notes: z.string().trim().max(2_000).optional(),
 });
+
+export async function GET(
+  _request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    return unauthorized();
+  }
+
+  const { id } = await context.params;
+  const items = await listWatchlistItems(id, userId);
+  return Response.json({ items });
+}
 
 export async function POST(
   request: Request,
@@ -31,7 +48,10 @@ export async function POST(
       snapshot,
       notes: parsed.notes,
     });
-    return Response.json({ item }, { status: 201 });
+    return Response.json(
+      { item },
+      item.isDuplicate ? { status: 200 } : { status: 201 },
+    );
   } catch (error) {
     return validationError(error);
   }

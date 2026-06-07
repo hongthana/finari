@@ -2,6 +2,25 @@ export type TrendSignal = "positive" | "neutral" | "negative" | "unknown";
 export type PeriodType = "annual" | "quarterly" | "ttm";
 export type MetricUnit = "currency" | "percent" | "ratio" | "number";
 
+export type AlertCondition =
+  | "above"
+  | "below"
+  | "change-above"
+  | "change-below"
+  | "above-or-equal"
+  | "below-or-equal";
+
+export type AlertType =
+  | "revenue"
+  | "net-income"
+  | "fcf"
+  | "cash"
+  | "debt"
+  | "working-capital"
+  | "debt-to-equity"
+  | "roe"
+  | "custom";
+
 export interface CompanyIdentity {
   cik: string;
   ticker: string;
@@ -277,6 +296,24 @@ export interface ResearchMemo {
   citations: SourceCitation[];
 }
 
+export interface AlertConfig {
+  threshold: number;
+  condition: AlertCondition;
+  notes?: string;
+}
+
+export interface AlertPreference {
+  id: string;
+  userId: string;
+  ticker: string;
+  alertType: AlertType | string;
+  config: AlertConfig;
+  enabled: boolean;
+  lastTriggeredAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WaitlistLead {
   email: string;
   investorProfile: string;
@@ -288,4 +325,43 @@ export interface WaitlistLeadRecord extends WaitlistLead {
   id: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface WorkspaceExportMemo {
+  company: CompanyIdentity;
+  disclaimer: string;
+  mode: "ai" | "fallback";
+  sections: MemoSection[];
+}
+
+export interface WorkspaceExportPayload {
+  scope: "memo" | "snapshot";
+  ticker: string;
+  companyName: string;
+  generatedAt: string;
+  snapshotSummary: {
+    latestFiling: string | null;
+    latestFinancialFiling: string | null;
+    latestAnnualFiling: string | null;
+    latestQuarterlyFiling: string | null;
+    latestRevenue: number | null;
+    latestNetIncome: number | null;
+    latestFreeCashFlow: number | null;
+    latestDebt: number | null;
+    balanceSheetSignal: string;
+  };
+  memo?: WorkspaceExportMemo;
+}
+
+export interface ValuationSnapshot {
+  ticker: string;
+  asOf: string;
+  marketCap: number | null;
+  priceToEarnings: number | null;
+  priceToBook: number | null;
+  enterpriseValueToEbitda: number | null;
+  debtToEquity: number | null;
+  returnOnEquity: number | null;
+  currency: string | null;
+  source: string;
 }
