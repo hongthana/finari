@@ -85,6 +85,21 @@ type Viewer = {
   email?: string | null;
   isAdmin: boolean;
 };
+
+function GitHubIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      className={className}
+      fill="currentColor"
+    >
+      <path d="M12 .5C5.648.5.5 5.648.5 12a11.5 11.5 0 0 0 7.865 10.925c.575.105.785-.25.785-.55 0-.27-.01-1.13-.015-2.04-3.196.695-3.872-1.542-3.872-1.542-.523-1.33-1.277-1.684-1.277-1.684-1.044-.714.08-.7.08-.7 1.154.082 1.761 1.184 1.761 1.184 1.026 1.757 2.693 1.25 3.35.955.104-.742.401-1.25.73-1.54-2.555-.29-5.243-1.277-5.243-5.69 0-1.255.447-2.282 1.18-3.086-.118-.29-.51-1.455.111-3.034 0 0 .963-.308 3.155 1.18a10.96 10.96 0 0 1 5.746 0c2.19-1.488 3.15-1.18 3.15-1.18.623 1.58.231 2.744.113 3.034.734.804 1.178 1.831 1.178 3.086 0 4.425-2.693 5.397-5.258 5.68.412.356.78 1.056.78 2.127 0 1.537-.014 2.778-.014 3.154 0 .303.205.66.79.548A11.5 11.5 0 0 0 23.5 12C23.5 5.648 18.352.5 12 .5Z" />
+    </svg>
+  );
+}
+
 type Sp500Constituent = {
   ticker: string;
   name: string;
@@ -1069,6 +1084,8 @@ function ResearchToolbar({
 }) {
   const alternateLocale = getAlternateLocale(locale);
   const languageHref = `/${alternateLocale}?ticker=${encodeURIComponent(activeTicker)}`;
+  const repoUrl =
+    process.env.NEXT_PUBLIC_GITHUB_REPO_URL ?? "https://github.com/hongthana/finari";
 
   return (
     <section className="sticky top-0 z-40 border-b border-zinc-200 bg-white/95 shadow-sm shadow-zinc-950/5 backdrop-blur supports-[backdrop-filter]:bg-white/85">
@@ -1091,6 +1108,16 @@ function ResearchToolbar({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-zinc-600">
+            <Link
+              href={repoUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              aria-label={t.toolbar.githubRepo}
+              className="inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 font-semibold text-zinc-800 transition hover:border-teal-500 hover:text-teal-700"
+            >
+              <GitHubIcon className="h-3.5 w-3.5 text-zinc-900" />
+              {t.toolbar.github}
+            </Link>
             <Link
               href={languageHref}
               aria-label={t.toolbar.languageLabel}
