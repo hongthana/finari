@@ -705,6 +705,23 @@ function EventImpactCard({
     watchMetric,
   );
   const eventBrief = locale === "th" ? localizedEventBrief : event.summary || localizedEventBrief;
+  const localizedImpactSummary = t.events.impactSummary(
+    impact,
+    driverSummary,
+    watchMetric,
+    confidence,
+  );
+  const localizedInvestorMeaning = t.events.investorMeaning(
+    impact,
+    driverSummary,
+    horizon,
+  );
+  const impactSummary =
+    locale === "th" ? localizedImpactSummary : event.impactSummary || localizedImpactSummary;
+  const investorMeaning =
+    locale === "th"
+      ? localizedInvestorMeaning
+      : event.investorMeaning || localizedInvestorMeaning;
   const publishedAt = new Date(event.publishedAt).toLocaleString(
     locale === "th" ? "th-TH" : "en-US",
   );
@@ -807,7 +824,7 @@ function EventImpactCard({
                 {t.events.impactSummaryLabel}
               </p>
               <p className="mt-1 break-words text-sm leading-6 text-zinc-700">
-                {event.impactSummary}
+                {impactSummary}
               </p>
             </div>
             <div>
@@ -815,7 +832,7 @@ function EventImpactCard({
                 {t.events.investorMeaningLabel}
               </p>
               <p className="mt-1 break-words text-sm leading-6 text-zinc-700">
-                {event.investorMeaning}
+                {investorMeaning}
               </p>
             </div>
           </div>
