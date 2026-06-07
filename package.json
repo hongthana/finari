@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run src/lib/event-impact.test.ts src/lib/financial-analysis.test.ts src/lib/i18n.test.ts src/lib/research-store.test.ts src/lib/sec.test.ts src/lib/sp500.test.ts src/lib/waitlist.test.ts src/middleware.test.ts src/components/finari-app.test.tsx --fileParallelism=false",
     "test:watch": "vitest",
+    "security:secrets": "gitleaks git . --no-banner --redact",
+    "security:secrets:current": "sh -c 'tmp=$(mktemp -d); git archive HEAD | tar -x -C \"$tmp\"; gitleaks dir \"$tmp\" --no-banner --redact --max-target-megabytes 5; code=$?; rm -rf \"$tmp\"; exit $code'",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
