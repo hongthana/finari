@@ -2,25 +2,73 @@
 
 Institutional-grade equity research for retail investors.
 
-Finari is a Next.js MVP that helps retail investors analyze US-listed companies from SEC filings. The first version focuses on fundamentals-first ticker research, normalized SEC XBRL statement facts, filing-backed research memos, and waitlist capture for future premium workflows.
+Finari is a ticker-first equity research platform for US-listed stocks. It turns SEC filings, normalized XBRL facts, filing metadata, source-linked event headlines, and optional AI memos into a plain-English and Thai research screen for retail investors.
+
+The product goal is Bloomberg Terminal + Morningstar + SEC filing analysis + AI, with a consumer-simple interface. Finari is educational research software. It does not provide buy/sell recommendations, price targets, stock-price predictions, or personalized investment advice.
+
+## Current MVP
+
+- Public ticker research for US-listed companies.
+- English and Thai locale routes at `/en` and `/th`; `/` redirects by cookie or browser language.
+- SEC-backed company snapshot, latest financial filing, annual trends, quarterly/TTM trends, balance-sheet analysis, peer comparison, and data-quality caveats.
+- Decision screen with strongest evidence, main risk, metric to watch, latest financial filing, and confidence label.
+- Statement charts for revenue/net income, cash flow, and balance sheet.
+- Latest events and potential financial impact from RSS snippets and SEC filing metadata, with provider-ready architecture.
+- Public deterministic memos and event impact reads for anonymous users.
+- Private AI memos and private event impact analysis for signed-in users.
+- Admin-published canonical public AI memos and event impact analysis.
+- Email magic-link authentication, saved research, watchlists, waitlist capture, and S&P 500 ticker selection/backfill.
 
 ## Stack
 
-- Next.js App Router, TypeScript, Tailwind CSS
-- Recharts for statement visualizations
+- Next.js App Router 16, React 19, TypeScript, Tailwind CSS 4
+- Recharts for financial visualizations
+- Auth.js / NextAuth email magic links with Drizzle adapter
+- Drizzle ORM and explicit Postgres migrations
+- Railway Postgres for durable application, research, event, auth, and waitlist data
+- Railway Redis for short-lived cache, rate-limit state, and refresh locks
 - SEC EDGAR JSON APIs for ticker mapping, submissions, and company facts
-- Railway Postgres with Drizzle migrations for durable research, accounts, watchlists, saved research, and waitlist storage
-- Railway Redis for short-lived SEC/search cache and refresh locks
-- Vitest and Testing Library for unit, API, and UI smoke tests
+- RSS event provider by default, with environment placeholders for future licensed news providers
+- OpenAI API for server-side AI generation when configured
+- Vitest, Testing Library, ESLint, TypeScript, and Gitleaks
+
+## Data Sources
+
+Finari v1 is fundamentals-first and source-linked.
+
+- SEC ticker mapping resolves ticker to CIK.
+- SEC submissions identify filings and primary filing links.
+- SEC company facts supply normalized US-GAAP financial facts.
+- RSS feeds supply headline/snippet-level latest event context.
+- SEC filing metadata is also treated as an event source.
+
+Finari does not scrape full news articles. Event analysis uses only headlines, feed summaries, source metadata, SEC filing metadata, and deterministic or AI analysis grounded in those inputs.
+
+## Product Boundaries
+
+Finari intentionally excludes these from v1:
+
+- Live stock prices
+- Valuation multiples
+- Buy/sell/hold recommendations
+- Price targets
+- Personalized investment advice
+- Full article scraping
+- User-provided OpenAI API keys or ChatGPT subscription OAuth
+
+OpenAI usage is Finari-managed and server-side through `OPENAI_API_KEY`. Anonymous users do not trigger OpenAI spend; they receive deterministic public analysis or admin-published public AI analysis.
 
 ## Environment
 
-Copy `.env.example` to `.env.local` and set:
+Copy `.env.example` to `.env.local` and set local values:
 
 ```bash
 SEC_USER_AGENT="Finari/0.1 (research app; contact=you@example.com)"
 DATABASE_URL="postgres://user:password@localhost:5432/finari"
 REDIS_URL="redis://localhost:6379"
+NEWS_PROVIDER="rss"
+NEWS_RSS_URL_TEMPLATE="https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US"
+NEWS_API_KEY=""
 AUTH_SECRET="replace-with-a-long-random-secret"
 AUTH_URL="http://localhost:3000"
 EMAIL_FROM="Finari <research@example.com>"
@@ -30,10 +78,28 @@ OPENAI_MODEL="gpt-4.1-mini"
 ADMIN_EMAILS="admin@example.com"
 ```
 
-`OPENAI_API_KEY` is optional. Without it, Finari returns a deterministic filing-backed memo fallback. Set `ADMIN_EMAILS` to a comma-separated list of Finari login emails that can publish canonical public memos.
-`RESEND_API_KEY` is required for production magic-link email delivery.
+Important notes:
 
-## Development
+- `SEC_USER_AGENT` should include a real contact address for SEC fair-access compliance.
+- `DATABASE_URL` is required for durable data.
+- `REDIS_URL` is optional for local development, but recommended for cache and lock behavior.
+- `AUTH_SECRET` must be a long random value in production.
+- `AUTH_URL` should match the deployed app URL in production.
+- `EMAIL_FROM` must use a sender domain verified by the email provider.
+- `RESEND_API_KEY` is required for production magic-link delivery.
+- `OPENAI_API_KEY` is optional; without it, Finari returns deterministic fallback memos and event analysis.
+- `ADMIN_EMAILS` is a comma-separated list of signed-in Finari emails that can publish canonical public analysis.
+
+## Local Development
+
+Requirements:
+
+- Node.js 24+
+- pnpm 9+
+- Postgres
+- Redis, optional but recommended
+
+Install and run:
 
 ```bash
 pnpm install
@@ -41,20 +107,11 @@ pnpm db:migrate
 pnpm dev
 ```
 
-The app starts on `http://localhost:3000` unless that port is occupied.
-
-## Verification
-
-```bash
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-```
+The app starts on `http://localhost:3000` unless the port is occupied.
 
 ## Database
 
-Finari stores durable product data in Postgres and uses Redis only for short-lived cache/locks. The database schema is managed by Drizzle:
+The database schema is managed by Drizzle migrations in `drizzle/`.
 
 ```bash
 pnpm db:generate
@@ -62,19 +119,84 @@ pnpm db:migrate
 pnpm db:studio
 ```
 
-On Railway, set `DATABASE_URL` to `${{Postgres.DATABASE_URL}}` and `REDIS_URL` to `${{Redis.REDIS_URL}}`, then run `pnpm db:migrate` as the web service pre-deploy command.
+Core durable tables include:
+
+- Auth: `users`, `accounts`, `sessions`, `verification_tokens`, `user_profiles`
+- Companies and filings: `companies`, `company_tickers`, `filings`
+- Financial data: `financial_facts`, `financial_periods`
+- Research: `research_snapshots`, `research_memos`, `research_refresh_runs`
+- Events: `company_events`, `event_impacts`
+- Product data: `watchlists`, `watchlist_items`, `saved_research`, `alert_preferences`, `waitlist_leads`
+- Audit and cost control: `ai_usage_events`
+
+Redis is used only for short-lived cache, rate-limit state, and refresh locks. Do not store durable research or user data in Redis.
+
+## Railway Deployment
+
+The intended Railway topology is:
+
+- `web`: Next.js app
+- `Postgres`: durable database
+- `Redis`: cache and locks
+
+Use Railway reference variables for private service networking:
+
+```bash
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+REDIS_URL=${{Redis.REDIS_URL}}
+```
+
+Recommended web service settings:
+
+- Pre-deploy command: `pnpm db:migrate`
+- Start command: `pnpm start`
+- Serverless/App Sleeping can be enabled for the web service
+- Postgres and Redis should remain durable infrastructure services
+- Keep OpenAI, Resend, auth, and database credentials only in Railway variables
+
+Do not commit Railway project IDs, environment IDs, service IDs, public database URLs, API keys, or tokens.
+
+## API Surface
+
+Public routes:
+
+- `GET /api/search?q=`
+- `GET /api/sp500`
+- `GET /api/company/[ticker]`
+- `GET /api/company/[ticker]/events?locale=en|th`
+- `POST /api/company/[ticker]/memo?locale=en|th`
+- `POST /api/waitlist`
+
+Authenticated user routes:
+
+- `GET /api/me`
+- `POST /api/me/company/[ticker]/memo?locale=en|th`
+- `POST /api/me/company/[ticker]/events/analysis?locale=en|th`
+- `GET /api/research/saved`
+- `POST /api/research/saved`
+- `GET /api/watchlists`
+- `POST /api/watchlists`
+- `POST /api/watchlists/[id]/items`
+
+Admin routes:
+
+- `POST /api/admin/company/[ticker]/memo?locale=en|th`
+- `POST /api/admin/company/[ticker]/events/refresh?locale=en|th`
+- `PATCH /api/admin/company/[ticker]/events/[eventId]`
+
+Admin authorization is based on the signed-in user's email matching `ADMIN_EMAILS`.
 
 ## Research Backfill
 
-Finari can warm and persist company research snapshots for the current S&P 500 constituent list. The backfill script calls the existing company research API one ticker at a time, so the normal Postgres persistence path stores companies, filings, normalized financial periods, financial facts, research snapshots, and source citations.
+Finari can warm and persist research snapshots for the current S&P 500 constituent list. The script calls the app's existing API one ticker at a time, so normal persistence stores companies, filings, normalized periods, facts, snapshots, citations, and optional event impacts.
 
-Dry-run the current ticker list:
+Dry-run the ticker list:
 
 ```bash
 pnpm backfill:sp500 -- --dry-run
 ```
 
-Smoke-test a small production run:
+Smoke-test a small run:
 
 ```bash
 FINARI_BASE_URL=https://your-finari-domain.example pnpm backfill:sp500 -- --limit 5 --delay-ms 2500
@@ -92,8 +214,60 @@ Resume after the last successful ticker from the JSONL report:
 FINARI_BASE_URL=https://your-finari-domain.example pnpm backfill:sp500 -- --start-after MSFT --delay-ms 3000
 ```
 
-Use `--include-events` only when you also want to warm event impact cards; it adds extra provider/API calls. Public AI memos are not generated by this script.
+Useful options:
 
-## Data Scope
+- `--include-events` also warms event impact cards.
+- `--locale th` warms optional event reads in Thai.
+- `--tickers AAPL,MSFT,NVDA` limits the run to explicit tickers.
+- `--ticker-file ./tickers.txt` reads tickers from a file.
+- `--output .data/backfill.jsonl` writes a JSONL report.
 
-Finari v1 intentionally avoids live price data, valuation multiples, buy/sell recommendations, and price targets. The analysis is educational and grounded in SEC facts. Valuation and market data should be added behind a provider abstraction when a reliable quote/fundamentals provider is selected.
+Public AI memos are not generated by the backfill script.
+
+## Verification
+
+Run the local verification suite before opening or merging changes:
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+Security scans:
+
+```bash
+pnpm security:secrets
+pnpm security:secrets:current
+```
+
+GitHub Actions currently run:
+
+- `ci`: lint, typecheck, tests, and build
+- `Gitleaks`: full git-history and checked-out file secret scanning
+
+## Localization
+
+Finari supports English and Thai.
+
+- `/en` renders the English product experience.
+- `/th` renders the Thai product experience.
+- `/` redirects by saved locale preference, then browser language, then English fallback.
+- Source names, company names, ticker symbols, SEC forms, filing links, and published headlines remain as source data.
+- Finari-generated UI labels, summaries, deterministic analysis, fallback memos, prompts, disclaimers, and errors should be localized through `src/lib/i18n.ts`.
+
+## Security And Public Repo Hygiene
+
+Before making the repository public or accepting external contributions:
+
+- Keep `.env*` files out of git.
+- Keep Railway, OpenAI, Resend, database, Redis, and auth secrets only in environment variables.
+- Run `pnpm security:secrets` before publishing sensitive branches.
+- Keep GitHub secret scanning and Gitleaks enabled.
+- Avoid hardcoding production domains, project IDs, service IDs, or private infrastructure details in docs or code.
+- Review generated files before committing; browser artifacts and local `.data/` reports should not be committed.
+
+## Contributing
+
+This codebase uses protected `main` with pull requests and required checks. Keep changes focused, add or update tests for behavior changes, and preserve the educational research boundary: no recommendations, no price targets, and no personalized advice.
