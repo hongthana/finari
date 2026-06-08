@@ -848,6 +848,9 @@ const en = {
     valuationDisclaimer:
       "Valuation data is optional and provided for research context only.",
     valuationSourceLabel: "Source",
+    valuationMetricsTitle: "All valuation metrics",
+    valuationMetricsSubtitle:
+      "Combined from FMP key metrics, ratios, and quote data.",
     exportTitle: "Memo export",
     exportSubtitle:
       "Export your memo and snapshot summary when memo data is available.",
@@ -1677,6 +1680,8 @@ const th: Dictionary = {
     valuationAsOf: "อัปเดตล่าสุด",
     valuationDisclaimer: "ข้อมูล valuation เป็นข้อมูลเสริมสำหรับงานวิจัย ไม่ใช่คำแนะนำการลงทุน",
     valuationSourceLabel: "ที่มา",
+    valuationMetricsTitle: "ตัวชี้วัด valuation ทั้งหมด",
+    valuationMetricsSubtitle: "รวมจาก FMP key metrics, ratios, และ quote data",
     exportTitle: "ส่งออกสรุป",
     exportSubtitle: "ดาวน์โหลด memo และสรุป snapshot เมื่อมี memo พร้อมใช้งาน",
     exportMemoUnavailable: "สร้าง memo ก่อนเพื่อเปิดใช้งานการ export",

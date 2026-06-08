@@ -389,6 +389,14 @@ export interface WorkspaceExportPayload {
   memo?: WorkspaceExportMemo;
 }
 
+export interface ValuationMetric {
+  id: string;
+  label: string;
+  value: number | null;
+  unit: MetricUnit;
+  source: "key-metrics" | "ratios-ttm" | "quote";
+}
+
 export interface ValuationSnapshot {
   ticker: string;
   asOf: string;
@@ -400,4 +408,5 @@ export interface ValuationSnapshot {
   returnOnEquity: number | null;
   currency: string | null;
   source: string;
+  metrics: ValuationMetric[];
 }

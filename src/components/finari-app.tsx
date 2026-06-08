@@ -3835,6 +3835,38 @@ function WaitlistPanel({
                 <p className="text-xs text-zinc-500">
                   {t.waitlist.valuationSourceLabel}: {valuation.source}
                 </p>
+                {valuation.metrics.length > 0 && (
+                  <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-900">
+                          {t.waitlist.valuationMetricsTitle}
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-600">
+                          {t.waitlist.valuationMetricsSubtitle}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {valuation.metrics.map((metric) => (
+                        <div
+                          key={`${metric.source}:${metric.id}`}
+                          className="rounded-md border border-zinc-200 bg-white p-2"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-xs text-zinc-500">{metric.label}</p>
+                            <p className="text-[10px] uppercase tracking-wide text-zinc-400">
+                              {metric.source}
+                            </p>
+                          </div>
+                          <p className="mt-1 font-semibold text-zinc-900">
+                            {formatMetricValue(metric.value, metric.unit)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </article>

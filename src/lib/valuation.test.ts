@@ -61,6 +61,9 @@ describe("getValuationForTicker", () => {
     expect(valuation.marketCap).toBe(2_900_000_000_000);
     expect(valuation.returnOnEquity).toBe(31.5);
     expect(valuation.debtToEquity).toBe(1.2);
+    expect(valuation.metrics.some((metric) => metric.id === "priceEarningsRatio")).toBe(true);
+    expect(valuation.metrics.some((metric) => metric.id === "priceToBookRatio")).toBe(true);
+    expect(valuation.metrics.some((metric) => metric.id === "marketCap")).toBe(true);
   });
 
   it("throws when SEC data payload is missing", async () => {
@@ -106,6 +109,7 @@ describe("getValuationForTicker", () => {
     expect(valuation.debtToEquity).toBeNull();
     expect(valuation.returnOnEquity).toBeNull();
     expect(valuation.source).toContain("quote fallback");
+    expect(valuation.metrics.some((metric) => metric.id === "marketCap")).toBe(true);
   });
 
   it("rejects invalid ticker format", async () => {
