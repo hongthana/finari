@@ -23,7 +23,9 @@ describe("getValuationForTicker", () => {
     process.env.FMP_API_KEY = "test-key";
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (url: string) => {
+      vi.fn(async (url: string, init?: RequestInit) => {
+        expect(init?.headers).toMatchObject({ apikey: "test-key" });
+
         if (url.includes("key-metrics?symbol=AAPL")) {
           return Response.json({
             priceEarningsRatio: 34.7,

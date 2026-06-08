@@ -48,7 +48,7 @@ function asNumber(value: unknown): number | null {
   return null;
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
+async function fetchJson<T>(url: string, apiKey: string): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
@@ -57,6 +57,7 @@ async function fetchJson<T>(url: string): Promise<T> {
       signal: controller.signal,
       headers: {
         accept: "application/json",
+        apikey: apiKey,
       },
       cache: "no-store",
     });
@@ -71,9 +72,9 @@ async function fetchJson<T>(url: string): Promise<T> {
   }
 }
 
-async function fetchMaybeJson<T>(url: string): Promise<T | null> {
+async function fetchMaybeJson<T>(url: string, apiKey: string): Promise<T | null> {
   try {
-    return await fetchJson<T>(url);
+    return await fetchJson<T>(url, apiKey);
   } catch {
     return null;
   }
@@ -100,14 +101,14 @@ export async function getValuationForTicker(ticker: string): Promise<ValuationSn
   }
 
   const baseUrl = getFmpBaseUrl().replace(/\/+$/, "");
-  const keyMetricsUrl = `${baseUrl}/key-metrics?symbol=${encodeURIComponent(normalized)}&apikey=${encodeURIComponent(apiKey)}`;
-  const quoteUrl = `${baseUrl}/quote?symbol=${encodeURIComponent(normalized)}&apikey=${encodeURIComponent(apiKey)}`;
-  const ratiosUrl = `${baseUrl}/ratios-ttm?symbol=${encodeURIComponent(normalized)}&apikey=${encodeURIComponent(apiKey)}`;
+  const keyMetricsUrl = `${baseUrl}/key-metrics?symbol=${encodeURIComponent(normalized)}`;
+  const quoteUrl = `${baseUrl}/quote?symbol=${encodeURIComponent(normalized)}`;
+  const ratiosUrl = `${baseUrl}/ratios-ttm?symbol=${encodeURIComponent(normalized)}`;
 
   const [rawMetrics, rawQuote, rawRatios] = await Promise.all([
-    fetchMaybeJson<FmpRatiosItem[] | FmpRatiosItem>(keyMetricsUrl),
-    fetchMaybeJson<FmpQuoteItem | FmpQuoteItem[]>(quoteUrl),
-    fetchMaybeJson<FmpRatiosItem[] | FmpRatiosItem>(ratiosUrl),
+    fetchMaybeJson<FmpRatiosItem[] | FmpRatiosItem>(keyMetricsUrl, apiKey),
+    fetchMaybeJson<FmpQuoteItem | FmpQuoteItem[]>(quoteUrl, apiKey),
+    fetchMaybeJson<FmpRatiosItem[] | FmpRatiosItem>(ratiosUrl, apiKey),
   ]);
 
   const ratios =
