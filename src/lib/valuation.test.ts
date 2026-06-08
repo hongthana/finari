@@ -77,6 +77,35 @@ describe("getValuationForTicker", () => {
     );
   });
 
+  it("falls back to quote data when metrics endpoints are unavailable", async () => {
+    process.env.FMP_API_KEY = "test-key";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.includes("quote?symbol=AAPL")) {
+          return Response.json([
+            {
+              marketCap: 2_905_000_000_000,
+            },
+          ]);
+        }
+
+        return Response.json({ error: "blocked" }, { status: 403 });
+      }),
+    );
+
+    const valuation = await getValuationForTicker("AAPL");
+
+    expect(valuation.ticker).toBe("AAPL");
+    expect(valuation.marketCap).toBe(2_905_000_000_000);
+    expect(valuation.priceToEarnings).toBeNull();
+    expect(valuation.priceToBook).toBeNull();
+    expect(valuation.enterpriseValueToEbitda).toBeNull();
+    expect(valuation.debtToEquity).toBeNull();
+    expect(valuation.returnOnEquity).toBeNull();
+    expect(valuation.source).toContain("quote fallback");
+  });
+
   it("rejects invalid ticker format", async () => {
     process.env.FMP_API_KEY = "test-key";
 
