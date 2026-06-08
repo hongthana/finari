@@ -3897,14 +3897,14 @@ function WaitlistPanel({
                   <button
                     type="submit"
                     disabled={alertsState === "loading"}
-                    className="mt-1 inline-flex h-9 items-center justify-center rounded-md bg-sky-700 px-3 text-sm font-medium text-white disabled:bg-zinc-300"
+                    className="mt-1 inline-flex h-9 items-center justify-center gap-2 rounded-md bg-sky-700 px-3 text-sm font-medium text-white disabled:bg-zinc-300"
                   >
                     {alertsState === "loading" ? (
                       <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                     ) : (
                       <Bell className="h-4 w-4" aria-hidden="true" />
                     )}
-                    {alertsState === "ready" ? t.waitlist.alertSaved : t.waitlist.alertCreate}
+                    {t.waitlist.alertCreate}
                   </button>
                 </form>
 
