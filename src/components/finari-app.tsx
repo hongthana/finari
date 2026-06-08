@@ -4060,9 +4060,11 @@ function WaitlistPanel({
                           key={`${metric.source}:${metric.id}`}
                           className="rounded-md border border-zinc-200 bg-white p-2"
                         >
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="text-xs text-zinc-500">{metric.label}</p>
-                            <p className="text-[10px] uppercase tracking-wide text-zinc-400">
+                          <div className="grid grid-cols-[minmax(0,1fr)_minmax(2.5rem,3.75rem)] items-start gap-1">
+                            <p className="min-w-0 break-words text-xs leading-4 text-zinc-500">
+                              {metric.label}
+                            </p>
+                            <p className="min-w-0 text-right text-[9px] uppercase leading-3 tracking-normal text-zinc-400 [overflow-wrap:anywhere]">
                               {metric.source}
                             </p>
                           </div>
