@@ -80,7 +80,7 @@ OPENAI_API_KEY=""
 OPENAI_MODEL="gpt-4.1-mini"
 ADMIN_EMAILS="admin@example.com"
 FMP_API_KEY=""
-FMP_BASE_URL="https://financialmodelingprep.com/api/v3"
+FMP_BASE_URL="https://financialmodelingprep.com/stable"
 ```
 
 Important notes:

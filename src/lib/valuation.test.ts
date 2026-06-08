@@ -24,7 +24,7 @@ describe("getValuationForTicker", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
-        if (url.includes("ratios-ttm/AAPL")) {
+        if (url.includes("key-metrics?symbol=AAPL")) {
           return Response.json({
             priceEarningsRatio: 34.7,
             priceToBookRatio: 47.2,
@@ -35,7 +35,11 @@ describe("getValuationForTicker", () => {
           });
         }
 
-        if (url.includes("quote/AAPL")) {
+        if (url.includes("ratios-ttm?symbol=AAPL")) {
+          return Response.json([], { status: 200 });
+        }
+
+        if (url.includes("quote?symbol=AAPL")) {
           return Response.json([
             {
               marketCap: 2_905_000_000_000,
@@ -61,7 +65,11 @@ describe("getValuationForTicker", () => {
     process.env.FMP_API_KEY = "test-key";
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => Response.json([], { status: 200 })),
+      vi.fn(async (url: string) =>
+        url.includes("quote?symbol=MSFT")
+          ? Response.json([], { status: 200 })
+          : Response.json([], { status: 200 }),
+      ),
     );
 
     await expect(getValuationForTicker("MSFT")).rejects.toThrow(

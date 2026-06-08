@@ -5,6 +5,8 @@ const FETCH_TIMEOUT_MS = 12_000;
 
 type FmpRatiosItem = {
   symbol?: string;
+  marketCap?: unknown;
+  enterpriseValue?: unknown;
   priceEarningsRatio?: unknown;
   peRatio?: unknown;
   priceToBookRatio?: unknown;
@@ -15,7 +17,6 @@ type FmpRatiosItem = {
   debtToEquity?: unknown;
   returnOnEquity?: unknown;
   returnOnEquityTTM?: unknown;
-  marketCap?: unknown;
 };
 
 type FmpQuoteItem = {
@@ -70,6 +71,14 @@ async function fetchJson<T>(url: string): Promise<T> {
   }
 }
 
+async function fetchMaybeJson<T>(url: string): Promise<T | null> {
+  try {
+    return await fetchJson<T>(url);
+  } catch {
+    return null;
+  }
+}
+
 function firstObject<T>(payload: T | T[] | null | undefined): T | null {
   if (!payload) {
     return null;
@@ -91,15 +100,18 @@ export async function getValuationForTicker(ticker: string): Promise<ValuationSn
   }
 
   const baseUrl = getFmpBaseUrl().replace(/\/+$/, "");
-  const safeBase = `${baseUrl}/ratios-ttm/${encodeURIComponent(normalized)}?apikey=${encodeURIComponent(apiKey)}`;
-  const quoteUrl = `${baseUrl}/quote/${encodeURIComponent(normalized)}?apikey=${encodeURIComponent(apiKey)}`;
+  const keyMetricsUrl = `${baseUrl}/key-metrics?symbol=${encodeURIComponent(normalized)}&apikey=${encodeURIComponent(apiKey)}`;
+  const quoteUrl = `${baseUrl}/quote?symbol=${encodeURIComponent(normalized)}&apikey=${encodeURIComponent(apiKey)}`;
+  const ratiosUrl = `${baseUrl}/ratios-ttm?symbol=${encodeURIComponent(normalized)}&apikey=${encodeURIComponent(apiKey)}`;
 
-  const [rawRatios, rawQuote] = await Promise.all([
-    fetchJson<FmpRatiosItem[] | FmpRatiosItem>(safeBase),
-    fetchJson<FmpQuoteItem | FmpQuoteItem[]>(quoteUrl),
+  const [rawMetrics, rawQuote, rawRatios] = await Promise.all([
+    fetchMaybeJson<FmpRatiosItem[] | FmpRatiosItem>(keyMetricsUrl),
+    fetchMaybeJson<FmpQuoteItem | FmpQuoteItem[]>(quoteUrl),
+    fetchMaybeJson<FmpRatiosItem[] | FmpRatiosItem>(ratiosUrl),
   ]);
 
-  const ratios = firstObject<FmpRatiosItem>(rawRatios);
+  const ratios =
+    firstObject<FmpRatiosItem>(rawMetrics) ?? firstObject<FmpRatiosItem>(rawRatios);
   const quote = firstObject<FmpQuoteItem>(rawQuote);
 
   if (!ratios) {

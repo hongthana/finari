@@ -69,6 +69,6 @@ export function getFmpApiKey(): string {
 export function getFmpBaseUrl(): string {
   return (
     process.env.FMP_BASE_URL?.trim() ||
-    "https://financialmodelingprep.com/api/v3"
+    "https://financialmodelingprep.com/stable"
   );
 }
