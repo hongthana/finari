@@ -74,6 +74,7 @@ AUTH_URL="http://localhost:3000"
 FINARI_INVITATION_ONLY="false"
 FINARI_INVITED_EMAILS=""
 ALERTS_CRON_SECRET="replace-with-a-long-random-secret"
+REFRESH_CRON_SECRET="replace-with-a-long-random-secret"
 EMAIL_FROM="Finari <research@example.com>"
 RESEND_API_KEY=""
 OPENAI_API_KEY=""
@@ -92,6 +93,7 @@ Important notes:
 - `AUTH_URL` should match the deployed app URL in production.
 - Set `FINARI_INVITATION_ONLY=true` and `FINARI_INVITED_EMAILS` to a comma-separated email allowlist to make `www.finari.co` invitation-only. `ADMIN_EMAILS` are also allowed.
 - `ALERTS_CRON_SECRET` must match the GitHub Actions secret used by the scheduled alert-delivery workflow.
+- `REFRESH_CRON_SECRET` must match the GitHub Actions secret used by the scheduled research-refresh workflow.
 - `EMAIL_FROM` must use a sender domain verified by the email provider.
 - `RESEND_API_KEY` is required for production magic-link delivery.
 - `OPENAI_API_KEY` is optional; without it, Finari returns deterministic fallback memos and event analysis.
@@ -304,11 +306,17 @@ GitHub Actions currently run:
 - `ci`: lint, typecheck, tests, and build
 - `Gitleaks`: full git-history and checked-out file secret scanning
 - `alert-delivery`: scheduled `POST /api/admin/alerts/deliver` trigger using `ALERTS_CRON_SECRET`
+- `daily-research-refresh`: scheduled `pnpm backfill:sp500` trigger using `REFRESH_CRON_SECRET`
 
 For the scheduled alert-delivery workflow:
 
 - Set the repository variable `FINARI_BASE_URL` to the deployed app URL.
 - Set the repository secret `ALERTS_CRON_SECRET` to the same value used by the app runtime.
+
+For the scheduled research-refresh workflow:
+
+- Set the repository variable `FINARI_BASE_URL` to the deployed app URL.
+- Set the repository secret `REFRESH_CRON_SECRET` to the same value used by the app runtime.
 
 ## Localization
 

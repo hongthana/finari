@@ -1,0 +1,48 @@
+name: Daily research refresh
+
+on:
+  schedule:
+    - cron: "30 22 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-research-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Refresh tracked universe
+        env:
+          FINARI_BASE_URL: ${{ vars.FINARI_BASE_URL }}
+          REFRESH_CRON_SECRET: ${{ secrets.REFRESH_CRON_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${FINARI_BASE_URL:-}" ]; then
+            echo "FINARI_BASE_URL is required"
+            exit 1
+          fi
+
+          if [ -z "${REFRESH_CRON_SECRET:-}" ]; then
+            echo "REFRESH_CRON_SECRET is required"
+            exit 1
+          fi
+
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm refresh:sp500 -- --base-url "${FINARI_BASE_URL}" --cron-secret "${REFRESH_CRON_SECRET}"

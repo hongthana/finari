@@ -31,6 +31,7 @@ import type { CompanyIdentity, CompanySnapshot, ResearchMemo } from "@/lib/types
 const SEARCH_CACHE_TTL_SECONDS = 15 * 60;
 const COMPANY_CACHE_TTL_SECONDS = 6 * 60 * 60;
 const MAX_PEER_SEED_FETCHES = 4;
+const FINANCIAL_FORMS = new Set(["10-K", "10-K/A", "10-Q", "10-Q/A"]);
 
 const PEER_SEED_TICKERS_BY_SIC: Record<string, string[]> = {
   "3571": ["AAPL", "DELL", "HPQ", "HPE", "SMCI", "NTAP", "STX", "WDC"],
@@ -146,6 +147,32 @@ async function fetchAndPersistSnapshot(ticker: string) {
   });
 }
 
+async function hasNewFinancialFiling(
+  cik: string,
+  latestStoredAccession?: string | null,
+): Promise<boolean> {
+  try {
+    const submissions = await getSubmissions(cik);
+    const recent = submissions.filings?.recent;
+    if (!recent?.accessionNumber?.length) {
+      return false;
+    }
+
+    for (let index = 0; index < recent.accessionNumber.length; index += 1) {
+      const form = recent.form?.[index] ?? "";
+      if (!FINANCIAL_FORMS.has(form)) {
+        continue;
+      }
+
+      return recent.accessionNumber[index] !== (latestStoredAccession ?? null);
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export async function getCompanySnapshotForTicker(
   ticker: string,
   options: { forceRefresh?: boolean } = {},
@@ -153,7 +180,13 @@ export async function getCompanySnapshotForTicker(
   if (!options.forceRefresh) {
     const stored = await getFreshStoredSnapshot(ticker);
     if (stored) {
-      return stored.snapshot;
+      const hasChanged = await hasNewFinancialFiling(
+        stored.snapshot.identity.cik,
+        stored.snapshot.latestFinancialFiling?.accessionNumber,
+      );
+      if (!hasChanged) {
+        return stored.snapshot;
+      }
     }
   }
 

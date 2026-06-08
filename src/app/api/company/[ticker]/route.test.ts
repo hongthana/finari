@@ -1,8 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getCompanyFacts } from "@/lib/sec";
 
 import { GET } from "./route";
+
+const requireInvitationAccess = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/sec", async () => {
   const fixtures = await import("@/test/fixtures");
@@ -18,6 +20,16 @@ vi.mock("@/lib/sec", async () => {
     getSubmissions: vi.fn(async () => fixtures.fixtureSubmissions),
     getCompanyFacts: vi.fn(async () => fixtures.fixtureFacts),
   };
+});
+
+vi.mock("@/lib/site-access", () => ({
+  requireInvitationAccess,
+}));
+
+beforeEach(() => {
+  requireInvitationAccess.mockClear();
+  requireInvitationAccess.mockResolvedValue(null);
+  process.env.REFRESH_CRON_SECRET = "";
 });
 
 describe("company API route", () => {
@@ -63,5 +75,23 @@ describe("company API route", () => {
       params: Promise.resolve({ ticker: "MSFT" }),
     });
     expect(getCompanyFactsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows the refresh cron secret to bypass invitation gating", async () => {
+    process.env.REFRESH_CRON_SECRET = "refresh-secret";
+
+    const response = await GET(
+      new Request("http://localhost/api/company/MSFT", {
+        headers: {
+          authorization: "Bearer refresh-secret",
+        },
+      }),
+      {
+        params: Promise.resolve({ ticker: "MSFT" }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(requireInvitationAccess).not.toHaveBeenCalled();
   });
 });

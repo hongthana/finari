@@ -8,6 +8,7 @@ const DEFAULT_BASE_URL = "http://localhost:3000";
 function parseArgs(argv) {
   const args = {
     baseUrl: process.env.FINARI_BASE_URL || DEFAULT_BASE_URL,
+    cronSecret: process.env.REFRESH_CRON_SECRET || process.env.FINARI_REFRESH_SECRET || "",
     sourceUrl: process.env.SP500_SOURCE_URL || DEFAULT_SOURCE_URL,
     delayMs: Number(process.env.SP500_BACKFILL_DELAY_MS || DEFAULT_DELAY_MS),
     timeoutMs: Number(process.env.SP500_BACKFILL_TIMEOUT_MS || DEFAULT_TIMEOUT_MS),
@@ -42,6 +43,9 @@ function parseArgs(argv) {
       index += 1;
     } else if (arg === "--limit") {
       args.limit = numberValue(arg, next);
+      index += 1;
+    } else if (arg === "--cron-secret") {
+      args.cronSecret = requiredValue(arg, next);
       index += 1;
     } else if (arg === "--start-after") {
       args.startAfter = normalizeTicker(requiredValue(arg, next));
@@ -117,6 +121,7 @@ Options:
   --tickers <list>       Comma-separated ticker override, e.g. AAPL,MSFT,NVDA.
   --ticker-file <path>   Newline or comma-separated ticker file override.
   --limit <n>            Process only the first n tickers after filtering.
+  --cron-secret <secret> Refresh secret used to bypass invitation gating.
   --start-after <ticker> Resume after a ticker symbol.
   --delay-ms <n>         Delay between tickers. Default: ${DEFAULT_DELAY_MS}.
   --timeout-ms <n>       Per-request timeout. Default: ${DEFAULT_TIMEOUT_MS}.
@@ -203,14 +208,14 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function fetchJsonWithTimeout(url, timeoutMs) {
+async function fetchJsonWithTimeout(url, timeoutMs, headers = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const startedAt = Date.now();
 
   try {
     const response = await fetch(url, {
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", ...headers },
       signal: controller.signal,
     });
     const text = await response.text();
@@ -261,7 +266,14 @@ function snapshotSummary(payload) {
 
 async function warmTicker(ticker, args) {
   const companyUrl = `${args.baseUrl}/api/company/${encodeURIComponent(ticker)}`;
-  const companyResult = await fetchJsonWithTimeout(companyUrl, args.timeoutMs);
+  const requestHeaders = args.cronSecret
+    ? { Authorization: `Bearer ${args.cronSecret}` }
+    : {};
+  const companyResult = await fetchJsonWithTimeout(
+    companyUrl,
+    args.timeoutMs,
+    requestHeaders,
+  );
   if (!companyResult.ok || !companyResult.json?.snapshot) {
     return {
       ticker,
@@ -275,7 +287,11 @@ async function warmTicker(ticker, args) {
   let events = null;
   if (args.includeEvents) {
     const eventUrl = `${args.baseUrl}/api/company/${encodeURIComponent(ticker)}/events?locale=${encodeURIComponent(args.locale)}`;
-    const eventResult = await fetchJsonWithTimeout(eventUrl, args.timeoutMs);
+    const eventResult = await fetchJsonWithTimeout(
+      eventUrl,
+      args.timeoutMs,
+      requestHeaders,
+    );
     events = {
       ok: eventResult.ok,
       status: eventResult.status,

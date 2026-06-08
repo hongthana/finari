@@ -58,6 +58,10 @@ export function getAlertsCronSecret(): string {
   return process.env.ALERTS_CRON_SECRET?.trim() || "";
 }
 
+export function getRefreshCronSecret(): string {
+  return process.env.REFRESH_CRON_SECRET?.trim() || "";
+}
+
 export function getEmailFrom(): string {
   return process.env.EMAIL_FROM?.trim() || "Finari <research@finari.local>";
 }
