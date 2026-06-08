@@ -34,6 +34,8 @@ describe("getValuationForTicker", () => {
             debtToEquity: 1.2,
             returnOnEquity: 31.5,
             marketCap: 2_900_000_000_000,
+            freeCashFlowToEquity: 90_284_000_000,
+            freeCashFlowToFirm: 98_767_000_000,
           });
         }
 
@@ -64,6 +66,12 @@ describe("getValuationForTicker", () => {
     expect(valuation.metrics.some((metric) => metric.id === "priceEarningsRatio")).toBe(true);
     expect(valuation.metrics.some((metric) => metric.id === "priceToBookRatio")).toBe(true);
     expect(valuation.metrics.some((metric) => metric.id === "marketCap")).toBe(true);
+    expect(
+      valuation.metrics.find((metric) => metric.id === "freeCashFlowToEquity")?.unit,
+    ).toBe("currency");
+    expect(
+      valuation.metrics.find((metric) => metric.id === "freeCashFlowToFirm")?.unit,
+    ).toBe("currency");
   });
 
   it("throws when SEC data payload is missing", async () => {

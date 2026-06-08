@@ -858,6 +858,20 @@ const en = {
     valuationMetricsTitle: "All valuation metrics",
     valuationMetricsSubtitle:
       "Combined from FMP key metrics, ratios, and quote data.",
+    valuationMetricsSearchPlaceholder: "Search metrics",
+    valuationMetricsShowAll: "Show all metrics",
+    valuationMetricsShowLess: "Show fewer",
+    valuationMetricsEmpty: "No matching metrics.",
+    valuationMetricSourceBadges: {
+      "key-metrics": "KEY",
+      "ratios-ttm": "RATIO",
+      quote: "QUOTE",
+    },
+    valuationMetricSourceLabels: {
+      "key-metrics": "FMP key metrics",
+      "ratios-ttm": "FMP ratios TTM",
+      quote: "FMP quote",
+    },
     exportTitle: "Memo export",
     exportSubtitle:
       "Export your memo and snapshot summary when memo data is available.",
@@ -1696,6 +1710,20 @@ const th: Dictionary = {
     valuationSourceLabel: "ที่มา",
     valuationMetricsTitle: "ตัวชี้วัด valuation ทั้งหมด",
     valuationMetricsSubtitle: "รวมจาก FMP key metrics, ratios, และ quote data",
+    valuationMetricsSearchPlaceholder: "ค้นหา metric",
+    valuationMetricsShowAll: "แสดงทั้งหมด",
+    valuationMetricsShowLess: "แสดงน้อยลง",
+    valuationMetricsEmpty: "ไม่พบ metric ที่ตรงกัน",
+    valuationMetricSourceBadges: {
+      "key-metrics": "KEY",
+      "ratios-ttm": "RATIO",
+      quote: "QUOTE",
+    },
+    valuationMetricSourceLabels: {
+      "key-metrics": "FMP key metrics",
+      "ratios-ttm": "FMP ratios TTM",
+      quote: "FMP quote",
+    },
     exportTitle: "ส่งออกสรุป",
     exportSubtitle: "ดาวน์โหลด memo และสรุป snapshot เมื่อมี memo พร้อมใช้งาน",
     exportMemoUnavailable: "สร้าง memo ก่อนเพื่อเปิดใช้งานการ export",

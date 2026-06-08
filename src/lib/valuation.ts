@@ -185,11 +185,15 @@ function inferUnit(key: string, source: FmpSourceName): MetricUnit {
 
   if (
     key === "marketCap" ||
+    key === "marketCapTTM" ||
     key === "enterpriseValue" ||
+    key === "enterpriseValueTTM" ||
     key === "workingCapital" ||
     key === "netCurrentAssetValue" ||
     key === "investedCapital" ||
     key === "tangibleAssetValue" ||
+    key === "freeCashFlowToEquity" ||
+    key === "freeCashFlowToFirm" ||
     key === "averageInventory" ||
     key === "averagePayables" ||
     key === "averageReceivables"
@@ -230,8 +234,6 @@ function inferUnit(key: string, source: FmpSourceName): MetricUnit {
     key === "capexToRevenue" ||
     key === "capexToOperatingCashFlow" ||
     key === "capexToDepreciation" ||
-    key === "freeCashFlowToEquity" ||
-    key === "freeCashFlowToFirm" ||
     key === "freeCashFlowOperatingCashFlowRatioTTM" ||
     key === "operatingCashFlowRatioTTM" ||
     key === "operatingCashFlowSalesRatioTTM" ||

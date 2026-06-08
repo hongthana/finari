@@ -77,6 +77,7 @@ import type {
   MetricUnit,
   PeerMetricComparison,
   ResearchMemo,
+  ValuationMetric,
   ValuationSnapshot,
   TrendSignal,
 } from "@/lib/types";
@@ -132,6 +133,8 @@ type WorkspaceSavedResearch = {
 };
 
 type WorkspacePanelState = "idle" | "loading" | "ready" | "error";
+
+const VALUATION_METRICS_PREVIEW_LIMIT = 12;
 
 const ALERT_TYPES = [
   "revenue",
@@ -2988,6 +2991,36 @@ function MemoPanel({
   );
 }
 
+function ValuationMetricRow({
+  metric,
+  t,
+}: {
+  metric: ValuationMetric;
+  t: Dictionary;
+}) {
+  const sourceBadge = t.waitlist.valuationMetricSourceBadges[metric.source];
+  const sourceLabel = t.waitlist.valuationMetricSourceLabels[metric.source];
+
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_minmax(4.5rem,auto)] items-start gap-3 px-3 py-2.5">
+      <div className="min-w-0">
+        <p className="text-sm font-medium leading-5 text-zinc-900">
+          {metric.label}
+        </p>
+        <span
+          className="mt-1 inline-flex rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none tracking-normal text-zinc-500"
+          title={sourceLabel}
+        >
+          {sourceBadge}
+        </span>
+      </div>
+      <p className="min-w-0 max-w-32 text-right text-sm font-semibold leading-5 text-zinc-950 tabular-nums [overflow-wrap:anywhere]">
+        {formatMetricValue(metric.value, metric.unit)}
+      </p>
+    </div>
+  );
+}
+
 function WaitlistPanel({
   snapshot,
   memo,
@@ -3030,12 +3063,42 @@ function WaitlistPanel({
   const [valuation, setValuation] = useState<WorkspaceValuation>(null);
   const [valuationState, setValuationState] = useState<WorkspacePanelState>("idle");
   const [valuationMessage, setValuationMessage] = useState<string | null>(null);
+  const [valuationMetricQuery, setValuationMetricQuery] = useState("");
+  const [showAllValuationMetrics, setShowAllValuationMetrics] = useState(false);
   const [exportState, setExportState] = useState<WorkspacePanelState>("idle");
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [alertType, setAlertType] = useState(ALERT_TYPES[0]);
   const [alertCondition, setAlertCondition] = useState(ALERT_CONDITIONS[0]);
   const [alertThreshold, setAlertThreshold] = useState("0");
   const [alertNotes, setAlertNotes] = useState("");
+  const valuationMetrics = useMemo(() => valuation?.metrics ?? [], [valuation?.metrics]);
+  const normalizedValuationMetricQuery = valuationMetricQuery.trim().toLowerCase();
+  const filteredValuationMetrics = useMemo(() => {
+    if (!normalizedValuationMetricQuery) {
+      return valuationMetrics;
+    }
+
+    return valuationMetrics.filter((metric) => {
+      const sourceLabel =
+        t.waitlist.valuationMetricSourceLabels[metric.source].toLowerCase();
+      return [
+        metric.label,
+        metric.id,
+        metric.source,
+        sourceLabel,
+        formatMetricValue(metric.value, metric.unit),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedValuationMetricQuery);
+    });
+  }, [normalizedValuationMetricQuery, t, valuationMetrics]);
+  const displayedValuationMetrics =
+    normalizedValuationMetricQuery || showAllValuationMetrics
+      ? filteredValuationMetrics
+      : filteredValuationMetrics.slice(0, VALUATION_METRICS_PREVIEW_LIMIT);
+  const hiddenValuationMetricCount =
+    filteredValuationMetrics.length - displayedValuationMetrics.length;
 
   const loadSavedResearch = useCallback(async () => {
     if (!snapshot) {
@@ -3159,6 +3222,8 @@ function WaitlistPanel({
 
     setValuationState("loading");
     setValuationMessage(null);
+    setValuationMetricQuery("");
+    setShowAllValuationMetrics(false);
 
     try {
       const response = await fetch(
@@ -4054,26 +4119,56 @@ function WaitlistPanel({
                         </p>
                       </div>
                     </div>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {valuation.metrics.map((metric) => (
-                        <div
-                          key={`${metric.source}:${metric.id}`}
-                          className="rounded-md border border-zinc-200 bg-white p-2"
-                        >
-                          <div className="grid grid-cols-[minmax(0,1fr)_minmax(2.5rem,3.75rem)] items-start gap-1">
-                            <p className="min-w-0 break-words text-xs leading-4 text-zinc-500">
-                              {metric.label}
-                            </p>
-                            <p className="min-w-0 text-right text-[9px] uppercase leading-3 tracking-normal text-zinc-400 [overflow-wrap:anywhere]">
-                              {metric.source}
-                            </p>
-                          </div>
-                          <p className="mt-1 min-w-0 break-words text-sm font-semibold leading-5 text-zinc-900 [overflow-wrap:anywhere]">
-                            {formatMetricValue(metric.value, metric.unit)}
-                          </p>
-                        </div>
-                      ))}
+                    <div className="mt-3">
+                      <label className="sr-only" htmlFor="valuation-metric-search">
+                        {t.waitlist.valuationMetricsSearchPlaceholder}
+                      </label>
+                      <div className="relative">
+                        <Search
+                          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+                          aria-hidden="true"
+                        />
+                        <input
+                          id="valuation-metric-search"
+                          type="search"
+                          value={valuationMetricQuery}
+                          onChange={(event) => setValuationMetricQuery(event.target.value)}
+                          placeholder={t.waitlist.valuationMetricsSearchPlaceholder}
+                          className="h-9 w-full rounded-md border border-zinc-300 bg-white pl-9 pr-3 text-sm text-zinc-900 placeholder:text-zinc-400"
+                        />
+                      </div>
                     </div>
+                    <div className="mt-3 overflow-hidden rounded-md border border-zinc-200 bg-white">
+                      <div className="max-h-96 divide-y divide-zinc-100 overflow-auto">
+                        {displayedValuationMetrics.length ? (
+                          displayedValuationMetrics.map((metric) => (
+                            <ValuationMetricRow
+                              key={`${metric.source}:${metric.id}`}
+                              metric={metric}
+                              t={t}
+                            />
+                          ))
+                        ) : (
+                          <p className="px-3 py-4 text-sm text-zinc-500">
+                            {t.waitlist.valuationMetricsEmpty}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {!normalizedValuationMetricQuery &&
+                      valuation.metrics.length > VALUATION_METRICS_PREVIEW_LIMIT && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowAllValuationMetrics((current) => !current)
+                          }
+                          className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 transition hover:border-teal-500 hover:text-teal-700"
+                        >
+                          {showAllValuationMetrics
+                            ? t.waitlist.valuationMetricsShowLess
+                            : `${t.waitlist.valuationMetricsShowAll} (${hiddenValuationMetricCount})`}
+                        </button>
+                      )}
                   </div>
                 )}
               </div>
