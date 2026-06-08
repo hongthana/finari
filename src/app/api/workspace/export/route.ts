@@ -1,4 +1,5 @@
 import { jsonError } from "@/lib/api";
+import { recordRouteActivity } from "@/lib/activity";
 import { normalizeLocale } from "@/lib/i18n";
 import { getPrivateResearchMemoForTicker, getStoredSnapshotForTicker } from "@/lib/research-service";
 import { buildWorkspaceExportPayload } from "@/lib/research-store";
@@ -66,52 +67,66 @@ export async function GET(request: Request) {
   const format = (url.searchParams.get("format") || "json").toLowerCase();
   const locale = normalizeLocale(url.searchParams.get("locale"));
 
-  try {
-    const snapshot = await getStoredSnapshotForTicker(ticker);
-    let memo = null;
-    if (scope === "memo") {
+  return recordRouteActivity(
+    request,
+    {
+      userId,
+      email: user.email,
+      category: "workspace",
+      eventName: "workspace.export",
+      ticker,
+      locale,
+      metadata: { scope, format },
+    },
+    async () => {
       try {
-        memo = await getPrivateResearchMemoForTicker(userId, snapshot.snapshot.identity.ticker, locale);
+        const snapshot = await getStoredSnapshotForTicker(ticker);
+        let memo = null;
+        if (scope === "memo") {
+          try {
+            memo = await getPrivateResearchMemoForTicker(userId, snapshot.snapshot.identity.ticker, locale);
+          } catch (error) {
+            return jsonError(
+              error instanceof Error
+                ? error.message
+                : "Unable to generate workspace memo export",
+              502,
+            );
+          }
+        }
+
+        const payload = await buildWorkspaceExportPayload({
+          scope,
+          snapshot: snapshot.snapshot,
+          memo: memo
+            ? {
+                memo: memo.memo,
+                memoId: memo.memoId,
+              }
+            : null,
+        });
+
+        if (format === "csv") {
+          const csv = toCsv(payload);
+          return new Response(csv, {
+            headers: {
+              "Content-Type": "text/csv; charset=utf-8",
+              "Content-Disposition": `attachment; filename="finari-${snapshot.snapshot.identity.ticker.toUpperCase()}-${scope}-export.csv"`,
+            },
+          });
+        }
+
+        return Response.json({ payload });
       } catch (error) {
+        if (error instanceof Error && error.message.startsWith("Unknown ticker:")) {
+          return jsonError(error.message, 404);
+        }
+
         return jsonError(
-          error instanceof Error
-            ? error.message
-            : "Unable to generate workspace memo export",
+          error instanceof Error ? error.message : "Unable to export workspace payload",
           502,
         );
       }
-    }
-
-    const payload = await buildWorkspaceExportPayload({
-      scope,
-      snapshot: snapshot.snapshot,
-      memo: memo
-        ? {
-            memo: memo.memo,
-            memoId: memo.memoId,
-          }
-        : null,
-    });
-
-    if (format === "csv") {
-      const csv = toCsv(payload);
-      return new Response(csv, {
-        headers: {
-          "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": `attachment; filename="finari-${snapshot.snapshot.identity.ticker.toUpperCase()}-${scope}-export.csv"`,
-        },
-      });
-    }
-
-    return Response.json({ payload });
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith("Unknown ticker:")) {
-      return jsonError(error.message, 404);
-    }
-
-    return jsonError(
-      error instanceof Error ? error.message : "Unable to export workspace payload",
-      502,
-    );
-  }
+    },
+  );
 }

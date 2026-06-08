@@ -26,24 +26,11 @@ describe("requireInvitationAccess", () => {
     expect(getCurrentUser).not.toHaveBeenCalled();
   });
 
-  it("blocks anonymous users when invitation-only mode is enabled", async () => {
+  it("keeps public research routes open even when legacy invitation env vars are set", async () => {
     vi.stubEnv("FINARI_INVITATION_ONLY", "true");
-    getCurrentUser.mockResolvedValueOnce(null);
-
-    const response = await requireInvitationAccess();
-
-    expect(response?.status).toBe(401);
-    await expect(response?.json()).resolves.toEqual({ error: "Authentication required" });
-  });
-
-  it("allows signed-in users when invitation-only mode is enabled", async () => {
-    vi.stubEnv("FINARI_INVITATION_ONLY", "true");
-    getCurrentUser.mockResolvedValueOnce({
-      id: "user_1",
-      email: "investor@example.com",
-      isAdmin: false,
-    });
+    vi.stubEnv("FINARI_INVITED_EMAILS", "founder@example.com");
 
     await expect(requireInvitationAccess()).resolves.toBeNull();
+    expect(getCurrentUser).not.toHaveBeenCalled();
   });
 });

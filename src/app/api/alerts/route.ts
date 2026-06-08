@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { validationError } from "@/lib/api";
+import { recordRouteActivity } from "@/lib/activity";
 import type { AlertConfig } from "@/lib/types";
 import {
   listAlertPreferences,
@@ -46,22 +47,32 @@ export async function POST(request: Request) {
     return unauthorized();
   }
 
-  try {
-    const body = createAlertSchema.parse(await request.json());
-    const result = await upsertAlertPreference({
+  return recordRouteActivity(
+    request,
+    {
       userId,
-      ticker: body.ticker,
-      alertType: body.alertType,
-      enabled: body.enabled,
-      config: {
-        threshold: body.threshold,
-        condition: body.condition,
-        notes: body.notes,
-      } as AlertConfig,
-    });
+      category: "workspace",
+      eventName: "workspace.alert.upsert",
+    },
+    async () => {
+      try {
+        const body = createAlertSchema.parse(await request.json());
+        const result = await upsertAlertPreference({
+          userId,
+          ticker: body.ticker,
+          alertType: body.alertType,
+          enabled: body.enabled,
+          config: {
+            threshold: body.threshold,
+            condition: body.condition,
+            notes: body.notes,
+          } as AlertConfig,
+        });
 
-    return Response.json({ alert: result }, { status: result.isNew ? 201 : 200 });
-  } catch (error) {
-    return validationError(error);
-  }
+        return Response.json({ alert: result }, { status: result.isNew ? 201 : 200 });
+      } catch (error) {
+        return validationError(error);
+      }
+    },
+  );
 }

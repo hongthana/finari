@@ -1,4 +1,5 @@
 import { jsonError } from "@/lib/api";
+import { recordRouteActivity } from "@/lib/activity";
 import { curateCompanyEventForTicker } from "@/lib/event-impact";
 import { forbidden, getCurrentUser, unauthorized } from "@/lib/session";
 
@@ -36,24 +37,38 @@ export async function PATCH(
   if (!isCurationAction(payload?.action)) {
     return jsonError("Invalid event curation action", 400);
   }
+  const action = payload.action;
 
-  try {
-    await curateCompanyEventForTicker({
+  return recordRouteActivity(
+    request,
+    {
+      userId: user.id,
+      email: user.email,
+      category: "admin",
+      eventName: "admin.events.curate",
       ticker,
-      eventId,
-      adminUserId: user.id,
-      action: payload.action,
-    });
-    return Response.json({ ok: true });
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith("Unknown ticker:")) {
-      return jsonError(error.message, 404);
-    }
+      metadata: { action, eventId },
+    },
+    async () => {
+      try {
+        await curateCompanyEventForTicker({
+          ticker,
+          eventId,
+          adminUserId: user.id,
+          action,
+        });
+        return Response.json({ ok: true });
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith("Unknown ticker:")) {
+          return jsonError(error.message, 404);
+        }
 
-    if (error instanceof Error && error.message === "Unknown event") {
-      return jsonError("Unknown event", 404);
-    }
+        if (error instanceof Error && error.message === "Unknown event") {
+          return jsonError("Unknown event", 404);
+        }
 
-    return jsonError("Unable to update event curation right now", 502);
-  }
+        return jsonError("Unable to update event curation right now", 502);
+      }
+    },
+  );
 }

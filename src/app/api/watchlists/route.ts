@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { validationError } from "@/lib/api";
+import { recordRouteActivity } from "@/lib/activity";
 import {
   createWatchlist,
   ensureDefaultWatchlist,
@@ -31,11 +32,21 @@ export async function POST(request: Request) {
     return unauthorized();
   }
 
-  try {
-    const body = createWatchlistSchema.parse(await request.json());
-    const watchlist = await createWatchlist({ userId, name: body.name });
-    return Response.json({ watchlist }, { status: 201 });
-  } catch (error) {
-    return validationError(error);
-  }
+  return recordRouteActivity(
+    request,
+    {
+      userId,
+      category: "workspace",
+      eventName: "workspace.watchlist.create",
+    },
+    async () => {
+      try {
+        const body = createWatchlistSchema.parse(await request.json());
+        const watchlist = await createWatchlist({ userId, name: body.name });
+        return Response.json({ watchlist }, { status: 201 });
+      } catch (error) {
+        return validationError(error);
+      }
+    },
+  );
 }

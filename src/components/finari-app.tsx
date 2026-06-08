@@ -16,6 +16,7 @@ import {
   Languages,
   Loader2,
   LockKeyhole,
+  Mail,
   Minus,
   Newspaper,
   RefreshCw,
@@ -27,6 +28,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
+import { signIn } from "next-auth/react";
 import {
   FormEvent,
   type ReactNode,
@@ -86,6 +88,14 @@ type Viewer = {
   id: string;
   email?: string | null;
   isAdmin: boolean;
+};
+
+type ClientActivityEvent = {
+  eventName: string;
+  path: string;
+  locale: Locale;
+  ticker?: string;
+  metadata?: Record<string, unknown>;
 };
 
 type WorkspaceWatchlist = {
@@ -155,6 +165,198 @@ function buildDownload(fileName: string, content: string, mimeType: string) {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+function MagicLinkForm({
+  t,
+  locale,
+  ticker,
+  compact = false,
+}: {
+  t: Dictionary;
+  locale: Locale;
+  ticker?: string;
+  compact?: boolean;
+}) {
+  const emailInputId = useId();
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      setState("error");
+      setMessage(t.waitlist.signInFailed);
+      return;
+    }
+
+    setState("loading");
+    setMessage(null);
+    const callbackUrl = `/${locale}${ticker ? `?ticker=${encodeURIComponent(ticker)}` : ""}`;
+    const result = await signIn("email", {
+      email: normalizedEmail,
+      callbackUrl,
+      redirect: false,
+    }).catch(() => null);
+
+    if (!result || result.error) {
+      setState("error");
+      setMessage(t.waitlist.signInFailed);
+      return;
+    }
+
+    setState("ready");
+    setMessage(t.waitlist.signInSent);
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      className={compact ? "mt-3 grid gap-2" : "mt-4 grid gap-2"}
+      data-activity="auth.magic_link.form"
+    >
+      {!compact && (
+        <div>
+          <p className="text-sm font-semibold text-zinc-900">
+            {t.waitlist.signInEmailTitle}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-zinc-600">
+            {t.waitlist.signInEmailHelp}
+          </p>
+        </div>
+      )}
+      <label className="sr-only" htmlFor={emailInputId}>
+        {t.waitlist.emailPlaceholder}
+      </label>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <input
+          id={emailInputId}
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder={t.waitlist.emailPlaceholder}
+          className="h-10 min-w-0 flex-1 rounded-md border border-zinc-300 px-3 text-sm text-zinc-900 outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
+        />
+        <button
+          type="submit"
+          disabled={state === "loading"}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
+          data-activity="auth.magic_link.submit"
+        >
+          {state === "loading" ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Mail className="h-4 w-4" aria-hidden="true" />
+          )}
+          {state === "loading" ? t.waitlist.signInSending : t.waitlist.signInSend}
+        </button>
+      </div>
+      {message && (
+        <p
+          className={`rounded-md px-3 py-2 text-sm ${
+            state === "error"
+              ? "bg-rose-50 text-rose-800"
+              : "bg-emerald-50 text-emerald-800"
+          }`}
+        >
+          {message}
+        </p>
+      )}
+    </form>
+  );
+}
+
+function useActivityTracker({
+  viewer,
+  locale,
+  ticker,
+}: {
+  viewer: Viewer | null;
+  locale: Locale;
+  ticker?: string;
+}) {
+  const queueRef = useRef<ClientActivityEvent[]>([]);
+  const flushTimerRef = useRef<number | null>(null);
+
+  const flush = useCallback(() => {
+    if (!viewer || queueRef.current.length === 0) {
+      return;
+    }
+
+    const events = queueRef.current.splice(0, 25);
+    void fetch("/api/activity/client", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ events }),
+    }).catch(() => undefined);
+  }, [viewer]);
+
+  const enqueue = useCallback((event: Omit<ClientActivityEvent, "path" | "locale">) => {
+    if (!viewer) {
+      return;
+    }
+
+    queueRef.current.push({
+      ...event,
+      path: `${window.location.pathname}${window.location.search}`,
+      locale,
+      ticker,
+    });
+
+    if (queueRef.current.length >= 10) {
+      flush();
+      return;
+    }
+
+    if (flushTimerRef.current !== null) {
+      window.clearTimeout(flushTimerRef.current);
+    }
+    flushTimerRef.current = window.setTimeout(flush, 2500);
+  }, [flush, locale, ticker, viewer]);
+
+  useEffect(() => {
+    if (!viewer) {
+      return undefined;
+    }
+
+    enqueue({
+      eventName: "client.page_view",
+      metadata: { route: window.location.pathname },
+    });
+
+    function onClick(event: MouseEvent) {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      const element = target.closest<HTMLElement>("[data-activity]");
+      const eventName = element?.dataset.activity;
+      if (!eventName) {
+        return;
+      }
+
+      enqueue({
+        eventName,
+        metadata: {
+          role: element.getAttribute("role") ?? element.tagName.toLowerCase(),
+          disabled: element.getAttribute("aria-disabled") === "true",
+        },
+      });
+    }
+
+    window.addEventListener("click", onClick);
+    return () => {
+      window.removeEventListener("click", onClick);
+      if (flushTimerRef.current !== null) {
+        window.clearTimeout(flushTimerRef.current);
+      }
+      flush();
+    };
+  }, [enqueue, flush, viewer]);
 }
 
 function formatValuationMetric(
@@ -1066,6 +1268,7 @@ function EventImpactPanel({
               type="button"
               disabled={privateState === "loading" || state === "loading"}
               onClick={onGeneratePrivate}
+              data-activity="events.generate_private"
               className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-teal-700 px-3 text-xs font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
             >
               {privateState === "loading" ? (
@@ -1076,19 +1279,16 @@ function EventImpactPanel({
               {t.events.generatePrivate}
             </button>
           ) : (
-            <Link
-              href="/api/auth/signin"
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-3 text-xs font-semibold text-zinc-700 transition hover:border-teal-500 hover:text-teal-700"
-            >
-              <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />
-              {t.events.signInForPrivate}
-            </Link>
+            <div className="w-full min-w-0 sm:w-72">
+              <MagicLinkForm t={t} locale={locale} compact />
+            </div>
           )}
           {isAdmin && (
             <button
               type="button"
               disabled={adminState === "loading" || state === "loading"}
               onClick={onPublishPublic}
+              data-activity="admin.events.publish_public"
               className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-900 transition hover:border-amber-500 disabled:cursor-not-allowed disabled:border-zinc-200 disabled:bg-zinc-100 disabled:text-zinc-400"
             >
               {adminState === "loading" ? (
@@ -1245,7 +1445,11 @@ function ResearchToolbar({
         </div>
 
         <div className="grid gap-2 sm:gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-          <form onSubmit={onSubmit} className="relative">
+          <form
+            onSubmit={onSubmit}
+            className="relative"
+            data-activity="search.submit"
+          >
             <Search
               className="pointer-events-none absolute left-3 top-3.5 h-5 w-5 text-zinc-400"
               aria-hidden="true"
@@ -1275,6 +1479,7 @@ function ResearchToolbar({
                   <button
                     key={`${company.cik}-${company.ticker}`}
                     type="button"
+                    data-activity="search.result_select"
                     onClick={() => onSelectTicker(company.ticker)}
                     className="flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left transition hover:bg-zinc-100"
                   >
@@ -1489,6 +1694,7 @@ function SnapshotHeader({
         <button
           type="button"
           onClick={onRefresh}
+          data-activity="research.refresh"
           className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-300 bg-white px-3 font-semibold text-zinc-700 transition hover:border-teal-500 hover:text-teal-700"
         >
           <RefreshCw className="h-4 w-4" aria-hidden="true" />
@@ -2645,6 +2851,7 @@ function MemoPanel({
   onGenerate,
   onPublishPublic,
   viewer,
+  locale,
   t,
 }: {
   snapshot: CompanySnapshot | null;
@@ -2656,6 +2863,7 @@ function MemoPanel({
   onGenerate: () => void;
   onPublishPublic: () => void;
   viewer: Viewer | null;
+  locale: Locale;
   t: Dictionary;
 }) {
   const signedIn = Boolean(viewer);
@@ -2686,6 +2894,7 @@ function MemoPanel({
             type="button"
             disabled={!snapshot || memoState === "loading"}
             onClick={onGenerate}
+            data-activity="memo.generate"
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
           >
             {memoState === "loading" ? (
@@ -2696,19 +2905,21 @@ function MemoPanel({
             {generateLabel}
           </button>
           {!signedIn && (
-            <Link
-              href="/api/auth/signin"
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-3 text-xs font-semibold text-zinc-700 transition hover:border-teal-500 hover:text-teal-700"
-            >
-              <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />
-              {t.memo.signInForPrivate}
-            </Link>
+            <div className="w-full min-w-0 sm:w-72">
+              <MagicLinkForm
+                t={t}
+                locale={locale}
+                ticker={snapshot?.identity.ticker}
+                compact
+              />
+            </div>
           )}
           {isAdmin && (
             <button
               type="button"
               disabled={!snapshot || adminMemoState === "loading"}
               onClick={onPublishPublic}
+              data-activity="admin.memo.publish_public"
               className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-900 transition hover:border-amber-500 disabled:cursor-not-allowed disabled:border-zinc-200 disabled:bg-zinc-100 disabled:text-zinc-400"
             >
               {adminMemoState === "loading" ? (
@@ -3357,18 +3568,17 @@ function WaitlistPanel({
         </h3>
         <div className="mt-4 grid gap-2">
           {!viewer && (
-            <Link
-              href="/api/auth/signin"
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-4 text-sm font-semibold text-zinc-800 transition hover:border-teal-500 hover:text-teal-700"
-            >
-              <LockKeyhole className="h-4 w-4" aria-hidden="true" />
-              {t.waitlist.signIn}
-            </Link>
+            <MagicLinkForm
+              t={t}
+              locale={locale}
+              ticker={snapshot?.identity.ticker}
+            />
           )}
           <button
             type="button"
             disabled={!viewer || !snapshot || saveState === "loading"}
             onClick={() => void saveResearch()}
+            data-activity="workspace.save_research"
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
           >
             {saveState === "loading" ? (
@@ -3519,14 +3729,12 @@ function WaitlistPanel({
                 )}
               </>
             ) : (
-              <p className="mt-3 text-sm">
-                <Link
-                  href="/api/auth/signin"
-                  className="font-medium text-teal-700 underline underline-offset-2"
-                >
-                  {t.waitlist.signInToUse}
-                </Link>
-              </p>
+              <MagicLinkForm
+                t={t}
+                locale={locale}
+                ticker={snapshot?.identity.ticker}
+                compact
+              />
             )}
           </article>
 
@@ -3562,6 +3770,7 @@ function WaitlistPanel({
                   type="button"
                   disabled={!watchlistId || watchlistState === "loading"}
                   onClick={() => void addToWatchlist()}
+                  data-activity="workspace.watchlist.add"
                   className="mt-3 inline-flex h-9 items-center justify-center gap-2 rounded-md bg-zinc-950 px-3 text-sm font-medium text-white disabled:bg-zinc-300"
                 >
                   {watchlistState === "loading" ? (
@@ -3609,14 +3818,12 @@ function WaitlistPanel({
                 )}
               </>
             ) : (
-              <p className="mt-3 text-sm">
-                <Link
-                  href="/api/auth/signin"
-                  className="font-medium text-teal-700 underline underline-offset-2"
-                >
-                  {t.waitlist.signInToUse}
-                </Link>
-              </p>
+              <MagicLinkForm
+                t={t}
+                locale={locale}
+                ticker={snapshot?.identity.ticker}
+                compact
+              />
             )}
           </article>
 
@@ -3630,6 +3837,7 @@ function WaitlistPanel({
               <>
                 <form
                   onSubmit={createOrUpdateAlert}
+                  data-activity="workspace.alert.save"
                   className="mt-3 grid gap-2"
                 >
                   <div className="grid gap-1">
@@ -3722,6 +3930,7 @@ function WaitlistPanel({
                           <button
                             type="button"
                             onClick={() => void toggleAlert(item)}
+                            data-activity="workspace.alert.toggle"
                             className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium text-zinc-800"
                           >
                             {item.enabled
@@ -3749,14 +3958,12 @@ function WaitlistPanel({
                 )}
               </>
             ) : (
-              <p className="mt-3 text-sm">
-                <Link
-                  href="/api/auth/signin"
-                  className="font-medium text-teal-700 underline underline-offset-2"
-                >
-                  {t.waitlist.signInToUse}
-                </Link>
-              </p>
+              <MagicLinkForm
+                t={t}
+                locale={locale}
+                ticker={snapshot?.identity.ticker}
+                compact
+              />
             )}
           </article>
 
@@ -3884,6 +4091,7 @@ function WaitlistPanel({
                     type="button"
                     onClick={() => void exportWorkspace("memo", "json")}
                     disabled={exportState === "loading" || !memo}
+                    data-activity="workspace.export.memo_json"
                     className="inline-flex h-9 items-center gap-2 rounded-md bg-sky-700 px-3 text-sm font-medium text-white disabled:bg-zinc-300"
                   >
                     {exportState === "loading" ? (
@@ -3897,6 +4105,7 @@ function WaitlistPanel({
                     type="button"
                     onClick={() => void exportWorkspace("memo", "csv")}
                     disabled={exportState === "loading" || !memo}
+                    data-activity="workspace.export.memo_csv"
                     className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-300 px-3 text-sm font-medium text-zinc-800 disabled:border-zinc-200 disabled:bg-zinc-100 disabled:text-zinc-500"
                   >
                     {exportState === "loading" ? (
@@ -3910,6 +4119,7 @@ function WaitlistPanel({
                     type="button"
                     onClick={() => void exportWorkspace("snapshot", "json")}
                     disabled={exportState === "loading"}
+                    data-activity="workspace.export.snapshot_json"
                     className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-300 px-3 text-sm font-medium text-zinc-800"
                   >
                     {exportState === "loading" ? (
@@ -3934,14 +4144,12 @@ function WaitlistPanel({
                 )}
               </>
             ) : (
-              <p className="mt-3 text-sm">
-                <Link
-                  href="/api/auth/signin"
-                  className="font-medium text-teal-700 underline underline-offset-2"
-                >
-                  {t.waitlist.exportSignedOut}
-                </Link>
-              </p>
+              <MagicLinkForm
+                t={t}
+                locale={locale}
+                ticker={snapshot?.identity.ticker}
+                compact
+              />
             )}
           </article>
         </div>
@@ -4078,6 +4286,12 @@ export function FinariApp({
   const showSearchResults =
     query.trim().length > 0 && query.trim().toUpperCase() !== activeTicker;
   const visibleResults = showSearchResults ? results : [];
+
+  useActivityTracker({
+    viewer,
+    locale,
+    ticker: snapshot?.identity.ticker ?? activeTicker,
+  });
 
   const loadEvents = useCallback(async (ticker: string, includeHidden = false) => {
     const normalized = ticker.trim().toUpperCase();
@@ -4525,6 +4739,7 @@ export function FinariApp({
                 onGenerate={() => void generateMemo()}
                 onPublishPublic={() => void publishPublicMemo()}
                 viewer={viewer}
+                locale={locale}
                 t={t}
               />
               <SourcesAndCaveats snapshot={snapshot} locale={locale} t={t} />

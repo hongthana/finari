@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { validationError } from "@/lib/api";
+import { recordRouteActivity } from "@/lib/activity";
 import {
   getPrivateResearchMemoForTicker,
   getStoredSnapshotForTicker,
@@ -35,23 +36,33 @@ export async function POST(request: Request) {
     return unauthorized();
   }
 
-  try {
-    const body = saveResearchSchema.parse(await request.json());
-    const snapshot = await getStoredSnapshotForTicker(body.ticker);
-    const locale = normalizeLocale(body.locale);
-    const memo = body.includeMemo
-      ? await getPrivateResearchMemoForTicker(userId, body.ticker, locale)
-      : null;
-    const saved = await saveResearchForUser({
+  return recordRouteActivity(
+    request,
+    {
       userId,
-      snapshot,
-      memo: memo ? { memoId: memo.memoId, memo: memo.memo } : null,
-      title: body.title,
-      notes: body.notes,
-    });
+      category: "workspace",
+      eventName: "workspace.saved_research.create",
+    },
+    async () => {
+      try {
+        const body = saveResearchSchema.parse(await request.json());
+        const snapshot = await getStoredSnapshotForTicker(body.ticker);
+        const locale = normalizeLocale(body.locale);
+        const memo = body.includeMemo
+          ? await getPrivateResearchMemoForTicker(userId, body.ticker, locale)
+          : null;
+        const saved = await saveResearchForUser({
+          userId,
+          snapshot,
+          memo: memo ? { memoId: memo.memoId, memo: memo.memo } : null,
+          title: body.title,
+          notes: body.notes,
+        });
 
-    return Response.json({ saved }, { status: 201 });
-  } catch (error) {
-    return validationError(error);
-  }
+        return Response.json({ saved }, { status: 201 });
+      } catch (error) {
+        return validationError(error);
+      }
+    },
+  );
 }

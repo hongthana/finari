@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { validationError } from "@/lib/api";
+import { recordRouteActivity } from "@/lib/activity";
 import { getStoredSnapshotForTicker } from "@/lib/research-service";
 import {
   addCompanyToWatchlist,
@@ -38,21 +39,31 @@ export async function POST(
     return unauthorized();
   }
 
-  try {
-    const [{ id }, body] = await Promise.all([context.params, request.json()]);
-    const parsed = addItemSchema.parse(body);
-    const snapshot = await getStoredSnapshotForTicker(parsed.ticker);
-    const item = await addCompanyToWatchlist({
+  return recordRouteActivity(
+    request,
+    {
       userId,
-      watchlistId: id,
-      snapshot,
-      notes: parsed.notes,
-    });
-    return Response.json(
-      { item },
-      item.isDuplicate ? { status: 200 } : { status: 201 },
-    );
-  } catch (error) {
-    return validationError(error);
-  }
+      category: "workspace",
+      eventName: "workspace.watchlist.add_item",
+    },
+    async () => {
+      try {
+        const [{ id }, body] = await Promise.all([context.params, request.json()]);
+        const parsed = addItemSchema.parse(body);
+        const snapshot = await getStoredSnapshotForTicker(parsed.ticker);
+        const item = await addCompanyToWatchlist({
+          userId,
+          watchlistId: id,
+          snapshot,
+          notes: parsed.notes,
+        });
+        return Response.json(
+          { item },
+          item.isDuplicate ? { status: 200 } : { status: 201 },
+        );
+      } catch (error) {
+        return validationError(error);
+      }
+    },
+  );
 }

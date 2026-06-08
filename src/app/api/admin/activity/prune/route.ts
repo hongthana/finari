@@ -1,6 +1,5 @@
-import { runAlertDeliveryJob } from "@/lib/alert-delivery";
-import { recordActivityEvent } from "@/lib/activity";
-import { getAlertsCronSecret } from "@/lib/env";
+import { getActivityCronSecret } from "@/lib/env";
+import { pruneOldActivityEvents, recordActivityEvent } from "@/lib/activity";
 import { forbidden, getCurrentUser, unauthorized } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -16,47 +15,35 @@ function getBearerToken(request: Request): string {
 }
 
 function isCronAuthorized(request: Request): boolean {
-  const cronSecret = getAlertsCronSecret();
-  if (!cronSecret) {
-    return false;
-  }
-
-  return getBearerToken(request) === cronSecret;
+  const cronSecret = getActivityCronSecret();
+  return Boolean(cronSecret && getBearerToken(request) === cronSecret);
 }
 
 export async function POST(request: Request) {
   if (isCronAuthorized(request)) {
-    const summary = await runAlertDeliveryJob();
-    void recordActivityEvent({
-      category: "admin",
-      eventName: "admin.alerts.deliver_cron",
-      path: new URL(request.url).pathname,
-      method: request.method,
-      status: "ok",
-      metadata: { ...summary },
-    });
-    return Response.json({ summary });
+    const result = await pruneOldActivityEvents();
+    return Response.json({ result });
   }
 
   const user = await getCurrentUser();
   if (!user) {
     return unauthorized();
   }
-
   if (!user.isAdmin) {
     return forbidden();
   }
 
-  const summary = await runAlertDeliveryJob();
+  const result = await pruneOldActivityEvents();
   void recordActivityEvent({
     userId: user.id,
     email: user.email,
     category: "admin",
-    eventName: "admin.alerts.deliver",
+    eventName: "admin.activity.prune",
     path: new URL(request.url).pathname,
     method: request.method,
     status: "ok",
-    metadata: { ...summary },
+    metadata: { deleted: result.deleted, cutoff: result.cutoff.toISOString() },
   });
-  return Response.json({ summary });
+
+  return Response.json({ result });
 }

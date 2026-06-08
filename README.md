@@ -90,10 +90,12 @@ Important notes:
 - `DATABASE_URL` is required for durable data.
 - `REDIS_URL` is optional for local development, but recommended for cache and lock behavior.
 - `AUTH_SECRET` must be a long random value in production.
-- `AUTH_URL` should match the deployed app URL in production.
-- Set `FINARI_INVITATION_ONLY=true` and `FINARI_INVITED_EMAILS` to a comma-separated email allowlist to make `www.finari.co` invitation-only. `ADMIN_EMAILS` are also allowed.
+- `AUTH_URL` and `NEXTAUTH_URL` should both be `https://www.finari.co` in production so magic-link callbacks stay on the custom domain.
+- Finari production access is email magic-link based; any valid email can request a link. Keep `ADMIN_EMAILS` limited to trusted operators.
 - `ALERTS_CRON_SECRET` must match the GitHub Actions secret used by the scheduled alert-delivery workflow.
 - `REFRESH_CRON_SECRET` must match the GitHub Actions secret used by the scheduled research-refresh workflow.
+- `ACTIVITY_CRON_SECRET` must match the GitHub Actions secret used by the scheduled activity-pruning workflow.
+- `ACTIVITY_LOG_RETENTION_DAYS` defaults to `180`; activity logs store hashed IP/user-agent values and sanitized metadata only.
 - `EMAIL_FROM` must use a sender domain verified by the email provider.
 - `RESEND_API_KEY` is required for production magic-link delivery.
 - `OPENAI_API_KEY` is optional; without it, Finari returns deterministic fallback memos and event analysis.

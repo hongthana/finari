@@ -5,9 +5,9 @@ import EmailProvider from "next-auth/providers/email";
 
 import { getDb, hasDatabase } from "@/db/client";
 import { accounts, sessions, users, verificationTokens } from "@/db/schema";
+import { hashActivityValue, recordActivityEvent } from "@/lib/activity";
 import { sendMagicLinkEmail } from "@/lib/email";
 import { getAuthSecret, getEmailFrom } from "@/lib/env";
-import { isInvitedEmail } from "@/lib/invitations";
 
 export function getAuthOptions(): NextAuthOptions {
   const databaseEnabled = hasDatabase();
@@ -22,8 +22,8 @@ export function getAuthOptions(): NextAuthOptions {
         }) as Adapter)
       : undefined,
     callbacks: {
-      signIn({ user }) {
-        return isInvitedEmail(user.email);
+      signIn() {
+        return true;
       },
       session({ session, user }) {
         if (session.user) {
@@ -42,6 +42,18 @@ export function getAuthOptions(): NextAuthOptions {
     secret: getAuthSecret(),
     session: {
       strategy: databaseEnabled ? "database" : "jwt",
+    },
+    events: {
+      async signIn({ user, isNewUser }) {
+        await recordActivityEvent({
+          userId: user.id,
+          emailHash: hashActivityValue(user.email),
+          category: "auth",
+          eventName: "auth.sign_in.success",
+          status: "ok",
+          metadata: { isNewUser },
+        });
+      },
     },
   };
 }

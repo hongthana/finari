@@ -1,4 +1,5 @@
 import { jsonError } from "@/lib/api";
+import { recordRouteActivity } from "@/lib/activity";
 import { normalizeLocale } from "@/lib/i18n";
 import {
   companyLookupError,
@@ -20,19 +21,32 @@ export async function POST(
   const { ticker } = await context.params;
   const locale = normalizeLocale(new URL(request.url).searchParams.get("locale"));
 
-  try {
-    const { memo, memoId, snapshotId } = await getPrivateResearchMemoForTicker(
-      user.id,
+  return recordRouteActivity(
+    request,
+    {
+      userId: user.id,
+      email: user.email,
+      category: "workspace",
+      eventName: "memo.generate_private",
       ticker,
       locale,
-    );
+    },
+    async () => {
+      try {
+        const { memo, memoId, snapshotId } = await getPrivateResearchMemoForTicker(
+          user.id,
+          ticker,
+          locale,
+        );
 
-    return Response.json({ memo, memoId, snapshotId });
-  } catch (error) {
-    const lookupError = companyLookupError(error, ticker);
-    if (lookupError) {
-      return lookupError;
-    }
-    return jsonError("Unable to generate a private research memo right now", 502);
-  }
+        return Response.json({ memo, memoId, snapshotId });
+      } catch (error) {
+        const lookupError = companyLookupError(error, ticker);
+        if (lookupError) {
+          return lookupError;
+        }
+        return jsonError("Unable to generate a private research memo right now", 502);
+      }
+    },
+  );
 }

@@ -439,6 +439,42 @@ export const aiUsageEvents = pgTable(
   }),
 );
 
+export const userActivityEvents = pgTable(
+  "user_activity_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    emailHash: text("email_hash"),
+    category: text("category").notNull(),
+    eventName: text("event_name").notNull(),
+    path: text("path"),
+    method: text("method"),
+    status: integer("status"),
+    locale: text("locale"),
+    ticker: text("ticker"),
+    durationMs: integer("duration_ms"),
+    ipHash: text("ip_hash"),
+    userAgentHash: text("user_agent_hash"),
+    metadataJson: jsonb("metadata_json").$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    userCreatedIdx: index("user_activity_events_user_created_idx").on(
+      table.userId,
+      table.createdAt,
+    ),
+    eventCreatedIdx: index("user_activity_events_event_created_idx").on(
+      table.eventName,
+      table.createdAt,
+    ),
+    pathCreatedIdx: index("user_activity_events_path_created_idx").on(
+      table.path,
+      table.createdAt,
+    ),
+    createdIdx: index("user_activity_events_created_idx").on(table.createdAt),
+  }),
+);
+
 export const researchRefreshRuns = pgTable(
   "research_refresh_runs",
   {
@@ -600,6 +636,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   }),
   watchlists: many(watchlists),
   savedResearch: many(savedResearch),
+  activityEvents: many(userActivityEvents),
 }));
 
 export const companiesRelations = relations(companies, ({ many }) => ({

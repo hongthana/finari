@@ -62,6 +62,15 @@ export function getRefreshCronSecret(): string {
   return process.env.REFRESH_CRON_SECRET?.trim() || "";
 }
 
+export function getActivityCronSecret(): string {
+  return process.env.ACTIVITY_CRON_SECRET?.trim() || "";
+}
+
+export function getActivityLogRetentionDays(): number {
+  const raw = Number.parseInt(process.env.ACTIVITY_LOG_RETENTION_DAYS ?? "", 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 180;
+}
+
 export function getEmailFrom(): string {
   return process.env.EMAIL_FROM?.trim() || "Finari <research@finari.local>";
 }

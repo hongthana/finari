@@ -1,4 +1,5 @@
 import { jsonError } from "@/lib/api";
+import { recordRouteActivity } from "@/lib/activity";
 import { getRefreshCronSecret } from "@/lib/env";
 import { companyLookupError, getCompanySnapshotForTicker } from "@/lib/research-service";
 import { requireInvitationAccess } from "@/lib/site-access";
@@ -28,26 +29,37 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ ticker: string }> },
 ) {
-  if (!isRefreshAuthorized(request)) {
-    const blocked = await requireInvitationAccess();
-    if (blocked) {
-      return blocked;
-    }
-  }
-
   const { ticker } = await context.params;
   const { searchParams } = new URL(request.url);
   const forceRefresh =
     searchParams.get("refresh") === "1" || searchParams.get("refresh") === "true";
 
-  try {
-    const snapshot = await getCompanySnapshotForTicker(ticker, { forceRefresh });
-    return Response.json({ snapshot });
-  } catch (error) {
-    const lookupError = companyLookupError(error, ticker);
-    if (lookupError) {
-      return lookupError;
-    }
-    return jsonError("Unable to load SEC company facts right now", 502);
-  }
+  return recordRouteActivity(
+    request,
+    {
+      category: "research",
+      eventName: forceRefresh ? "research.company_refresh" : "research.company_view",
+      ticker,
+      metadata: { forceRefresh },
+    },
+    async () => {
+      if (!isRefreshAuthorized(request)) {
+        const blocked = await requireInvitationAccess();
+        if (blocked) {
+          return blocked;
+        }
+      }
+
+      try {
+        const snapshot = await getCompanySnapshotForTicker(ticker, { forceRefresh });
+        return Response.json({ snapshot });
+      } catch (error) {
+        const lookupError = companyLookupError(error, ticker);
+        if (lookupError) {
+          return lookupError;
+        }
+        return jsonError("Unable to load SEC company facts right now", 502);
+      }
+    },
+  );
 }
