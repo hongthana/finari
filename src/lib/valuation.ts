@@ -114,34 +114,38 @@ export async function getValuationForTicker(ticker: string): Promise<ValuationSn
     firstObject<FmpRatiosItem>(rawMetrics) ?? firstObject<FmpRatiosItem>(rawRatios);
   const quote = firstObject<FmpQuoteItem>(rawQuote);
 
-  if (!ratios) {
+  if (!ratios && !quote) {
     throw new Error(`No valuation data available for ${normalized}`);
   }
+
+  const metricSource = ratios ?? {};
 
   return {
     ticker: normalized,
     asOf: new Date().toISOString(),
     marketCap:
-      asNumber(ratios.marketCap) ??
+      asNumber(metricSource.marketCap) ??
       asNumber(quote?.marketCap) ??
       asNumber(quote?.marketCapitalization) ??
       asNumber(quote?.mktCap) ??
       asNumber(quote?.market_cap),
     priceToEarnings:
-      asNumber(ratios.priceEarningsRatio) ??
-      asNumber(ratios.peRatio),
+      asNumber(metricSource.priceEarningsRatio) ??
+      asNumber(metricSource.peRatio),
     priceToBook:
-      asNumber(ratios.priceToBookRatio) ??
-      asNumber(ratios.pbRatio),
+      asNumber(metricSource.priceToBookRatio) ??
+      asNumber(metricSource.pbRatio),
     enterpriseValueToEbitda:
-      asNumber(ratios.enterpriseValueOverEBITDA) ??
-      asNumber(ratios.evEbitda),
+      asNumber(metricSource.enterpriseValueOverEBITDA) ??
+      asNumber(metricSource.evEbitda),
     debtToEquity:
-      asNumber(ratios.debtToEquity),
+      asNumber(metricSource.debtToEquity),
     returnOnEquity:
-      asNumber(ratios.returnOnEquity) ??
-      asNumber(ratios.returnOnEquityTTM),
+      asNumber(metricSource.returnOnEquity) ??
+      asNumber(metricSource.returnOnEquityTTM),
     currency: "USD",
-    source: "financialmodelingprep.com",
+    source: ratios
+      ? "financialmodelingprep.com"
+      : "financialmodelingprep.com (quote fallback)",
   };
 }
