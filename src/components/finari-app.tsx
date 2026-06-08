@@ -4068,7 +4068,7 @@ function WaitlistPanel({
                               {metric.source}
                             </p>
                           </div>
-                          <p className="mt-1 font-semibold text-zinc-900">
+                          <p className="mt-1 min-w-0 break-words text-sm font-semibold leading-5 text-zinc-900 [overflow-wrap:anywhere]">
                             {formatMetricValue(metric.value, metric.unit)}
                           </p>
                         </div>
