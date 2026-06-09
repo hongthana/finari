@@ -148,7 +148,7 @@ const ALERT_TYPES = [
   "debt-to-equity",
   "roe",
   "custom",
-];
+] as const;
 
 const ALERT_CONDITIONS = [
   "above",
@@ -157,7 +157,26 @@ const ALERT_CONDITIONS = [
   "change-below",
   "above-or-equal",
   "below-or-equal",
-];
+] as const;
+
+type AlertTypeOption = typeof ALERT_TYPES[number];
+type AlertConditionOption = typeof ALERT_CONDITIONS[number];
+
+function isAlertTypeOption(value: string): value is AlertTypeOption {
+  return (ALERT_TYPES as readonly string[]).includes(value);
+}
+
+function isAlertConditionOption(value: string): value is AlertConditionOption {
+  return (ALERT_CONDITIONS as readonly string[]).includes(value);
+}
+
+function alertTypeLabel(t: Dictionary, value: string): string {
+  return isAlertTypeOption(value) ? t.waitlist.alertTypeOptions[value] : value;
+}
+
+function alertConditionLabel(t: Dictionary, value: string): string {
+  return isAlertConditionOption(value) ? t.waitlist.alertConditionOptions[value] : value;
+}
 
 function buildDownload(fileName: string, content: string, mimeType: string) {
   const blob = new Blob([content], { type: mimeType });
@@ -987,23 +1006,21 @@ function AdvisorSummary({
                 key={read.title}
                 className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3"
               >
-                <div className="flex items-start gap-3">
+                <div className="flex items-center gap-2">
                   <SignalBadge
                     signal={read.signal}
                     variant={read.iconVariant}
                     label={read.title}
                     t={t}
-                    className="mt-0.5 p-1.5"
+                    className="shrink-0 p-1.5"
                   />
-                  <div className="min-w-0">
-                    <h4 className="text-sm font-semibold text-zinc-950">
-                      {read.title}
-                    </h4>
-                    <p className="mt-1 break-words text-sm leading-6 text-zinc-700">
-                      {read.body}
-                    </p>
-                  </div>
+                  <h4 className="min-w-0 break-words text-sm font-semibold text-zinc-950">
+                    {read.title}
+                  </h4>
                 </div>
+                <p className="mt-2 break-words text-sm leading-6 text-zinc-700">
+                  {read.body}
+                </p>
               </article>
             ))}
           </div>
@@ -1022,22 +1039,20 @@ function AdvisorSummary({
                 key={item.question}
                 className="min-w-0 rounded-md border border-zinc-200 bg-white p-3"
               >
-                <div className="flex items-start gap-2">
+                <div className="flex items-center gap-2">
                   <SignalBadge
                     signal={item.signal}
                     label={item.question}
                     t={t}
-                    className="mt-0.5 p-1"
+                    className="shrink-0 p-1"
                   />
-                  <div className="min-w-0">
-                    <p className="break-words text-sm font-semibold leading-5 text-zinc-950">
-                      {item.question}
-                    </p>
-                    <p className="mt-1 break-words text-sm leading-6 text-zinc-700">
-                      {item.answer}
-                    </p>
-                  </div>
+                  <p className="min-w-0 break-words text-sm font-semibold leading-5 text-zinc-950">
+                    {item.question}
+                  </p>
                 </div>
+                <p className="mt-2 break-words text-sm leading-6 text-zinc-700">
+                  {item.answer}
+                </p>
               </article>
             ))}
           </div>
@@ -1916,23 +1931,21 @@ function DecisionScreen({
             key={card.label}
             className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3"
           >
-            <div className="flex items-start gap-3">
+            <div className="flex items-center gap-2">
               <MeaningBadge
                 Icon={card.Icon}
                 label={card.label}
                 tooltip={card.tooltip}
                 tone={card.tone}
-                className="mt-0.5 p-1.5"
+                className="shrink-0 p-1.5"
               />
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
-                  {card.label}
-                </p>
-                <p className="mt-1 break-words text-sm font-semibold leading-6 text-zinc-950">
-                  {card.value}
-                </p>
-              </div>
+              <p className="min-w-0 break-words text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
+                {card.label}
+              </p>
             </div>
+            <p className="mt-2 break-words text-sm font-semibold leading-6 text-zinc-950">
+              {card.value}
+            </p>
           </article>
         ))}
       </div>
@@ -3167,8 +3180,10 @@ function WaitlistPanel({
   );
   const [exportState, setExportState] = useState<WorkspacePanelState>("idle");
   const [exportMessage, setExportMessage] = useState<string | null>(null);
-  const [alertType, setAlertType] = useState(ALERT_TYPES[0]);
-  const [alertCondition, setAlertCondition] = useState(ALERT_CONDITIONS[0]);
+  const [alertType, setAlertType] = useState<AlertTypeOption>(ALERT_TYPES[0]);
+  const [alertCondition, setAlertCondition] = useState<AlertConditionOption>(
+    ALERT_CONDITIONS[0],
+  );
   const [alertThreshold, setAlertThreshold] = useState("0");
   const [alertNotes, setAlertNotes] = useState("");
   const valuationMetrics = useMemo(() => valuation?.metrics ?? [], [valuation?.metrics]);
@@ -4087,7 +4102,7 @@ function WaitlistPanel({
                     >
                       {ALERT_TYPES.map((type) => (
                         <option key={type} value={type}>
-                          {type}
+                          {alertTypeLabel(t, type)}
                         </option>
                       ))}
                     </select>
@@ -4103,7 +4118,7 @@ function WaitlistPanel({
                     >
                       {ALERT_CONDITIONS.map((condition) => (
                         <option key={condition} value={condition}>
-                          {condition}
+                          {alertConditionLabel(t, condition)}
                         </option>
                       ))}
                     </select>
@@ -4158,9 +4173,12 @@ function WaitlistPanel({
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div>
-                            <p className="font-medium text-zinc-900">{item.alertType}</p>
+                            <p className="font-medium text-zinc-900">
+                              {alertTypeLabel(t, item.alertType)}
+                            </p>
                             <p className="text-xs text-zinc-500">
-                              {item.ticker} · {item.config.condition} {item.config.threshold}
+                              {item.ticker} · {alertConditionLabel(t, item.config.condition)}{" "}
+                              {item.config.threshold}
                             </p>
                           </div>
                           <button
