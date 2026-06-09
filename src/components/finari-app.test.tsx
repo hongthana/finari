@@ -125,6 +125,123 @@ describe("FinariApp", () => {
     );
   });
 
+  it("pins favorite valuation metrics above the full valuation list", async () => {
+    const user = userEvent.setup();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+
+        if (url === "/api/me") {
+          return Response.json({
+            user: { id: "user_1", email: "investor@example.com", isAdmin: false },
+          });
+        }
+
+        if (url === "/api/sp500") {
+          return Response.json({
+            constituents: [
+              { ticker: "AAPL", name: "Apple Inc.", sector: "Information Technology" },
+            ],
+          });
+        }
+
+        if (url.startsWith("/api/valuation/AAPL")) {
+          return Response.json({
+            valuation: {
+              ticker: "AAPL",
+              asOf: "2026-06-09T00:00:00.000Z",
+              marketCap: 3_000_000_000_000,
+              priceToEarnings: 30,
+              priceToBook: 45,
+              enterpriseValueToEbitda: 22,
+              debtToEquity: 0.8,
+              returnOnEquity: 1.5,
+              currency: "USD",
+              source: "financialmodelingprep.com",
+              metrics: [
+                {
+                  id: "average-inventory",
+                  label: "Average inventory",
+                  value: 6_500_000_000,
+                  unit: "currency",
+                  source: "key-metrics",
+                },
+                {
+                  id: "price-to-earnings-ratio",
+                  label: "Price to earnings ratio",
+                  value: 30,
+                  unit: "multiple",
+                  source: "ratios-ttm",
+                },
+              ],
+            },
+          });
+        }
+
+        if (url.startsWith("/api/company/AAPL/events")) {
+          return Response.json({
+            events: fixtureEvents,
+            generatedAt: "2026-06-05T10:00:00.000Z",
+          });
+        }
+
+        if (url.startsWith("/api/company/AAPL")) {
+          return Response.json({ snapshot: fixtureSnapshot });
+        }
+
+        if (url.startsWith("/api/search")) {
+          return Response.json({ results: [] });
+        }
+
+        if (url === "/api/research/saved") {
+          return Response.json({ saved: [] });
+        }
+
+        if (url === "/api/watchlists") {
+          return Response.json({ watchlists: [] });
+        }
+
+        if (url === "/api/alerts") {
+          return Response.json({ alerts: [] });
+        }
+
+        return Response.json({}, { status: 404 });
+      }),
+    );
+
+    render(
+      <FinariApp
+        locale="en"
+        initialViewer={{ id: "user_1", email: "investor@example.com", isAdmin: false }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Average inventory")).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByText("Price to earnings ratio")).toBeInTheDocument();
+    });
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Add to favorites: Price to earnings ratio",
+      }),
+    );
+
+    const favoriteMetric = screen.getByText("Price to earnings ratio");
+    const previousFirstMetric = screen.getByText("Average inventory");
+    expect(
+      Boolean(
+        favoriteMetric.compareDocumentPosition(previousFirstMetric) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ),
+    ).toBe(true);
+    expect(screen.getByText(/favorites pinned/)).toBeInTheDocument();
+  });
+
   it("localizes the event brief in Thai instead of showing the English feed snippet", async () => {
     vi.stubGlobal(
       "fetch",

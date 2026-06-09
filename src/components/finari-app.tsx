@@ -24,6 +24,7 @@ import {
   ShieldCheck,
   TrendingDown,
   Sparkles,
+  Star,
   TrendingUp,
   type LucideIcon,
 } from "lucide-react";
@@ -135,6 +136,7 @@ type WorkspaceSavedResearch = {
 type WorkspacePanelState = "idle" | "loading" | "ready" | "error";
 
 const VALUATION_METRICS_PREVIEW_LIMIT = 12;
+const VALUATION_FAVORITES_STORAGE_PREFIX = "finari:valuation-metric-favorites";
 
 const ALERT_TYPES = [
   "revenue",
@@ -366,6 +368,8 @@ function useActivityTracker({
           interactionType,
           role: element.getAttribute("role") ?? element.tagName.toLowerCase(),
           disabled: element.getAttribute("aria-disabled") === "true",
+          metricId: element.dataset.activityMetricId,
+          metricSource: element.dataset.activityMetricSource,
           clickX: Math.round(clickX),
           clickY: Math.round(clickY),
           viewportWidth,
@@ -3051,16 +3055,48 @@ function MemoPanel({
 function ValuationMetricRow({
   metric,
   t,
+  isFavorite,
+  onToggleFavorite,
 }: {
   metric: ValuationMetric;
   t: Dictionary;
+  isFavorite: boolean;
+  onToggleFavorite: (metric: ValuationMetric) => void;
 }) {
   const sourceBadge = t.waitlist.valuationMetricSourceBadges[metric.source];
   const sourceLabel = t.waitlist.valuationMetricSourceLabels[metric.source];
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_minmax(4.5rem,auto)] items-start gap-3 px-3 py-2.5">
-      <div className="min-w-0">
+    <div className="grid grid-cols-[2rem_minmax(0,1fr)_minmax(4.5rem,auto)] items-start gap-2 px-3 py-2.5">
+      <button
+        type="button"
+        onClick={() => onToggleFavorite(metric)}
+        aria-pressed={isFavorite}
+        aria-label={
+          isFavorite
+            ? `${t.waitlist.valuationMetricUnfavorite}: ${metric.label}`
+            : `${t.waitlist.valuationMetricFavorite}: ${metric.label}`
+        }
+        title={
+          isFavorite
+            ? t.waitlist.valuationMetricUnfavorite
+            : t.waitlist.valuationMetricFavorite
+        }
+        data-activity="valuation.metric.favorite_toggle"
+        data-activity-metric-id={metric.id}
+        data-activity-metric-source={metric.source}
+        className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition ${
+          isFavorite
+            ? "border-amber-300 bg-amber-50 text-amber-600"
+            : "border-zinc-200 bg-white text-zinc-400 hover:border-amber-300 hover:text-amber-600"
+        }`}
+      >
+        <Star
+          className={`h-4 w-4 ${isFavorite ? "fill-current" : ""}`}
+          aria-hidden="true"
+        />
+      </button>
+      <div className="min-w-0 pt-0.5">
         <p className="text-sm font-medium leading-5 text-zinc-900">
           {metric.label}
         </p>
@@ -3071,11 +3107,15 @@ function ValuationMetricRow({
           {sourceBadge}
         </span>
       </div>
-      <p className="min-w-0 max-w-32 text-right text-sm font-semibold leading-5 text-zinc-950 tabular-nums [overflow-wrap:anywhere]">
+      <p className="min-w-0 max-w-32 pt-0.5 text-right text-sm font-semibold leading-5 text-zinc-950 tabular-nums [overflow-wrap:anywhere]">
         {formatMetricValue(metric.value, metric.unit)}
       </p>
     </div>
   );
+}
+
+function valuationMetricKey(metric: ValuationMetric): string {
+  return `${metric.source}:${metric.id}`;
 }
 
 function WaitlistPanel({
@@ -3122,6 +3162,9 @@ function WaitlistPanel({
   const [valuationMessage, setValuationMessage] = useState<string | null>(null);
   const [valuationMetricQuery, setValuationMetricQuery] = useState("");
   const [showAllValuationMetrics, setShowAllValuationMetrics] = useState(false);
+  const [favoriteValuationMetricKeys, setFavoriteValuationMetricKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [exportState, setExportState] = useState<WorkspacePanelState>("idle");
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [alertType, setAlertType] = useState(ALERT_TYPES[0]);
@@ -3150,12 +3193,82 @@ function WaitlistPanel({
         .includes(normalizedValuationMetricQuery);
     });
   }, [normalizedValuationMetricQuery, t, valuationMetrics]);
+  const valuationFavoritesStorageKey =
+    viewer && snapshot
+      ? `${VALUATION_FAVORITES_STORAGE_PREFIX}:${viewer.id}:${snapshot.identity.ticker}`
+      : null;
+  const orderedFilteredValuationMetrics = useMemo(() => {
+    if (!favoriteValuationMetricKeys.size) {
+      return filteredValuationMetrics;
+    }
+
+    const favorites: ValuationMetric[] = [];
+    const rest: ValuationMetric[] = [];
+    for (const metric of filteredValuationMetrics) {
+      if (favoriteValuationMetricKeys.has(valuationMetricKey(metric))) {
+        favorites.push(metric);
+      } else {
+        rest.push(metric);
+      }
+    }
+    return [...favorites, ...rest];
+  }, [favoriteValuationMetricKeys, filteredValuationMetrics]);
   const displayedValuationMetrics =
     normalizedValuationMetricQuery || showAllValuationMetrics
-      ? filteredValuationMetrics
-      : filteredValuationMetrics.slice(0, VALUATION_METRICS_PREVIEW_LIMIT);
+      ? orderedFilteredValuationMetrics
+      : orderedFilteredValuationMetrics.slice(0, VALUATION_METRICS_PREVIEW_LIMIT);
   const hiddenValuationMetricCount =
-    filteredValuationMetrics.length - displayedValuationMetrics.length;
+    orderedFilteredValuationMetrics.length - displayedValuationMetrics.length;
+  const favoriteValuationMetricCount = valuationMetrics.filter((metric) =>
+    favoriteValuationMetricKeys.has(valuationMetricKey(metric)),
+  ).length;
+
+  useEffect(() => {
+    if (!valuationFavoritesStorageKey) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFavoriteValuationMetricKeys(new Set());
+      return;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(valuationFavoritesStorageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      const keys = Array.isArray(parsed)
+        ? parsed.filter((value): value is string => typeof value === "string")
+        : [];
+      setFavoriteValuationMetricKeys(new Set(keys));
+    } catch {
+      setFavoriteValuationMetricKeys(new Set());
+    }
+  }, [valuationFavoritesStorageKey]);
+
+  const toggleFavoriteValuationMetric = useCallback(
+    (metric: ValuationMetric) => {
+      const key = valuationMetricKey(metric);
+      setFavoriteValuationMetricKeys((current) => {
+        const next = new Set(current);
+        if (next.has(key)) {
+          next.delete(key);
+        } else {
+          next.add(key);
+        }
+
+        if (valuationFavoritesStorageKey) {
+          try {
+            window.localStorage.setItem(
+              valuationFavoritesStorageKey,
+              JSON.stringify([...next]),
+            );
+          } catch {
+            // Preference persistence should never block research usage.
+          }
+        }
+
+        return next;
+      });
+    },
+    [valuationFavoritesStorageKey],
+  );
 
   const loadSavedResearch = useCallback(async () => {
     if (!snapshot) {
@@ -4176,6 +4289,12 @@ function WaitlistPanel({
                           {t.waitlist.valuationMetricsSubtitle}
                         </p>
                       </div>
+                      {favoriteValuationMetricCount > 0 && (
+                        <span className="shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">
+                          {favoriteValuationMetricCount}{" "}
+                          {t.waitlist.valuationMetricsFavoritesCount}
+                        </span>
+                      )}
                     </div>
                     <div className="mt-3">
                       <label className="sr-only" htmlFor="valuation-metric-search">
@@ -4204,6 +4323,10 @@ function WaitlistPanel({
                               key={`${metric.source}:${metric.id}`}
                               metric={metric}
                               t={t}
+                              isFavorite={favoriteValuationMetricKeys.has(
+                                valuationMetricKey(metric),
+                              )}
+                              onToggleFavorite={toggleFavoriteValuationMetric}
                             />
                           ))
                         ) : (

@@ -862,6 +862,9 @@ const en = {
     valuationMetricsShowAll: "Show all metrics",
     valuationMetricsShowLess: "Show fewer",
     valuationMetricsEmpty: "No matching metrics.",
+    valuationMetricFavorite: "Add to favorites",
+    valuationMetricUnfavorite: "Remove from favorites",
+    valuationMetricsFavoritesCount: "favorites pinned",
     valuationMetricSourceBadges: {
       "key-metrics": "KEY",
       "ratios-ttm": "RATIO",
@@ -1714,6 +1717,9 @@ const th: Dictionary = {
     valuationMetricsShowAll: "แสดงทั้งหมด",
     valuationMetricsShowLess: "แสดงน้อยลง",
     valuationMetricsEmpty: "ไม่พบ metric ที่ตรงกัน",
+    valuationMetricFavorite: "เพิ่มเป็นรายการโปรด",
+    valuationMetricUnfavorite: "นำออกจากรายการโปรด",
+    valuationMetricsFavoritesCount: "รายการโปรดที่ปักไว้ด้านบน",
     valuationMetricSourceBadges: {
       "key-metrics": "KEY",
       "ratios-ttm": "RATIO",
