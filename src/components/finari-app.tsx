@@ -3412,11 +3412,15 @@ function MemoPanel({
 
 function ValuationMetricRow({
   metric,
+  ticker,
+  locale,
   t,
   isFavorite,
   onToggleFavorite,
 }: {
   metric: ValuationMetric;
+  ticker: string;
+  locale: Locale;
   t: Dictionary;
   isFavorite: boolean;
   onToggleFavorite: (metric: ValuationMetric) => void;
@@ -3425,50 +3429,209 @@ function ValuationMetricRow({
   const sourceLabel = t.waitlist.valuationMetricSourceLabels[metric.source];
 
   return (
-    <div className="grid grid-cols-[2rem_minmax(0,1fr)_minmax(4.5rem,auto)] items-start gap-2 px-3 py-2.5">
-      <button
-        type="button"
-        onClick={() => onToggleFavorite(metric)}
-        aria-pressed={isFavorite}
-        aria-label={
-          isFavorite
-            ? `${t.waitlist.valuationMetricUnfavorite}: ${metric.label}`
-            : `${t.waitlist.valuationMetricFavorite}: ${metric.label}`
-        }
-        title={
-          isFavorite
-            ? t.waitlist.valuationMetricUnfavorite
-            : t.waitlist.valuationMetricFavorite
-        }
-        data-activity="valuation.metric.favorite_toggle"
-        data-activity-metric-id={metric.id}
-        data-activity-metric-source={metric.source}
-        className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition ${
-          isFavorite
-            ? "border-amber-300 bg-amber-50 text-amber-600"
-            : "border-zinc-200 bg-white text-zinc-400 hover:border-amber-300 hover:text-amber-600"
-        }`}
-      >
-        <Star
-          className={`h-4 w-4 ${isFavorite ? "fill-current" : ""}`}
-          aria-hidden="true"
-        />
-      </button>
-      <div className="min-w-0 pt-0.5">
-        <p className="text-sm font-medium leading-5 text-zinc-900">
-          {metric.label}
-        </p>
-        <span
-          className="mt-1 inline-flex rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none tracking-normal text-zinc-500"
-          title={sourceLabel}
+    <FeedbackTile
+      target={{
+        ticker,
+        locale,
+        tileId: `valuation-metric:${metric.source}:${metric.id}`,
+        tileLabel: metric.label,
+      }}
+    >
+      <div className="grid grid-cols-[2rem_minmax(0,1fr)_minmax(4.5rem,auto)] items-start gap-2 px-3 py-2.5 pr-12">
+        <button
+          type="button"
+          onClick={() => onToggleFavorite(metric)}
+          aria-pressed={isFavorite}
+          aria-label={
+            isFavorite
+              ? `${t.waitlist.valuationMetricUnfavorite}: ${metric.label}`
+              : `${t.waitlist.valuationMetricFavorite}: ${metric.label}`
+          }
+          title={
+            isFavorite
+              ? t.waitlist.valuationMetricUnfavorite
+              : t.waitlist.valuationMetricFavorite
+          }
+          data-activity="valuation.metric.favorite_toggle"
+          data-activity-metric-id={metric.id}
+          data-activity-metric-source={metric.source}
+          className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition ${
+            isFavorite
+              ? "border-amber-300 bg-amber-50 text-amber-600"
+              : "border-zinc-200 bg-white text-zinc-400 hover:border-amber-300 hover:text-amber-600"
+          }`}
         >
-          {sourceBadge}
-        </span>
+          <Star
+            className={`h-4 w-4 ${isFavorite ? "fill-current" : ""}`}
+            aria-hidden="true"
+          />
+        </button>
+        <div className="min-w-0 pt-0.5">
+          <p className="text-sm font-medium leading-5 text-zinc-900">
+            {metric.label}
+          </p>
+          <span
+            className="mt-1 inline-flex rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none tracking-normal text-zinc-500"
+            title={sourceLabel}
+          >
+            {sourceBadge}
+          </span>
+        </div>
+        <p className="min-w-0 max-w-32 pt-0.5 text-right text-sm font-semibold leading-5 text-zinc-950 tabular-nums [overflow-wrap:anywhere]">
+          {formatMetricValue(metric.value, metric.unit)}
+        </p>
       </div>
-      <p className="min-w-0 max-w-32 pt-0.5 text-right text-sm font-semibold leading-5 text-zinc-950 tabular-nums [overflow-wrap:anywhere]">
-        {formatMetricValue(metric.value, metric.unit)}
-      </p>
-    </div>
+    </FeedbackTile>
+  );
+}
+
+function ValuationSummaryTile({
+  ticker,
+  locale,
+  tileId,
+  label,
+  value,
+}: {
+  ticker: string;
+  locale: Locale;
+  tileId: string;
+  label: string;
+  value: string;
+}) {
+  return (
+    <FeedbackTile
+      target={{
+        ticker,
+        locale,
+        tileId,
+        tileLabel: label,
+      }}
+    >
+      <div className="rounded-md border border-zinc-200 bg-white p-2 pr-12">
+        <p className="text-xs text-zinc-500">{label}</p>
+        <p className="font-semibold text-zinc-900">
+          {value}
+        </p>
+      </div>
+    </FeedbackTile>
+  );
+}
+
+function ValuationMetricsPanel({
+  ticker,
+  locale,
+  valuation,
+  t,
+  favoriteValuationMetricCount,
+  valuationMetricQuery,
+  setValuationMetricQuery,
+  displayedValuationMetrics,
+  favoriteValuationMetricKeys,
+  toggleFavoriteValuationMetric,
+  normalizedValuationMetricQuery,
+  showAllValuationMetrics,
+  hiddenValuationMetricCount,
+  setShowAllValuationMetrics,
+}: {
+  ticker: string;
+  locale: Locale;
+  valuation: ValuationSnapshot;
+  t: Dictionary;
+  favoriteValuationMetricCount: number;
+  valuationMetricQuery: string;
+  setValuationMetricQuery: (value: string) => void;
+  displayedValuationMetrics: ValuationMetric[];
+  favoriteValuationMetricKeys: Set<string>;
+  toggleFavoriteValuationMetric: (metric: ValuationMetric) => void;
+  normalizedValuationMetricQuery: string;
+  showAllValuationMetrics: boolean;
+  hiddenValuationMetricCount: number;
+  setShowAllValuationMetrics: (updater: (current: boolean) => boolean) => void;
+}) {
+  return (
+    <FeedbackTile
+      target={{
+        ticker,
+        locale,
+        tileId: "valuation:all-metrics",
+        tileLabel: t.waitlist.valuationMetricsTitle,
+      }}
+    >
+      <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 pr-12">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-zinc-900">
+              {t.waitlist.valuationMetricsTitle}
+            </p>
+            <p className="mt-1 text-xs text-zinc-600">
+              {t.waitlist.valuationMetricsSubtitle}
+            </p>
+          </div>
+          {favoriteValuationMetricCount > 0 && (
+            <span className="shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">
+              {favoriteValuationMetricCount}{" "}
+              {t.waitlist.valuationMetricsFavoritesCount}
+            </span>
+          )}
+        </div>
+        <div className="mt-3">
+          <label className="sr-only" htmlFor="valuation-metric-search">
+            {t.waitlist.valuationMetricsSearchPlaceholder}
+          </label>
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+              aria-hidden="true"
+            />
+            <input
+              id="valuation-metric-search"
+              type="search"
+              value={valuationMetricQuery}
+              onChange={(event) => setValuationMetricQuery(event.target.value)}
+              placeholder={t.waitlist.valuationMetricsSearchPlaceholder}
+              className="h-9 w-full rounded-md border border-zinc-300 bg-white pl-9 pr-3 text-sm text-zinc-900 placeholder:text-zinc-400"
+            />
+          </div>
+        </div>
+        <div className="mt-3 overflow-hidden rounded-md border border-zinc-200 bg-white">
+          <div className="max-h-96 divide-y divide-zinc-100 overflow-auto">
+            {displayedValuationMetrics.length ? (
+              displayedValuationMetrics.map((metric) => (
+                <ValuationMetricRow
+                  key={`${metric.source}:${metric.id}`}
+                  metric={metric}
+                  ticker={ticker}
+                  locale={locale}
+                  t={t}
+                  isFavorite={favoriteValuationMetricKeys.has(
+                    valuationMetricKey(metric),
+                  )}
+                  onToggleFavorite={toggleFavoriteValuationMetric}
+                />
+              ))
+            ) : (
+              <p className="px-3 py-4 text-sm text-zinc-500">
+                {t.waitlist.valuationMetricsEmpty}
+              </p>
+            )}
+          </div>
+        </div>
+        {!normalizedValuationMetricQuery &&
+          valuation.metrics.length > VALUATION_METRICS_PREVIEW_LIMIT && (
+            <button
+              type="button"
+              onClick={() =>
+                setShowAllValuationMetrics((current) => !current)
+              }
+              className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 transition hover:border-teal-500 hover:text-teal-700"
+            >
+              {showAllValuationMetrics
+                ? t.waitlist.valuationMetricsShowLess
+                : `${t.waitlist.valuationMetricsShowAll} (${hiddenValuationMetricCount})`}
+            </button>
+          )}
+      </div>
+    </FeedbackTile>
   );
 }
 
@@ -4585,135 +4748,87 @@ function WaitlistPanel({
               </p>
             )}
 
-            {valuation && valuationState === "ready" && (
+            {snapshot && valuation && valuationState === "ready" && (
               <div className="mt-3 space-y-2 text-sm">
                 <p className="text-zinc-500">
                   {t.waitlist.valuationAsOf}: {formatLocaleDate(valuation.asOf, locale)}
                 </p>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-md border border-zinc-200 bg-white p-2">
-                    <p className="text-xs text-zinc-500">Market cap</p>
-                    <p className="font-semibold text-zinc-900">
-                      {formatValuationMetric(valuation.marketCap, "—")}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-zinc-200 bg-white p-2">
-                    <p className="text-xs text-zinc-500">P/E</p>
-                    <p className="font-semibold text-zinc-900">
-                      {formatValuationMetric(valuation.priceToEarnings, "—", {
-                        compact: true,
-                      })}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-zinc-200 bg-white p-2">
-                    <p className="text-xs text-zinc-500">P/B</p>
-                    <p className="font-semibold text-zinc-900">
-                      {formatValuationMetric(valuation.priceToBook, "—", {
-                        compact: true,
-                      })}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-zinc-200 bg-white p-2">
-                    <p className="text-xs text-zinc-500">EV/EBITDA</p>
-                    <p className="font-semibold text-zinc-900">
-                      {formatValuationMetric(valuation.enterpriseValueToEbitda, "—", {
-                        compact: true,
-                      })}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-zinc-200 bg-white p-2">
-                    <p className="text-xs text-zinc-500">Debt/Equity</p>
-                    <p className="font-semibold text-zinc-900">
-                      {formatValuationMetric(valuation.debtToEquity, "—", {
-                        compact: true,
-                      })}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-zinc-200 bg-white p-2">
-                    <p className="text-xs text-zinc-500">ROE</p>
-                    <p className="font-semibold text-zinc-900">
-                      {valuation.returnOnEquity === null
+                  <ValuationSummaryTile
+                    ticker={snapshot.identity.ticker}
+                    locale={locale}
+                    tileId="valuation:market-cap"
+                    label="Market cap"
+                    value={formatValuationMetric(valuation.marketCap, "—")}
+                  />
+                  <ValuationSummaryTile
+                    ticker={snapshot.identity.ticker}
+                    locale={locale}
+                    tileId="valuation:pe"
+                    label="P/E"
+                    value={formatValuationMetric(valuation.priceToEarnings, "—", {
+                      compact: true,
+                    })}
+                  />
+                  <ValuationSummaryTile
+                    ticker={snapshot.identity.ticker}
+                    locale={locale}
+                    tileId="valuation:pb"
+                    label="P/B"
+                    value={formatValuationMetric(valuation.priceToBook, "—", {
+                      compact: true,
+                    })}
+                  />
+                  <ValuationSummaryTile
+                    ticker={snapshot.identity.ticker}
+                    locale={locale}
+                    tileId="valuation:ev-ebitda"
+                    label="EV/EBITDA"
+                    value={formatValuationMetric(valuation.enterpriseValueToEbitda, "—", {
+                      compact: true,
+                    })}
+                  />
+                  <ValuationSummaryTile
+                    ticker={snapshot.identity.ticker}
+                    locale={locale}
+                    tileId="valuation:debt-equity"
+                    label="Debt/Equity"
+                    value={formatValuationMetric(valuation.debtToEquity, "—", {
+                      compact: true,
+                    })}
+                  />
+                  <ValuationSummaryTile
+                    ticker={snapshot.identity.ticker}
+                    locale={locale}
+                    tileId="valuation:roe"
+                    label="ROE"
+                    value={
+                      valuation.returnOnEquity === null
                         ? "—"
-                        : formatPercent(valuation.returnOnEquity / 100)}
-                    </p>
-                  </div>
+                        : formatPercent(valuation.returnOnEquity / 100)
+                    }
+                  />
                 </div>
                 <p className="text-xs text-zinc-500">
                   {t.waitlist.valuationSourceLabel}: {valuation.source}
                 </p>
                 {valuation.metrics.length > 0 && (
-                  <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-zinc-900">
-                          {t.waitlist.valuationMetricsTitle}
-                        </p>
-                        <p className="mt-1 text-xs text-zinc-600">
-                          {t.waitlist.valuationMetricsSubtitle}
-                        </p>
-                      </div>
-                      {favoriteValuationMetricCount > 0 && (
-                        <span className="shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">
-                          {favoriteValuationMetricCount}{" "}
-                          {t.waitlist.valuationMetricsFavoritesCount}
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-3">
-                      <label className="sr-only" htmlFor="valuation-metric-search">
-                        {t.waitlist.valuationMetricsSearchPlaceholder}
-                      </label>
-                      <div className="relative">
-                        <Search
-                          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
-                          aria-hidden="true"
-                        />
-                        <input
-                          id="valuation-metric-search"
-                          type="search"
-                          value={valuationMetricQuery}
-                          onChange={(event) => setValuationMetricQuery(event.target.value)}
-                          placeholder={t.waitlist.valuationMetricsSearchPlaceholder}
-                          className="h-9 w-full rounded-md border border-zinc-300 bg-white pl-9 pr-3 text-sm text-zinc-900 placeholder:text-zinc-400"
-                        />
-                      </div>
-                    </div>
-                    <div className="mt-3 overflow-hidden rounded-md border border-zinc-200 bg-white">
-                      <div className="max-h-96 divide-y divide-zinc-100 overflow-auto">
-                        {displayedValuationMetrics.length ? (
-                          displayedValuationMetrics.map((metric) => (
-                            <ValuationMetricRow
-                              key={`${metric.source}:${metric.id}`}
-                              metric={metric}
-                              t={t}
-                              isFavorite={favoriteValuationMetricKeys.has(
-                                valuationMetricKey(metric),
-                              )}
-                              onToggleFavorite={toggleFavoriteValuationMetric}
-                            />
-                          ))
-                        ) : (
-                          <p className="px-3 py-4 text-sm text-zinc-500">
-                            {t.waitlist.valuationMetricsEmpty}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    {!normalizedValuationMetricQuery &&
-                      valuation.metrics.length > VALUATION_METRICS_PREVIEW_LIMIT && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setShowAllValuationMetrics((current) => !current)
-                          }
-                          className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 transition hover:border-teal-500 hover:text-teal-700"
-                        >
-                          {showAllValuationMetrics
-                            ? t.waitlist.valuationMetricsShowLess
-                            : `${t.waitlist.valuationMetricsShowAll} (${hiddenValuationMetricCount})`}
-                        </button>
-                      )}
-                  </div>
+                  <ValuationMetricsPanel
+                    ticker={snapshot.identity.ticker}
+                    locale={locale}
+                    valuation={valuation}
+                    t={t}
+                    favoriteValuationMetricCount={favoriteValuationMetricCount}
+                    valuationMetricQuery={valuationMetricQuery}
+                    setValuationMetricQuery={setValuationMetricQuery}
+                    displayedValuationMetrics={displayedValuationMetrics}
+                    favoriteValuationMetricKeys={favoriteValuationMetricKeys}
+                    toggleFavoriteValuationMetric={toggleFavoriteValuationMetric}
+                    normalizedValuationMetricQuery={normalizedValuationMetricQuery}
+                    showAllValuationMetrics={showAllValuationMetrics}
+                    hiddenValuationMetricCount={hiddenValuationMetricCount}
+                    setShowAllValuationMetrics={setShowAllValuationMetrics}
+                  />
                 )}
               </div>
             )}
