@@ -3559,8 +3559,8 @@ function ValuationMetricsPanel({
         tileLabel: t.waitlist.valuationMetricsTitle,
       }}
     >
-      <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 pr-12">
-        <div className="flex items-start justify-between gap-3">
+      <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+        <div className="flex items-start justify-between gap-3 pr-12">
           <div>
             <p className="text-sm font-semibold text-zinc-900">
               {t.waitlist.valuationMetricsTitle}
@@ -3595,7 +3595,7 @@ function ValuationMetricsPanel({
             />
           </div>
         </div>
-        <div className="mt-3 overflow-hidden rounded-md border border-zinc-200 bg-white">
+        <div className="mt-3 -mx-1 overflow-hidden rounded-md border border-zinc-200 bg-white">
           <div className="max-h-96 divide-y divide-zinc-100 overflow-auto">
             {displayedValuationMetrics.length ? (
               displayedValuationMetrics.map((metric) => (
