@@ -39,6 +39,9 @@ export function getAuthOptions(): NextAuthOptions {
           sendMagicLinkEmail({ identifier, url }),
       }),
     ],
+    pages: {
+      signIn: "/auth/signin",
+    },
     secret: getAuthSecret(),
     session: {
       strategy: databaseEnabled ? "database" : "jwt",
