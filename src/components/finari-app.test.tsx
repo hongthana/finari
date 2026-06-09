@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -33,9 +33,98 @@ const fixtureEvents = [
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe("FinariApp", () => {
+  it("records signed-in click activity with ticker and heatmap metadata", async () => {
+    const activityRequests: unknown[] = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+
+        if (url === "/api/activity/client") {
+          activityRequests.push(JSON.parse(String(init?.body ?? "{}")));
+          return Response.json({ ok: true, accepted: 1 });
+        }
+
+        if (url === "/api/me") {
+          return Response.json({
+            user: { id: "user_1", email: "investor@example.com", isAdmin: false },
+          });
+        }
+
+        if (url === "/api/sp500") {
+          return Response.json({
+            constituents: [
+              { ticker: "AAPL", name: "Apple Inc.", sector: "Information Technology" },
+            ],
+          });
+        }
+
+        if (url.startsWith("/api/company/AAPL/events")) {
+          return Response.json({
+            events: fixtureEvents,
+            generatedAt: "2026-06-05T10:00:00.000Z",
+          });
+        }
+
+        if (url.startsWith("/api/company/AAPL")) {
+          return Response.json({ snapshot: fixtureSnapshot });
+        }
+
+        if (url.startsWith("/api/search")) {
+          return Response.json({ results: [] });
+        }
+
+        return Response.json({}, { status: 404 });
+      }),
+    );
+
+    render(
+      <FinariApp
+        locale="en"
+        initialViewer={{ id: "user_1", email: "investor@example.com", isAdmin: false }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
+    });
+
+    const refreshButton = screen.getByRole("button", { name: "Refresh" });
+    for (let index = 0; index < 10; index += 1) {
+      fireEvent.click(refreshButton, {
+        clientX: 120,
+        clientY: 240,
+      });
+    }
+
+    await waitFor(() => {
+      expect(activityRequests.length).toBeGreaterThan(0);
+    });
+
+    expect(activityRequests).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          events: expect.arrayContaining([
+            expect.objectContaining({
+              eventName: "research.refresh",
+              ticker: "AAPL",
+              metadata: expect.objectContaining({
+                clickX: 120,
+                clickY: 240,
+                heatmapZone: expect.any(String),
+              }),
+            }),
+          ]),
+        }),
+      ]),
+    );
+  });
+
   it("localizes the event brief in Thai instead of showing the English feed snippet", async () => {
     vi.stubGlobal(
       "fetch",

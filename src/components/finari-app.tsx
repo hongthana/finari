@@ -315,7 +315,7 @@ function useActivityTracker({
       ...event,
       path: `${window.location.pathname}${window.location.search}`,
       locale,
-      ticker,
+      ticker: event.ticker ?? ticker,
     });
 
     if (queueRef.current.length >= 10) {
@@ -339,7 +339,7 @@ function useActivityTracker({
       metadata: { route: window.location.pathname },
     });
 
-    function onClick(event: MouseEvent) {
+    function trackInteraction(event: MouseEvent | Event, interactionType: "click" | "change") {
       const target = event.target;
       if (!(target instanceof Element)) {
         return;
@@ -349,19 +349,56 @@ function useActivityTracker({
       if (!eventName) {
         return;
       }
+      const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      const elementRect = element.getBoundingClientRect();
+      const selectedValue =
+        element instanceof HTMLSelectElement ? element.value.trim().toUpperCase() : "";
+      const activityTicker = element.dataset.activityTicker?.trim().toUpperCase() || selectedValue;
+      const clickEvent = event instanceof MouseEvent ? event : null;
+      const clickX = clickEvent?.clientX ?? elementRect.left + elementRect.width / 2;
+      const clickY = clickEvent?.clientY ?? elementRect.top + elementRect.height / 2;
 
       enqueue({
         eventName,
+        ticker: activityTicker || undefined,
         metadata: {
+          interactionType,
           role: element.getAttribute("role") ?? element.tagName.toLowerCase(),
           disabled: element.getAttribute("aria-disabled") === "true",
+          clickX: Math.round(clickX),
+          clickY: Math.round(clickY),
+          viewportWidth,
+          viewportHeight,
+          clickPercentX: Math.round((clickX / Math.max(viewportWidth, 1)) * 1000) / 10,
+          clickPercentY: Math.round((clickY / Math.max(viewportHeight, 1)) * 1000) / 10,
+          heatmapZone: heatmapZoneFromPoint(
+            clickX,
+            clickY,
+            viewportWidth,
+            viewportHeight,
+          ),
+          elementLeft: Math.round(elementRect.left),
+          elementTop: Math.round(elementRect.top),
+          elementWidth: Math.round(elementRect.width),
+          elementHeight: Math.round(elementRect.height),
         },
       });
     }
 
+    function onClick(event: MouseEvent) {
+      trackInteraction(event, "click");
+    }
+
+    function onChange(event: Event) {
+      trackInteraction(event, "change");
+    }
+
     window.addEventListener("click", onClick);
+    window.addEventListener("change", onChange);
     return () => {
       window.removeEventListener("click", onClick);
+      window.removeEventListener("change", onChange);
       if (flushTimerRef.current !== null) {
         window.clearTimeout(flushTimerRef.current);
       }
@@ -425,6 +462,14 @@ type Sp500Constituent = {
 
 const STARTER_TICKERS = ["AAPL", "MSFT", "NVDA", "AMZN", "META"];
 const DEFAULT_TICKER = "AAPL";
+
+function heatmapZoneFromPoint(x: number, y: number, width: number, height: number): string {
+  const columns = ["left", "center", "right"];
+  const rows = ["top", "middle", "bottom"];
+  const columnIndex = Math.min(2, Math.max(0, Math.floor((x / Math.max(width, 1)) * 3)));
+  const rowIndex = Math.min(2, Math.max(0, Math.floor((y / Math.max(height, 1)) * 3)));
+  return `${rows[rowIndex]}-${columns[columnIndex]}`;
+}
 
 function signalClasses(signal: TrendSignal): string {
   if (signal === "positive") {
@@ -1491,6 +1536,7 @@ function ResearchToolbar({
                     key={`${company.cik}-${company.ticker}`}
                     type="button"
                     data-activity="search.result_select"
+                    data-activity-ticker={company.ticker}
                     onClick={() => onSelectTicker(company.ticker)}
                     className="flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left transition hover:bg-zinc-100"
                   >
@@ -1518,6 +1564,7 @@ function ResearchToolbar({
             </label>
             <select
               id="sp500-selector"
+              data-activity="search.sp500_select"
               value={
                 sp500Constituents.some((company) => company.ticker === activeTicker)
                   ? activeTicker
@@ -1548,6 +1595,8 @@ function ResearchToolbar({
                 <button
                   key={ticker}
                   type="button"
+                  data-activity="search.starter_ticker"
+                  data-activity-ticker={ticker}
                   onClick={() => onSelectTicker(ticker)}
                   className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 transition hover:border-teal-500 hover:text-teal-700"
                 >
@@ -4359,9 +4408,11 @@ function SourcesAndCaveats({
 export function FinariApp({
   locale,
   initialTicker = DEFAULT_TICKER,
+  initialViewer = null,
 }: {
   locale: Locale;
   initialTicker?: string;
+  initialViewer?: Viewer | null;
 }) {
   const t = getDictionary(locale);
   const normalizedInitialTicker = initialTicker.trim().toUpperCase() || DEFAULT_TICKER;
@@ -4386,7 +4437,7 @@ export function FinariApp({
   const [adminMemoState, setAdminMemoState] = useState<MemoState>("idle");
   const [memoError, setMemoError] = useState<string | null>(null);
   const [adminMemoError, setAdminMemoError] = useState<string | null>(null);
-  const [viewer, setViewer] = useState<Viewer | null>(null);
+  const [viewer, setViewer] = useState<Viewer | null>(initialViewer);
 
   const loading = loadState === "loading";
   const showSearchResults =

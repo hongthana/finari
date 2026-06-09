@@ -63,7 +63,14 @@ describe("POST /api/activity/client", () => {
               path: "/en?ticker=AAPL",
               locale: "en",
               ticker: "AAPL",
-              metadata: { buttonId: "save" },
+              metadata: {
+                buttonId: "save",
+                clickX: 120,
+                clickY: 240,
+                clickPercentX: 12,
+                clickPercentY: 30,
+                heatmapZone: "middle-left",
+              },
             },
           ],
         }),
@@ -80,6 +87,11 @@ describe("POST /api/activity/client", () => {
         path: "/en?ticker=AAPL",
         locale: "en",
         ticker: "AAPL",
+        metadata: expect.objectContaining({
+          heatmapZone: "middle-left",
+          clickX: 120,
+          clickY: 240,
+        }),
       }),
     );
   });
