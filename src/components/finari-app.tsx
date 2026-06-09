@@ -217,7 +217,7 @@ function MagicLinkForm({
   return (
     <form
       onSubmit={submit}
-      className={compact ? "mt-3 grid gap-2" : "mt-4 grid gap-2"}
+      className={compact ? "mt-3 grid min-w-0 gap-2" : "mt-4 grid gap-2"}
       data-activity="auth.magic_link.form"
     >
       {!compact && (
@@ -233,7 +233,13 @@ function MagicLinkForm({
       <label className="sr-only" htmlFor={emailInputId}>
         {t.waitlist.emailPlaceholder}
       </label>
-      <div className={compact ? "grid gap-2" : "flex flex-col gap-2 sm:flex-row"}>
+      <div
+        className={
+          compact
+            ? "grid min-w-0 grid-cols-1 gap-2"
+            : "flex flex-col gap-2 sm:flex-row"
+        }
+      >
         <input
           id={emailInputId}
           type="email"
@@ -242,13 +248,13 @@ function MagicLinkForm({
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           placeholder={t.waitlist.emailPlaceholder}
-          className="h-10 min-w-0 flex-1 rounded-md border border-zinc-300 px-3 text-sm text-zinc-900 outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
+          className="h-10 w-full min-w-0 flex-1 rounded-md border border-zinc-300 px-3 text-sm text-zinc-900 outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
         />
         <button
           type="submit"
           disabled={state === "loading"}
-          className={`inline-flex h-10 items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300 ${
-            compact ? "w-full" : ""
+          className={`inline-flex h-10 max-w-full items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300 ${
+            compact ? "w-full min-w-0" : "shrink-0"
           }`}
           data-activity="auth.magic_link.submit"
         >
@@ -3639,6 +3645,7 @@ function WaitlistPanel({
               t={t}
               locale={locale}
               ticker={snapshot?.identity.ticker}
+              compact
             />
           )}
           <button
@@ -3745,7 +3752,7 @@ function WaitlistPanel({
           />
         </div>
         <div className="mt-4 space-y-3">
-          <article className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+          <article className="min-w-0 overflow-hidden rounded-md border border-zinc-200 bg-zinc-50 p-3">
             <h4 className="text-sm font-semibold text-zinc-900">
               {t.waitlist.savedWorkspaceTitle}
             </h4>
@@ -3805,7 +3812,7 @@ function WaitlistPanel({
             )}
           </article>
 
-          <article className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+          <article className="min-w-0 overflow-hidden rounded-md border border-zinc-200 bg-zinc-50 p-3">
             <h4 className="text-sm font-semibold text-zinc-900">
               {t.waitlist.watchlistTitle}
             </h4>
@@ -3894,7 +3901,7 @@ function WaitlistPanel({
             )}
           </article>
 
-          <article className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+          <article className="min-w-0 overflow-hidden rounded-md border border-zinc-200 bg-zinc-50 p-3">
             <h4 className="text-sm font-semibold text-zinc-900">
               {t.waitlist.alertTitle}
             </h4>
@@ -4034,7 +4041,7 @@ function WaitlistPanel({
             )}
           </article>
 
-          <article className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+          <article className="min-w-0 overflow-hidden rounded-md border border-zinc-200 bg-zinc-50 p-3">
             <h4 className="text-sm font-semibold text-zinc-900">
               {t.waitlist.valuationTitle}
             </h4>
@@ -4177,7 +4184,7 @@ function WaitlistPanel({
             )}
           </article>
 
-          <article className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+          <article className="min-w-0 overflow-hidden rounded-md border border-zinc-200 bg-zinc-50 p-3">
             <h4 className="text-sm font-semibold text-zinc-900">
               {t.waitlist.exportTitle}
             </h4>
