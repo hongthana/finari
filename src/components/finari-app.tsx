@@ -784,7 +784,6 @@ function SignalBadge({
       tabIndex={0}
       aria-label={`${label}: ${signal}. ${tooltip}`}
       aria-describedby={tooltipId}
-      title={tooltip}
     >
       {signalIcon(signal, variant)}
       <span
@@ -843,7 +842,6 @@ function MeaningBadge({
       tabIndex={0}
       aria-label={`${label}. ${tooltip}`}
       aria-describedby={tooltipId}
-      title={tooltip}
     >
       <Icon className="h-4 w-4" aria-hidden="true" />
       <span
