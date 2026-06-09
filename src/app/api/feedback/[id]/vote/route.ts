@@ -1,7 +1,7 @@
 import { activityRequestContext, recordActivityEvent } from "@/lib/activity";
 import { validationError } from "@/lib/api";
 import { getCurrentUser } from "@/lib/session";
-import { voteForTileFeedback } from "@/lib/tile-feedback";
+import { toPublicTileFeedback, voteForTileFeedback } from "@/lib/tile-feedback";
 
 export const runtime = "nodejs";
 
@@ -39,7 +39,10 @@ export async function POST(
       },
     });
 
-    return Response.json(result);
+    return Response.json({
+      ...result,
+      feedback: toPublicTileFeedback(result.feedback),
+    });
   } catch (error) {
     return validationError(error);
   }

@@ -17,6 +17,11 @@ export type TileFeedbackRecord = {
   createdAt: Date;
 };
 
+export type PublicTileFeedbackRecord = Pick<
+  TileFeedbackRecord,
+  "id" | "tileId" | "tileLabel" | "feedback" | "votes" | "createdAt"
+>;
+
 function normalizeTicker(ticker: string): string {
   return ticker.trim().toUpperCase().slice(0, 12);
 }
@@ -34,6 +39,19 @@ function rowToFeedback(row: typeof tileFeedback.$inferSelect): TileFeedbackRecor
     status: row.status,
     votes: row.votes,
     createdAt: row.createdAt,
+  };
+}
+
+export function toPublicTileFeedback(
+  record: TileFeedbackRecord,
+): PublicTileFeedbackRecord {
+  return {
+    id: record.id,
+    tileId: record.tileId,
+    tileLabel: record.tileLabel,
+    feedback: record.feedback,
+    votes: record.votes,
+    createdAt: record.createdAt,
   };
 }
 

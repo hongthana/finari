@@ -2,7 +2,11 @@ import { z } from "zod";
 
 import { validationError } from "@/lib/api";
 import { activityRequestContext, recordActivityEvent } from "@/lib/activity";
-import { createTileFeedback, listTileFeedback } from "@/lib/tile-feedback";
+import {
+  createTileFeedback,
+  listTileFeedback,
+  toPublicTileFeedback,
+} from "@/lib/tile-feedback";
 import { getCurrentUser } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -25,7 +29,7 @@ export async function GET(request: Request) {
     limit: Number.parseInt(url.searchParams.get("limit") ?? "50", 10),
   });
 
-  return Response.json({ feedback });
+  return Response.json({ feedback: feedback.map(toPublicTileFeedback) });
 }
 
 export async function POST(request: Request) {
@@ -60,7 +64,10 @@ export async function POST(request: Request) {
       },
     });
 
-    return Response.json({ feedback }, { status: 201 });
+    return Response.json(
+      { feedback: toPublicTileFeedback(feedback) },
+      { status: 201 },
+    );
   } catch (error) {
     return validationError(error);
   }
