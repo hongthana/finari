@@ -17,6 +17,7 @@ import {
   Loader2,
   LockKeyhole,
   Mail,
+  MessageSquare,
   Minus,
   Newspaper,
   RefreshCw,
@@ -25,6 +26,7 @@ import {
   TrendingDown,
   Sparkles,
   Star,
+  ThumbsUp,
   TrendingUp,
   type LucideIcon,
 } from "lucide-react";
@@ -135,6 +137,22 @@ type WorkspaceSavedResearch = {
 
 type WorkspacePanelState = "idle" | "loading" | "ready" | "error";
 
+type PublicTileFeedback = {
+  id: string;
+  tileId: string;
+  tileLabel: string;
+  feedback: string;
+  votes: number;
+  createdAt: string;
+};
+
+type FeedbackTarget = {
+  ticker: string;
+  locale: Locale;
+  tileId: string;
+  tileLabel: string;
+};
+
 const VALUATION_METRICS_PREVIEW_LIMIT = 12;
 const VALUATION_FAVORITES_STORAGE_PREFIX = "finari:valuation-metric-favorites";
 
@@ -189,6 +207,188 @@ function buildDownload(fileName: string, content: string, mimeType: string) {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+function captureElementSnapshot(element: HTMLElement): Record<string, unknown> {
+  const rect = element.getBoundingClientRect();
+  return {
+    capturedAt: new Date().toISOString(),
+    viewport: {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+    },
+    bounds: {
+      x: Math.round(rect.x),
+      y: Math.round(rect.y),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+    },
+    text: element.innerText.slice(0, 4000),
+    html: element.outerHTML.slice(0, 12000),
+  };
+}
+
+function FeedbackTile({
+  target,
+  children,
+}: {
+  target: FeedbackTarget;
+  children: ReactNode;
+}) {
+  const tileRef = useRef<HTMLDivElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [items, setItems] = useState<PublicTileFeedback[]>([]);
+  const [state, setState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [message, setMessage] = useState<string | null>(null);
+
+  const loadFeedback = useCallback(async () => {
+    const response = await fetch(
+      `/api/feedback?ticker=${encodeURIComponent(target.ticker)}&tileId=${encodeURIComponent(target.tileId)}&limit=20`,
+    );
+    if (!response.ok) {
+      throw new Error("Unable to load feedback");
+    }
+    const body = await response.json() as { feedback?: PublicTileFeedback[] };
+    setItems(body.feedback ?? []);
+  }, [target.ticker, target.tileId]);
+
+  function toggleFeedback() {
+    const nextOpen = !isOpen;
+    setIsOpen(nextOpen);
+    if (nextOpen) {
+      void loadFeedback().catch(() => undefined);
+    }
+  }
+
+  async function submitFeedback(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = feedback.trim();
+    if (trimmed.length < 3) {
+      setState("error");
+      setMessage("Add a little more detail before submitting.");
+      return;
+    }
+
+    setState("loading");
+    setMessage(null);
+    const screenshot = tileRef.current ? captureElementSnapshot(tileRef.current) : {};
+    const response = await fetch("/api/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...target,
+        pagePath: window.location.pathname + window.location.search,
+        feedback: trimmed,
+        screenshot,
+      }),
+    });
+
+    if (!response.ok) {
+      setState("error");
+      setMessage("Feedback could not be submitted.");
+      return;
+    }
+
+    const body = await response.json() as { feedback: PublicTileFeedback };
+    setItems((current) => [body.feedback, ...current]);
+    setFeedback("");
+    setState("ready");
+    setMessage("Feedback submitted.");
+  }
+
+  async function vote(item: PublicTileFeedback) {
+    const response = await fetch(`/api/feedback/${encodeURIComponent(item.id)}/vote`, {
+      method: "POST",
+    });
+    if (!response.ok) {
+      return;
+    }
+    const body = await response.json() as { feedback?: PublicTileFeedback };
+    if (!body.feedback) {
+      return;
+    }
+    setItems((current) =>
+      current.map((entry) => entry.id === item.id ? body.feedback as PublicTileFeedback : entry),
+    );
+  }
+
+  return (
+    <div ref={tileRef} className="group/feedback relative min-w-0">
+      {children}
+      <button
+        type="button"
+        onClick={toggleFeedback}
+        className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-200 bg-white/95 text-zinc-500 opacity-100 shadow-sm transition hover:border-teal-500 hover:text-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 md:opacity-0 md:group-hover/feedback:opacity-100"
+        aria-label={`Comment on ${target.tileLabel}`}
+      >
+        <MessageSquare className="h-4 w-4" aria-hidden="true" />
+      </button>
+      {isOpen && (
+        <div className="absolute right-0 top-11 z-40 w-[min(24rem,calc(100vw-2rem))] rounded-md border border-zinc-200 bg-white p-3 text-left shadow-xl">
+          <form onSubmit={submitFeedback}>
+            <label className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
+              Feedback
+              <textarea
+                value={feedback}
+                onChange={(event) => setFeedback(event.target.value)}
+                className="mt-2 min-h-24 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm font-normal leading-6 text-zinc-900 outline-none focus:border-teal-600 focus:ring-4 focus:ring-teal-100"
+                placeholder="What should improve on this card?"
+              />
+            </label>
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <p className="text-xs text-zinc-500">
+                This captures this card snapshot for admin review.
+              </p>
+              <button
+                type="submit"
+                disabled={state === "loading"}
+                className="inline-flex h-8 items-center rounded-md bg-teal-700 px-3 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-zinc-300"
+              >
+                {state === "loading" ? "Submitting" : "Submit"}
+              </button>
+            </div>
+            {message && (
+              <p className={`mt-2 text-xs ${state === "error" ? "text-rose-700" : "text-teal-700"}`}>
+                {message}
+              </p>
+            )}
+          </form>
+
+          <div className="mt-3 border-t border-zinc-100 pt-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
+              Public requests
+            </p>
+            <div className="mt-2 max-h-48 space-y-2 overflow-auto">
+              {items.length ? (
+                items.map((item) => (
+                  <div key={item.id} className="rounded-md border border-zinc-200 bg-zinc-50 p-2">
+                    <p className="break-words text-xs leading-5 text-zinc-700">
+                      {item.feedback}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void vote(item)}
+                      className="mt-2 inline-flex h-7 items-center gap-1 rounded-md border border-zinc-300 bg-white px-2 text-xs font-semibold text-zinc-700 hover:border-teal-500 hover:text-teal-700"
+                    >
+                      <ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />
+                      {item.votes}
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs leading-5 text-zinc-500">
+                  No public requests yet.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function MagicLinkForm({
@@ -976,9 +1176,11 @@ function makeChartRows(snapshot: CompanySnapshot | null) {
 
 function AdvisorSummary({
   snapshot,
+  locale,
   t,
 }: {
   snapshot: CompanySnapshot;
+  locale: Locale;
   t: Dictionary;
 }) {
   const reads = advisorReads(snapshot, t);
@@ -1002,26 +1204,33 @@ function AdvisorSummary({
           </p>
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             {reads.map((read) => (
-              <article
+              <FeedbackTile
                 key={read.title}
-                className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3"
+                target={{
+                  ticker: snapshot.identity.ticker,
+                  locale,
+                  tileId: `advisor-read:${read.title}`,
+                  tileLabel: read.title,
+                }}
               >
-                <div className="flex items-center gap-2">
-                  <SignalBadge
-                    signal={read.signal}
-                    variant={read.iconVariant}
-                    label={read.title}
-                    t={t}
-                    className="shrink-0 p-1.5"
-                  />
-                  <h4 className="min-w-0 break-words text-sm font-semibold text-zinc-950">
-                    {read.title}
-                  </h4>
-                </div>
-                <p className="mt-2 break-words text-sm leading-6 text-zinc-700">
-                  {read.body}
-                </p>
-              </article>
+                <article className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3 pr-12">
+                  <div className="flex items-center gap-2">
+                    <SignalBadge
+                      signal={read.signal}
+                      variant={read.iconVariant}
+                      label={read.title}
+                      t={t}
+                      className="shrink-0 p-1.5"
+                    />
+                    <h4 className="min-w-0 break-words text-sm font-semibold text-zinc-950">
+                      {read.title}
+                    </h4>
+                  </div>
+                  <p className="mt-2 break-words text-sm leading-6 text-zinc-700">
+                    {read.body}
+                  </p>
+                </article>
+              </FeedbackTile>
             ))}
           </div>
           <p className="mt-3 break-words text-xs leading-5 text-zinc-500">
@@ -1035,25 +1244,32 @@ function AdvisorSummary({
           </h4>
           <div className="mt-3 space-y-3">
             {questions.map((item) => (
-              <article
+              <FeedbackTile
                 key={item.question}
-                className="min-w-0 rounded-md border border-zinc-200 bg-white p-3"
+                target={{
+                  ticker: snapshot.identity.ticker,
+                  locale,
+                  tileId: `advisor-question:${item.question}`,
+                  tileLabel: item.question,
+                }}
               >
-                <div className="flex items-center gap-2">
-                  <SignalBadge
-                    signal={item.signal}
-                    label={item.question}
-                    t={t}
-                    className="shrink-0 p-1"
-                  />
-                  <p className="min-w-0 break-words text-sm font-semibold leading-5 text-zinc-950">
-                    {item.question}
+                <article className="min-w-0 rounded-md border border-zinc-200 bg-white p-3 pr-12">
+                  <div className="flex items-center gap-2">
+                    <SignalBadge
+                      signal={item.signal}
+                      label={item.question}
+                      t={t}
+                      className="shrink-0 p-1"
+                    />
+                    <p className="min-w-0 break-words text-sm font-semibold leading-5 text-zinc-950">
+                      {item.question}
+                    </p>
+                  </div>
+                  <p className="mt-2 break-words text-sm leading-6 text-zinc-700">
+                    {item.answer}
                   </p>
-                </div>
-                <p className="mt-2 break-words text-sm leading-6 text-zinc-700">
-                  {item.answer}
-                </p>
-              </article>
+                </article>
+              </FeedbackTile>
             ))}
           </div>
         </div>
@@ -1066,6 +1282,7 @@ function EventImpactCard({
   event,
   locale,
   t,
+  ticker,
   viewer,
   curating,
   onCurate,
@@ -1073,6 +1290,7 @@ function EventImpactCard({
   event: CompanyEventImpact;
   locale: Locale;
   t: Dictionary;
+  ticker: string;
   viewer: Viewer | null;
   curating: boolean;
   onCurate: (eventId: string, action: EventCurationAction) => void;
@@ -1129,6 +1347,14 @@ function EventImpactCard({
     event.visibility === "private" ? t.events.privateAnalysis : t.events.publicAnalysis;
 
   return (
+    <FeedbackTile
+      target={{
+        ticker,
+        locale,
+        tileId: `event:${event.id}`,
+        tileLabel: event.title,
+      }}
+    >
     <article
       className={`min-w-0 rounded-md border bg-white p-4 ${
         event.isFeatured ? "border-sky-300" : "border-zinc-200"
@@ -1283,6 +1509,7 @@ function EventImpactCard({
         </div>
       </div>
     </article>
+    </FeedbackTile>
   );
 }
 
@@ -1295,6 +1522,7 @@ function EventImpactPanel({
   privateError,
   adminError,
   locale,
+  ticker,
   t,
   viewer,
   curatingEventId,
@@ -1310,6 +1538,7 @@ function EventImpactPanel({
   privateError: string | null;
   adminError: string | null;
   locale: Locale;
+  ticker?: string;
   t: Dictionary;
   viewer: Viewer | null;
   curatingEventId: string | null;
@@ -1416,13 +1645,14 @@ function EventImpactPanel({
       {events.length > 0 && (
         <div className="mt-4 space-y-3">
           {events.map((event) => (
-            <EventImpactCard
-              key={event.id}
-              event={event}
-              locale={locale}
-              t={t}
-              viewer={viewer}
-              curating={curatingEventId === event.id}
+              <EventImpactCard
+                key={event.id}
+                event={event}
+                locale={locale}
+                ticker={ticker ?? ""}
+                t={t}
+                viewer={viewer}
+                curating={curatingEventId === event.id}
               onCurate={onCurate}
             />
           ))}
@@ -1830,9 +2060,11 @@ function periodLabel(period: FinancialPeriod, t: Dictionary): string {
 
 function DecisionScreen({
   snapshot,
+  locale,
   t,
 }: {
   snapshot: CompanySnapshot;
+  locale: Locale;
   t: Dictionary;
 }) {
   const framework = snapshot.decisionFramework;
@@ -1927,26 +2159,33 @@ function DecisionScreen({
 
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {decisionCards.map((card) => (
-          <article
+          <FeedbackTile
             key={card.label}
-            className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3"
+            target={{
+              ticker: snapshot.identity.ticker,
+              locale,
+              tileId: `decision:${card.label}`,
+              tileLabel: card.label,
+            }}
           >
-            <div className="flex items-center gap-2">
-              <MeaningBadge
-                Icon={card.Icon}
-                label={card.label}
-                tooltip={card.tooltip}
-                tone={card.tone}
-                className="shrink-0 p-1.5"
-              />
-              <p className="min-w-0 break-words text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
-                {card.label}
+            <article className="min-w-0 rounded-md border border-zinc-200 bg-zinc-50 p-3 pr-12">
+              <div className="flex items-center gap-2">
+                <MeaningBadge
+                  Icon={card.Icon}
+                  label={card.label}
+                  tooltip={card.tooltip}
+                  tone={card.tone}
+                  className="shrink-0 p-1.5"
+                />
+                <p className="min-w-0 break-words text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
+                  {card.label}
+                </p>
+              </div>
+              <p className="mt-2 break-words text-sm font-semibold leading-6 text-zinc-950">
+                {card.value}
               </p>
-            </div>
-            <p className="mt-2 break-words text-sm font-semibold leading-6 text-zinc-950">
-              {card.value}
-            </p>
-          </article>
+            </article>
+          </FeedbackTile>
         ))}
       </div>
     </section>
@@ -2239,9 +2478,13 @@ function ChangeAnalysisPanel({
 
 function BusinessDriverCard({
   driver,
+  ticker,
+  locale,
   t,
 }: {
   driver: BusinessDriver;
+  ticker: string;
+  locale: Locale;
   t: Dictionary;
 }) {
   const label = recordValue(t.analysis.driverLabels, driver.id, driver.id);
@@ -2252,7 +2495,15 @@ function BusinessDriverCard({
   );
 
   return (
-    <article className="min-w-0 rounded-md border border-zinc-200 bg-white p-4">
+    <FeedbackTile
+      target={{
+        ticker,
+        locale,
+        tileId: `driver:${driver.id}`,
+        tileLabel: label,
+      }}
+    >
+    <article className="min-w-0 rounded-md border border-zinc-200 bg-white p-4 pr-12">
       <div className="flex items-start gap-3">
         <SignalBadge
           signal={driver.signal}
@@ -2330,14 +2581,17 @@ function BusinessDriverCard({
         </div>
       </div>
     </article>
+    </FeedbackTile>
   );
 }
 
 function BusinessDriversPanel({
   snapshot,
+  locale,
   t,
 }: {
   snapshot: CompanySnapshot;
+  locale: Locale;
   t: Dictionary;
 }) {
   return (
@@ -2361,7 +2615,13 @@ function BusinessDriversPanel({
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {snapshot.businessDrivers.map((driver) => (
-          <BusinessDriverCard key={driver.id} driver={driver} t={t} />
+          <BusinessDriverCard
+            key={driver.id}
+            driver={driver}
+            ticker={snapshot.identity.ticker}
+            locale={locale}
+            t={t}
+          />
         ))}
       </div>
     </section>
@@ -2370,9 +2630,11 @@ function BusinessDriversPanel({
 
 function BalanceSheetPanel({
   snapshot,
+  locale,
   t,
 }: {
   snapshot: CompanySnapshot;
+  locale: Locale;
   t: Dictionary;
 }) {
   const analysis = snapshot.balanceSheetAnalysis;
@@ -2419,32 +2681,48 @@ function BalanceSheetPanel({
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {values.map((item) => (
-          <article
+          <FeedbackTile
             key={item.label}
-            className="rounded-md border border-zinc-200 bg-zinc-50 p-3"
+            target={{
+              ticker: snapshot.identity.ticker,
+              locale,
+              tileId: `balance:${item.label}`,
+              tileLabel: item.label,
+            }}
           >
-            <p className="text-xs font-medium text-zinc-500">{item.label}</p>
-            <p className="mt-1 break-words text-lg font-semibold text-zinc-950">
-              {item.value}
-            </p>
-          </article>
+            <article className="rounded-md border border-zinc-200 bg-zinc-50 p-3 pr-12">
+              <p className="text-xs font-medium text-zinc-500">{item.label}</p>
+              <p className="mt-1 break-words text-lg font-semibold text-zinc-950">
+                {item.value}
+              </p>
+            </article>
+          </FeedbackTile>
         ))}
-        <article className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
-          <p className="text-xs font-medium text-zinc-500">
-            {t.decision.finalTakeaway}
-          </p>
-          <div className="mt-2 flex items-center gap-2">
-            <SignalBadge
-              signal={analysis.signal}
-              label={t.analysis.balanceTitle}
-              t={t}
-              className="p-1"
-            />
-            <span className="text-sm font-semibold capitalize text-zinc-950">
-              {analysis.signal}
-            </span>
-          </div>
-        </article>
+        <FeedbackTile
+          target={{
+            ticker: snapshot.identity.ticker,
+            locale,
+            tileId: "balance:final-takeaway",
+            tileLabel: t.decision.finalTakeaway,
+          }}
+        >
+          <article className="rounded-md border border-zinc-200 bg-zinc-50 p-3 pr-12">
+            <p className="text-xs font-medium text-zinc-500">
+              {t.decision.finalTakeaway}
+            </p>
+            <div className="mt-2 flex items-center gap-2">
+              <SignalBadge
+                signal={analysis.signal}
+                label={t.analysis.balanceTitle}
+                t={t}
+                className="p-1"
+              />
+              <span className="text-sm font-semibold capitalize text-zinc-950">
+                {analysis.signal}
+              </span>
+            </div>
+          </article>
+        </FeedbackTile>
       </div>
     </section>
   );
@@ -2553,9 +2831,13 @@ function PeerComparisonPanel({
 
 function DataQualityCheckRow({
   check,
+  ticker,
+  locale,
   t,
 }: {
   check: DataQualityCheck;
+  ticker: string;
+  locale: Locale;
   t: Dictionary;
 }) {
   const label = recordValue(t.analysis.checkLabels, check.id, check.label);
@@ -2566,7 +2848,15 @@ function DataQualityCheckRow({
   );
 
   return (
-    <article className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+    <FeedbackTile
+      target={{
+        ticker,
+        locale,
+        tileId: `data-quality:${check.id}`,
+        tileLabel: label,
+      }}
+    >
+    <article className="rounded-md border border-zinc-200 bg-zinc-50 p-3 pr-12">
       <div className="flex items-start gap-3">
         <span
           className={`mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border ${
@@ -2587,14 +2877,17 @@ function DataQualityCheckRow({
         </div>
       </div>
     </article>
+    </FeedbackTile>
   );
 }
 
 function DataQualityPanel({
   snapshot,
+  locale,
   t,
 }: {
   snapshot: CompanySnapshot;
+  locale: Locale;
   t: Dictionary;
 }) {
   return (
@@ -2618,28 +2911,43 @@ function DataQualityPanel({
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
-        <article className="rounded-md border border-zinc-200 bg-zinc-50 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
-            {t.analysis.score}
-          </p>
-          <p className="mt-2 text-3xl font-semibold text-zinc-950">
-            {snapshot.dataQuality.score}/100
-          </p>
-          <div className="mt-3 flex items-center gap-2">
-            <SignalBadge
-              signal={snapshot.dataQuality.signal}
-              label={t.analysis.confidence}
-              t={t}
-              className="p-1"
-            />
-            <span className="text-sm font-semibold text-zinc-800">
-              {t.analysis.confidenceLabels[snapshot.dataQuality.label]}
-            </span>
-          </div>
-        </article>
+        <FeedbackTile
+          target={{
+            ticker: snapshot.identity.ticker,
+            locale,
+            tileId: "data-quality:score",
+            tileLabel: t.analysis.score,
+          }}
+        >
+          <article className="rounded-md border border-zinc-200 bg-zinc-50 p-4 pr-12">
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-500">
+              {t.analysis.score}
+            </p>
+            <p className="mt-2 text-3xl font-semibold text-zinc-950">
+              {snapshot.dataQuality.score}/100
+            </p>
+            <div className="mt-3 flex items-center gap-2">
+              <SignalBadge
+                signal={snapshot.dataQuality.signal}
+                label={t.analysis.confidence}
+                t={t}
+                className="p-1"
+              />
+              <span className="text-sm font-semibold text-zinc-800">
+                {t.analysis.confidenceLabels[snapshot.dataQuality.label]}
+              </span>
+            </div>
+          </article>
+        </FeedbackTile>
         <div className="grid gap-3 lg:grid-cols-2">
           {snapshot.dataQuality.checks.map((check) => (
-            <DataQualityCheckRow key={check.id} check={check} t={t} />
+            <DataQualityCheckRow
+              key={check.id}
+              check={check}
+              ticker={snapshot.identity.ticker}
+              locale={locale}
+              t={t}
+            />
           ))}
         </div>
       </div>
@@ -2647,37 +2955,54 @@ function DataQualityPanel({
   );
 }
 
-function MetricGrid({ metrics, t }: { metrics: FinancialMetric[]; t: Dictionary }) {
+function MetricGrid({
+  metrics,
+  ticker,
+  locale,
+  t,
+}: {
+  metrics: FinancialMetric[];
+  ticker: string;
+  locale: Locale;
+  t: Dictionary;
+}) {
   return (
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       {metrics.slice(0, 10).map((metric) => {
         const metricCopy = t.metrics[metric.id as keyof typeof t.metrics];
 
         return (
-          <article
+          <FeedbackTile
             key={metric.id}
-            className="rounded-md border border-zinc-200 bg-white p-4"
+            target={{
+              ticker,
+              locale,
+              tileId: `metric:${metric.id}`,
+              tileLabel: metricCopy?.label ?? metric.label,
+            }}
           >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-medium text-zinc-500">
-                  {metricCopy?.label ?? metric.label}
-                </p>
-                <p className={`mt-2 text-xl font-semibold ${metricTone(metric)}`}>
-                  {formatMetricValue(metric.value, metric.unit)}
-                </p>
+            <article className="rounded-md border border-zinc-200 bg-white p-4 pr-12">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium text-zinc-500">
+                    {metricCopy?.label ?? metric.label}
+                  </p>
+                  <p className={`mt-2 text-xl font-semibold ${metricTone(metric)}`}>
+                    {formatMetricValue(metric.value, metric.unit)}
+                  </p>
+                </div>
+                <SignalBadge
+                  signal={metric.signal}
+                  label={metricCopy?.label ?? metric.label}
+                  t={t}
+                  tooltipAlign="right"
+                />
               </div>
-              <SignalBadge
-                signal={metric.signal}
-                label={metricCopy?.label ?? metric.label}
-                t={t}
-                tooltipAlign="right"
-              />
-            </div>
-            <p className="mt-3 text-xs leading-5 text-zinc-500">
-              {metricCopy?.description ?? metric.description}
-            </p>
-          </article>
+              <p className="mt-3 text-xs leading-5 text-zinc-500">
+                {metricCopy?.description ?? metric.description}
+              </p>
+            </article>
+          </FeedbackTile>
         );
       })}
     </section>
@@ -2717,16 +3042,26 @@ function ChartFrame({ children }: { children: ReactNode }) {
 
 function FinancialCharts({
   snapshot,
+  locale,
   t,
 }: {
   snapshot: CompanySnapshot;
+  locale: Locale;
   t: Dictionary;
 }) {
   const chartRows = useMemo(() => makeChartRows(snapshot), [snapshot]);
 
   return (
     <section className="grid min-w-0 gap-4 xl:grid-cols-2">
-      <article className="min-w-0 rounded-md border border-zinc-200 bg-white p-5">
+      <FeedbackTile
+        target={{
+          ticker: snapshot.identity.ticker,
+          locale,
+          tileId: "chart:revenue-net-income",
+          tileLabel: t.charts.revenueNetIncome,
+        }}
+      >
+      <article className="min-w-0 rounded-md border border-zinc-200 bg-white p-5 pr-12">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold text-zinc-950">
@@ -2787,8 +3122,17 @@ function FinancialCharts({
           </ResponsiveContainer>
         </ChartFrame>
       </article>
+      </FeedbackTile>
 
-      <article className="min-w-0 rounded-md border border-zinc-200 bg-white p-5">
+      <FeedbackTile
+        target={{
+          ticker: snapshot.identity.ticker,
+          locale,
+          tileId: "chart:cash-flow",
+          tileLabel: t.charts.cashBalance,
+        }}
+      >
+      <article className="min-w-0 rounded-md border border-zinc-200 bg-white p-5 pr-12">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold text-zinc-950">
@@ -2830,6 +3174,7 @@ function FinancialCharts({
           </ResponsiveContainer>
         </ChartFrame>
       </article>
+      </FeedbackTile>
     </section>
   );
 }
@@ -5000,8 +5345,8 @@ export function FinariApp({
 
           {snapshot && (
             <>
-              <DecisionScreen snapshot={snapshot} t={t} />
-              <AdvisorSummary snapshot={snapshot} t={t} />
+              <DecisionScreen snapshot={snapshot} locale={locale} t={t} />
+              <AdvisorSummary snapshot={snapshot} locale={locale} t={t} />
               <EventImpactPanel
                 events={events}
                 state={eventsState}
@@ -5011,6 +5356,7 @@ export function FinariApp({
                 privateError={privateEventsError}
                 adminError={adminEventsError}
                 locale={locale}
+                ticker={snapshot.identity.ticker}
                 t={t}
                 viewer={viewer}
                 curatingEventId={curatingEventId}
@@ -5020,12 +5366,17 @@ export function FinariApp({
               />
               <QuarterlyTrendPanel snapshot={snapshot} t={t} />
               <ChangeAnalysisPanel snapshot={snapshot} locale={locale} t={t} />
-              <BusinessDriversPanel snapshot={snapshot} t={t} />
-              <BalanceSheetPanel snapshot={snapshot} t={t} />
+              <BusinessDriversPanel snapshot={snapshot} locale={locale} t={t} />
+              <BalanceSheetPanel snapshot={snapshot} locale={locale} t={t} />
               <PeerComparisonPanel snapshot={snapshot} t={t} />
-              <DataQualityPanel snapshot={snapshot} t={t} />
-              <MetricGrid metrics={snapshot.metrics} t={t} />
-              <FinancialCharts snapshot={snapshot} t={t} />
+              <DataQualityPanel snapshot={snapshot} locale={locale} t={t} />
+              <MetricGrid
+                metrics={snapshot.metrics}
+                ticker={snapshot.identity.ticker}
+                locale={locale}
+                t={t}
+              />
+              <FinancialCharts snapshot={snapshot} locale={locale} t={t} />
               <FinancialTable snapshot={snapshot} t={t} />
               <MemoPanel
                 snapshot={snapshot}

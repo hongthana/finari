@@ -475,6 +475,49 @@ export const userActivityEvents = pgTable(
   }),
 );
 
+export const tileFeedback = pgTable(
+  "tile_feedback",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    companyId: uuid("company_id").references(() => companies.id, { onDelete: "set null" }),
+    ticker: text("ticker").notNull(),
+    locale: text("locale").default("en").notNull(),
+    tileId: text("tile_id").notNull(),
+    tileLabel: text("tile_label").notNull(),
+    pagePath: text("page_path"),
+    feedback: text("feedback").notNull(),
+    screenshotJson: jsonb("screenshot_json").$type<Record<string, unknown>>().default({}).notNull(),
+    status: text("status").default("new").notNull(),
+    votes: integer("votes").default(0).notNull(),
+    ipHash: text("ip_hash"),
+    userAgentHash: text("user_agent_hash"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    tickerCreatedIdx: index("tile_feedback_ticker_created_idx").on(table.ticker, table.createdAt),
+    tileCreatedIdx: index("tile_feedback_tile_created_idx").on(table.tileId, table.createdAt),
+    statusCreatedIdx: index("tile_feedback_status_created_idx").on(table.status, table.createdAt),
+  }),
+);
+
+export const tileFeedbackVotes = pgTable(
+  "tile_feedback_votes",
+  {
+    feedbackId: uuid("feedback_id")
+      .notNull()
+      .references(() => tileFeedback.id, { onDelete: "cascade" }),
+    voterKey: text("voter_key").notNull(),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.feedbackId, table.voterKey] }),
+    userIdx: index("tile_feedback_votes_user_id_idx").on(table.userId),
+  }),
+);
+
 export const researchRefreshRuns = pgTable(
   "research_refresh_runs",
   {
