@@ -1,6 +1,7 @@
 import { jsonError } from "@/lib/api";
 import { recordRouteActivity } from "@/lib/activity";
 import { normalizeLocale } from "@/lib/i18n";
+import { RATE_LIMITS, requireUserRateLimit } from "@/lib/rate-limit";
 import { getPrivateResearchMemoForTicker, getStoredSnapshotForTicker } from "@/lib/research-service";
 import { buildWorkspaceExportPayload } from "@/lib/research-store";
 import { getCurrentUser } from "@/lib/session";
@@ -55,6 +56,10 @@ export async function GET(request: Request) {
   const userId = user?.id;
   if (!userId) {
     return jsonError("Authentication required", 401);
+  }
+  const limited = await requireUserRateLimit(userId, RATE_LIMITS.expensiveUser);
+  if (limited) {
+    return limited;
   }
 
   const url = new URL(request.url);

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { RATE_LIMITS, requireUserRateLimit } from "@/lib/rate-limit";
 import { markAlertDeliveryRead, getAlertDelivery } from "@/lib/research-store";
 import { getCurrentUserId, unauthorized } from "@/lib/session";
 
@@ -16,6 +17,10 @@ export async function PATCH(
   const userId = await getCurrentUserId();
   if (!userId) {
     return unauthorized();
+  }
+  const limited = await requireUserRateLimit(userId, RATE_LIMITS.userWrite);
+  if (limited) {
+    return limited;
   }
 
   const { id } = await context.params;

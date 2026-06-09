@@ -1,6 +1,7 @@
 import { jsonError } from "@/lib/api";
 import { getCompanyEventImpacts } from "@/lib/event-impact";
 import { normalizeLocale } from "@/lib/i18n";
+import { RATE_LIMITS, requireRequestRateLimit } from "@/lib/rate-limit";
 import { getCurrentUser } from "@/lib/session";
 import { requireInvitationAccess } from "@/lib/site-access";
 
@@ -10,6 +11,11 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ ticker: string }> },
 ) {
+  const limited = await requireRequestRateLimit(request, RATE_LIMITS.anonymousRead);
+  if (limited) {
+    return limited;
+  }
+
   const blocked = await requireInvitationAccess();
   if (blocked) {
     return blocked;

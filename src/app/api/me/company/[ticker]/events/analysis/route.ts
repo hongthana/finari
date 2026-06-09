@@ -2,6 +2,7 @@ import { jsonError } from "@/lib/api";
 import { recordRouteActivity } from "@/lib/activity";
 import { getPrivateCompanyEventAnalysisForTicker } from "@/lib/event-impact";
 import { normalizeLocale } from "@/lib/i18n";
+import { RATE_LIMITS, requireUserRateLimit } from "@/lib/rate-limit";
 import { getCurrentUser, unauthorized } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -13,6 +14,10 @@ export async function POST(
   const user = await getCurrentUser();
   if (!user) {
     return unauthorized();
+  }
+  const limited = await requireUserRateLimit(user.id, RATE_LIMITS.expensiveUser);
+  if (limited) {
+    return limited;
   }
 
   const { ticker } = await context.params;

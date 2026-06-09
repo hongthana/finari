@@ -1,6 +1,7 @@
 import { jsonError } from "@/lib/api";
 import { recordRouteActivity } from "@/lib/activity";
 import { normalizeLocale } from "@/lib/i18n";
+import { RATE_LIMITS, requireRequestRateLimit } from "@/lib/rate-limit";
 import { companyLookupError, getResearchMemoForTicker } from "@/lib/research-service";
 import { requireInvitationAccess } from "@/lib/site-access";
 
@@ -10,6 +11,11 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ ticker: string }> },
 ) {
+  const limited = await requireRequestRateLimit(request, RATE_LIMITS.expensiveUser);
+  if (limited) {
+    return limited;
+  }
+
   const { ticker } = await context.params;
   const locale = normalizeLocale(new URL(request.url).searchParams.get("locale"));
 

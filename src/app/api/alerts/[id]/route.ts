@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { validationError } from "@/lib/api";
 import { recordRouteActivity } from "@/lib/activity";
+import { RATE_LIMITS, requireUserRateLimit } from "@/lib/rate-limit";
 import type { AlertConfig } from "@/lib/types";
 import { patchAlertPreference } from "@/lib/research-store";
 import { getCurrentUserId, unauthorized } from "@/lib/session";
@@ -31,6 +32,10 @@ export async function PATCH(
   const userId = await getCurrentUserId();
   if (!userId) {
     return unauthorized();
+  }
+  const limited = await requireUserRateLimit(userId, RATE_LIMITS.userWrite);
+  if (limited) {
+    return limited;
   }
 
   const { id } = await context.params;

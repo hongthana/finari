@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { validationError } from "@/lib/api";
 import { recordRouteActivity } from "@/lib/activity";
+import { RATE_LIMITS, requireUserRateLimit } from "@/lib/rate-limit";
 import { getStoredSnapshotForTicker } from "@/lib/research-service";
 import {
   addCompanyToWatchlist,
@@ -37,6 +38,10 @@ export async function POST(
   const userId = await getCurrentUserId();
   if (!userId) {
     return unauthorized();
+  }
+  const limited = await requireUserRateLimit(userId, RATE_LIMITS.userWrite);
+  if (limited) {
+    return limited;
   }
 
   return recordRouteActivity(

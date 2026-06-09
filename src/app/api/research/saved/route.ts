@@ -7,6 +7,7 @@ import {
   getStoredSnapshotForTicker,
 } from "@/lib/research-service";
 import { normalizeLocale } from "@/lib/i18n";
+import { RATE_LIMITS, requireUserRateLimit } from "@/lib/rate-limit";
 import { listSavedResearchForUser, saveResearchForUser } from "@/lib/research-store";
 import { getCurrentUserId, unauthorized } from "@/lib/session";
 
@@ -34,6 +35,10 @@ export async function POST(request: Request) {
   const userId = await getCurrentUserId();
   if (!userId) {
     return unauthorized();
+  }
+  const limited = await requireUserRateLimit(userId, RATE_LIMITS.userWrite);
+  if (limited) {
+    return limited;
   }
 
   return recordRouteActivity(

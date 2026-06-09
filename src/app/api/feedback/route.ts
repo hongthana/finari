@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { validationError } from "@/lib/api";
 import { activityRequestContext, recordActivityEvent } from "@/lib/activity";
+import { RATE_LIMITS, requireRequestRateLimit } from "@/lib/rate-limit";
 import {
   createTileFeedback,
   listTileFeedback,
@@ -22,6 +23,11 @@ const feedbackSchema = z.object({
 });
 
 export async function GET(request: Request) {
+  const limited = await requireRequestRateLimit(request, RATE_LIMITS.anonymousRead);
+  if (limited) {
+    return limited;
+  }
+
   const url = new URL(request.url);
   const feedback = await listTileFeedback({
     ticker: url.searchParams.get("ticker") ?? undefined,
@@ -33,6 +39,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const limited = await requireRequestRateLimit(request, RATE_LIMITS.anonymousWrite);
+  if (limited) {
+    return limited;
+  }
+
   const user = await getCurrentUser();
 
   try {

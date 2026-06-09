@@ -1,5 +1,6 @@
 import { activityRequestContext, recordActivityEvent } from "@/lib/activity";
 import { validationError } from "@/lib/api";
+import { RATE_LIMITS, requireRequestRateLimit } from "@/lib/rate-limit";
 import { getCurrentUser } from "@/lib/session";
 import { toPublicTileFeedback, voteForTileFeedback } from "@/lib/tile-feedback";
 
@@ -9,6 +10,11 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  const limited = await requireRequestRateLimit(request, RATE_LIMITS.anonymousWrite);
+  if (limited) {
+    return limited;
+  }
+
   const user = await getCurrentUser();
   const { id } = await context.params;
   const requestContext = activityRequestContext(request);

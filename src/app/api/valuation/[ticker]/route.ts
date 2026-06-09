@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { jsonError, validationError } from "@/lib/api";
 import { recordRouteActivity } from "@/lib/activity";
+import { RATE_LIMITS, requireRequestRateLimit } from "@/lib/rate-limit";
 import { requireInvitationAccess } from "@/lib/site-access";
 import { getValuationForTicker } from "@/lib/valuation";
 
@@ -20,6 +21,11 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ ticker: string }> },
 ) {
+  const limited = await requireRequestRateLimit(request, RATE_LIMITS.anonymousRead);
+  if (limited) {
+    return limited;
+  }
+
   const rawParams = await context.params;
   const tickerForLog = rawParams.ticker;
 

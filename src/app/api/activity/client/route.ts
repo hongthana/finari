@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { validationError } from "@/lib/api";
 import { activityRequestContext, recordActivityEvent } from "@/lib/activity";
+import { RATE_LIMITS, requireUserRateLimit } from "@/lib/rate-limit";
 import { getCurrentUser, unauthorized } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -22,6 +23,10 @@ export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) {
     return unauthorized();
+  }
+  const limited = await requireUserRateLimit(user.id, RATE_LIMITS.userApi);
+  if (limited) {
+    return limited;
   }
 
   try {
