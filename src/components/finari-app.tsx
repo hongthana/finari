@@ -3437,7 +3437,7 @@ function ValuationMetricRow({
         tileLabel: metric.label,
       }}
     >
-      <div className="grid grid-cols-[2rem_minmax(0,1fr)_minmax(4.5rem,auto)] items-start gap-2 px-3 py-2.5 pr-12">
+      <div className="grid grid-cols-[2rem_minmax(0,1fr)] items-start gap-2 px-3 py-2.5 pr-12">
         <button
           type="button"
           onClick={() => onToggleFavorite(metric)}
@@ -3467,9 +3467,14 @@ function ValuationMetricRow({
           />
         </button>
         <div className="min-w-0 pt-0.5">
-          <p className="text-sm font-medium leading-5 text-zinc-900">
-            {metric.label}
-          </p>
+          <div className="flex min-w-0 flex-col gap-1">
+            <p className="min-w-0 break-words text-sm font-medium leading-5 text-zinc-900">
+              {metric.label}
+            </p>
+            <p className="min-w-0 break-words text-sm font-semibold leading-5 text-zinc-950 tabular-nums">
+              {formatMetricValue(metric.value, metric.unit)}
+            </p>
+          </div>
           <span
             className="mt-1 inline-flex rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none tracking-normal text-zinc-500"
             title={sourceLabel}
@@ -3477,9 +3482,6 @@ function ValuationMetricRow({
             {sourceBadge}
           </span>
         </div>
-        <p className="min-w-0 max-w-32 pt-0.5 text-right text-sm font-semibold leading-5 text-zinc-950 tabular-nums [overflow-wrap:anywhere]">
-          {formatMetricValue(metric.value, metric.unit)}
-        </p>
       </div>
     </FeedbackTile>
   );
