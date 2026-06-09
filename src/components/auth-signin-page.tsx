@@ -189,6 +189,10 @@ export function AuthSignInPage({ callbackUrl }: AuthSignInPageProps) {
               <h1 className="text-lg font-semibold">Sign in with email</h1>
             </div>
           </div>
+          <p className="mt-4 text-sm leading-6 text-zinc-300">
+            Use one magic link to unlock this browser. Finari keeps you signed in
+            for 30 days unless you sign out or clear cookies.
+          </p>
 
           <label className="mt-5 block text-sm font-semibold" htmlFor="email">
             Email
@@ -218,7 +222,8 @@ export function AuthSignInPage({ callbackUrl }: AuthSignInPageProps) {
 
           {state === "ready" && (
             <p className="mt-3 rounded-md bg-teal-500/15 px-3 py-2 text-sm text-teal-100">
-              Check your email for the Finari sign-in link.
+              Check your email for the Finari sign-in link. After you open it,
+              this browser stays signed in for 30 days.
             </p>
           )}
           {state === "error" && (

@@ -9,6 +9,9 @@ import { hashActivityValue, recordActivityEvent } from "@/lib/activity";
 import { sendMagicLinkEmail } from "@/lib/email";
 import { getAuthSecret, getEmailFrom } from "@/lib/env";
 
+export const AUTH_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+export const AUTH_SESSION_UPDATE_AGE_SECONDS = 60 * 60 * 24;
+
 export function getAuthOptions(): NextAuthOptions {
   const databaseEnabled = hasDatabase();
 
@@ -45,6 +48,11 @@ export function getAuthOptions(): NextAuthOptions {
     secret: getAuthSecret(),
     session: {
       strategy: databaseEnabled ? "database" : "jwt",
+      maxAge: AUTH_SESSION_MAX_AGE_SECONDS,
+      updateAge: AUTH_SESSION_UPDATE_AGE_SECONDS,
+    },
+    jwt: {
+      maxAge: AUTH_SESSION_MAX_AGE_SECONDS,
     },
     events: {
       async signIn({ user, isNewUser }) {
