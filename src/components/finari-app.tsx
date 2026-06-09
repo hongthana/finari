@@ -233,7 +233,7 @@ function MagicLinkForm({
       <label className="sr-only" htmlFor={emailInputId}>
         {t.waitlist.emailPlaceholder}
       </label>
-      <div className="flex flex-col gap-2 sm:flex-row">
+      <div className={compact ? "grid gap-2" : "flex flex-col gap-2 sm:flex-row"}>
         <input
           id={emailInputId}
           type="email"
@@ -247,7 +247,9 @@ function MagicLinkForm({
         <button
           type="submit"
           disabled={state === "loading"}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
+          className={`inline-flex h-10 items-center justify-center gap-2 rounded-md bg-zinc-950 px-4 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300 ${
+            compact ? "w-full" : ""
+          }`}
           data-activity="auth.magic_link.submit"
         >
           {state === "loading" ? (
