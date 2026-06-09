@@ -30,6 +30,7 @@ import {
   TrendingUp,
   type LucideIcon,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 import {
@@ -42,17 +43,6 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 
 import {
   compactCurrency,
@@ -179,6 +169,14 @@ const ALERT_CONDITIONS = [
 
 type AlertTypeOption = typeof ALERT_TYPES[number];
 type AlertConditionOption = typeof ALERT_CONDITIONS[number];
+
+const FinancialChartVisuals = dynamic(
+  () =>
+    import("./financial-chart-visuals").then((module) => module.FinancialChartVisuals),
+  {
+    loading: () => <ChartSkeleton />,
+  },
+);
 
 function isAlertTypeOption(value: string): value is AlertTypeOption {
   return (ALERT_TYPES as readonly string[]).includes(value);
@@ -1156,22 +1154,6 @@ function advisorQuestionAnswers(snapshot: CompanySnapshot, t: Dictionary) {
   ];
 }
 
-function makeChartRows(snapshot: CompanySnapshot | null) {
-  return (
-    snapshot?.periods
-      .slice()
-      .reverse()
-      .map((period) => ({
-        year: String(period.fiscalYear),
-        revenue: period.revenue ?? 0,
-        netIncome: period.netIncome ?? 0,
-        freeCashFlow: period.freeCashFlow ?? 0,
-        assets: period.assets ?? 0,
-        liabilities: period.liabilities ?? 0,
-      })) ?? []
-  );
-}
-
 function AdvisorSummary({
   snapshot,
   locale,
@@ -1674,6 +1656,7 @@ function ResearchToolbar({
   sp500State,
   loading,
   activeTicker,
+  onNeedSp500Constituents,
   onSelectTicker,
   onSubmit,
 }: {
@@ -1686,6 +1669,7 @@ function ResearchToolbar({
   sp500State: LoadState;
   loading: boolean;
   activeTicker: string;
+  onNeedSp500Constituents: () => void;
   onSelectTicker: (ticker: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
@@ -1693,6 +1677,9 @@ function ResearchToolbar({
   const languageHref = `/${alternateLocale}?ticker=${encodeURIComponent(activeTicker)}`;
   const repoUrl =
     process.env.NEXT_PUBLIC_GITHUB_REPO_URL ?? "https://github.com/hongthana/finari";
+  const sp500SelectorOptions = sp500Constituents.length
+    ? sp500Constituents
+    : STARTER_TICKERS.map((ticker) => ({ ticker, name: ticker }));
 
   return (
     <section className="relative z-40 border-b border-zinc-200 bg-white/95 shadow-sm shadow-zinc-950/5 backdrop-blur supports-[backdrop-filter]:bg-white/85 lg:sticky lg:top-0">
@@ -1760,6 +1747,7 @@ function ResearchToolbar({
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
+              onFocus={onNeedSp500Constituents}
               placeholder={t.toolbar.placeholder}
               className="h-12 w-full rounded-md border border-zinc-300 bg-white pl-10 pr-14 text-base font-medium text-zinc-950 outline-none transition focus:border-teal-600 focus:ring-4 focus:ring-teal-100 sm:pr-28"
             />
@@ -1812,8 +1800,10 @@ function ResearchToolbar({
             <select
               id="sp500-selector"
               data-activity="search.sp500_select"
+              onFocus={onNeedSp500Constituents}
+              onPointerDown={onNeedSp500Constituents}
               value={
-                sp500Constituents.some((company) => company.ticker === activeTicker)
+                sp500SelectorOptions.some((company) => company.ticker === activeTicker)
                   ? activeTicker
                   : ""
               }
@@ -1822,7 +1812,7 @@ function ResearchToolbar({
                   onSelectTicker(event.target.value);
                 }
               }}
-              disabled={sp500State === "loading" || !sp500Constituents.length}
+              disabled={sp500State === "loading"}
               className="h-10 min-w-0 rounded-md border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 outline-none transition hover:border-teal-500 focus:border-teal-600 focus:ring-4 focus:ring-teal-100 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500 sm:w-64"
             >
               <option value="">
@@ -1830,9 +1820,11 @@ function ResearchToolbar({
                   ? t.toolbar.sp500Loading
                   : t.toolbar.sp500Placeholder}
               </option>
-              {sp500Constituents.map((company) => (
+              {sp500SelectorOptions.map((company) => (
                 <option key={company.ticker} value={company.ticker}>
-                  {company.ticker} - {company.name}
+                  {company.name === company.ticker
+                    ? company.ticker
+                    : `${company.ticker} - ${company.name}`}
                 </option>
               ))}
             </select>
@@ -3007,33 +2999,55 @@ function MetricGrid({
   );
 }
 
-function ChartFrame({ children }: { children: ReactNode }) {
-  const frameRef = useRef<HTMLDivElement | null>(null);
-  const [ready, setReady] = useState(false);
+function ChartSkeleton() {
+  return (
+    <div className="mt-5 h-72 min-w-0 rounded-md border border-dashed border-zinc-200 bg-zinc-50" />
+  );
+}
+
+function DeferredFinancialChartVisuals({
+  snapshot,
+  t,
+  variant,
+}: {
+  snapshot: CompanySnapshot;
+  t: Dictionary;
+  variant: "revenue-net-income" | "cash-flow";
+}) {
+  const markerRef = useRef<HTMLDivElement | null>(null);
+  const [shouldLoad, setShouldLoad] = useState(false);
 
   useEffect(() => {
-    const frame = frameRef.current;
-    if (!frame) {
-      return;
+    if (shouldLoad) {
+      return undefined;
     }
 
-    function updateReady() {
-      setReady((frameRef.current?.getBoundingClientRect().width ?? 0) > 0);
+    const marker = markerRef.current;
+    if (!marker || typeof IntersectionObserver === "undefined") {
+      return undefined;
     }
 
-    updateReady();
-    if (typeof ResizeObserver === "undefined") {
-      return;
-    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setShouldLoad(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "600px 0px" },
+    );
 
-    const observer = new ResizeObserver(updateReady);
-    observer.observe(frame);
+    observer.observe(marker);
     return () => observer.disconnect();
-  }, []);
+  }, [shouldLoad]);
 
   return (
-    <div ref={frameRef} className="mt-5 h-72 min-w-0">
-      {ready ? children : null}
+    <div ref={markerRef}>
+      {shouldLoad ? (
+        <FinancialChartVisuals snapshot={snapshot} t={t} variant={variant} />
+      ) : (
+        <ChartSkeleton />
+      )}
     </div>
   );
 }
@@ -3047,8 +3061,6 @@ function FinancialCharts({
   locale: Locale;
   t: Dictionary;
 }) {
-  const chartRows = useMemo(() => makeChartRows(snapshot), [snapshot]);
-
   return (
     <section className="grid min-w-0 gap-4 xl:grid-cols-2">
       <FeedbackTile
@@ -3077,48 +3089,11 @@ function FinancialCharts({
             tooltipAlign="right"
           />
         </div>
-        <ChartFrame>
-          <ResponsiveContainer
-            width="100%"
-            height="100%"
-            minWidth={0}
-            minHeight={288}
-            initialDimension={{ width: 1, height: 288 }}
-          >
-            <AreaChart data={chartRows} margin={{ left: 0, right: 12 }}>
-              <defs>
-                <linearGradient id="revenue" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="5%" stopColor="#0f766e" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#0f766e" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="#e4e4e7" strokeDasharray="4 4" />
-              <XAxis dataKey="year" tickLine={false} axisLine={false} />
-              <YAxis
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(value) => compactNumber(Number(value))}
-              />
-              <Tooltip formatter={(value) => compactCurrency(Number(value))} />
-              <Area
-                type="monotone"
-                dataKey="revenue"
-                stroke="#0f766e"
-                strokeWidth={2}
-                fill="url(#revenue)"
-                name={t.charts.revenue}
-              />
-              <Area
-                type="monotone"
-                dataKey="netIncome"
-                stroke="#ea580c"
-                strokeWidth={2}
-                fill="transparent"
-                name={t.charts.netIncome}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </ChartFrame>
+        <DeferredFinancialChartVisuals
+          snapshot={snapshot}
+          t={t}
+          variant="revenue-net-income"
+        />
       </article>
       </FeedbackTile>
 
@@ -3148,29 +3123,11 @@ function FinancialCharts({
             tooltipAlign="right"
           />
         </div>
-        <ChartFrame>
-          <ResponsiveContainer
-            width="100%"
-            height="100%"
-            minWidth={0}
-            minHeight={288}
-            initialDimension={{ width: 1, height: 288 }}
-          >
-            <BarChart data={chartRows} margin={{ left: 0, right: 12 }}>
-              <CartesianGrid stroke="#e4e4e7" strokeDasharray="4 4" />
-              <XAxis dataKey="year" tickLine={false} axisLine={false} />
-              <YAxis
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(value) => compactNumber(Number(value))}
-              />
-              <Tooltip formatter={(value) => compactCurrency(Number(value))} />
-              <Bar dataKey="freeCashFlow" fill="#2563eb" name="FCF" radius={3} />
-              <Bar dataKey="liabilities" fill="#f59e0b" name={t.charts.liabilities} radius={3} />
-              <Bar dataKey="assets" fill="#71717a" name={t.charts.assets} radius={3} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartFrame>
+        <DeferredFinancialChartVisuals
+          snapshot={snapshot}
+          t={t}
+          variant="cash-flow"
+        />
       </article>
       </FeedbackTile>
     </section>
@@ -3969,8 +3926,12 @@ function WaitlistPanel({
       return;
     }
 
-    await Promise.all([loadSavedResearch(), loadWatchlistsAndItems(), loadAlerts()]);
-    void loadValuation();
+    await Promise.all([
+      loadSavedResearch(),
+      loadWatchlistsAndItems(),
+      loadAlerts(),
+      loadValuation(),
+    ]);
   }, [
     loadAlerts,
     loadSavedResearch,
@@ -5009,7 +4970,7 @@ function SourcesAndCaveats({
 export function FinariApp({
   locale,
   initialTicker = DEFAULT_TICKER,
-  initialViewer = null,
+  initialViewer,
 }: {
   locale: Locale;
   initialTicker?: string;
@@ -5038,7 +4999,8 @@ export function FinariApp({
   const [adminMemoState, setAdminMemoState] = useState<MemoState>("idle");
   const [memoError, setMemoError] = useState<string | null>(null);
   const [adminMemoError, setAdminMemoError] = useState<string | null>(null);
-  const [viewer, setViewer] = useState<Viewer | null>(initialViewer);
+  const [viewer, setViewer] = useState<Viewer | null>(initialViewer ?? null);
+  const sp500FetchStartedRef = useRef(false);
 
   const loading = loadState === "loading";
   const showSearchResults =
@@ -5318,6 +5280,10 @@ export function FinariApp({
   }
 
   useEffect(() => {
+    if (initialViewer !== undefined) {
+      return undefined;
+    }
+
     let mounted = true;
 
     async function loadViewer() {
@@ -5339,40 +5305,32 @@ export function FinariApp({
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [initialViewer]);
 
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadSp500Constituents() {
-      setSp500State("loading");
-      try {
-        const response = await fetch("/api/sp500");
-        const payload = (await response.json()) as {
-          constituents?: Sp500Constituent[];
-        };
-        if (!response.ok || !payload.constituents) {
-          throw new Error("Unable to load S&P 500 constituents");
-        }
-
-        if (mounted) {
-          setSp500Constituents(payload.constituents);
-          setSp500State("ready");
-        }
-      } catch {
-        if (mounted) {
-          setSp500Constituents([]);
-          setSp500State("error");
-        }
-      }
+  const loadSp500Constituents = useCallback(async () => {
+    if (sp500FetchStartedRef.current || sp500State === "ready") {
+      return;
     }
 
-    void loadSp500Constituents();
+    sp500FetchStartedRef.current = true;
+    setSp500State("loading");
+    try {
+      const response = await fetch("/api/sp500");
+      const payload = (await response.json()) as {
+        constituents?: Sp500Constituent[];
+      };
+      if (!response.ok || !payload.constituents) {
+        throw new Error("Unable to load S&P 500 constituents");
+      }
 
-    return () => {
-      mounted = false;
-    };
-  }, []);
+      setSp500Constituents(payload.constituents);
+      setSp500State("ready");
+    } catch {
+      sp500FetchStartedRef.current = false;
+      setSp500Constituents([]);
+      setSp500State("error");
+    }
+  }, [sp500State]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -5439,6 +5397,7 @@ export function FinariApp({
         sp500State={sp500State}
         loading={loading}
         activeTicker={activeTicker}
+        onNeedSp500Constituents={() => void loadSp500Constituents()}
         onSelectTicker={(ticker) => void loadCompany(ticker)}
         onSubmit={submitSearch}
       />
