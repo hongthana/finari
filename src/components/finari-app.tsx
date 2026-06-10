@@ -143,6 +143,10 @@ type FeedbackTarget = {
   tileLabel: string;
 };
 
+const FEEDBACK_TILE_OPEN_EVENT = "finari:feedback-tile-open";
+
+type FeedbackTileOpenEvent = CustomEvent<{ instanceId: string }>;
+
 const VALUATION_METRICS_PREVIEW_LIMIT = 12;
 const VALUATION_FAVORITES_STORAGE_PREFIX = "finari:valuation-metric-favorites";
 
@@ -235,6 +239,7 @@ function FeedbackTile({
   target: FeedbackTarget;
   children: ReactNode;
 }) {
+  const tileInstanceId = useId();
   const tileRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
@@ -253,12 +258,31 @@ function FeedbackTile({
     setItems(body.feedback ?? []);
   }, [target.ticker, target.tileId]);
 
-  function toggleFeedback() {
-    const nextOpen = !isOpen;
-    setIsOpen(nextOpen);
-    if (nextOpen) {
-      void loadFeedback().catch(() => undefined);
+  useEffect(() => {
+    function handleFeedbackTileOpen(event: Event) {
+      const openEvent = event as FeedbackTileOpenEvent;
+      if (openEvent.detail?.instanceId !== tileInstanceId) {
+        setIsOpen(false);
+      }
     }
+
+    window.addEventListener(FEEDBACK_TILE_OPEN_EVENT, handleFeedbackTileOpen);
+    return () => window.removeEventListener(FEEDBACK_TILE_OPEN_EVENT, handleFeedbackTileOpen);
+  }, [tileInstanceId]);
+
+  function toggleFeedback() {
+    if (isOpen) {
+      setIsOpen(false);
+      return;
+    }
+
+    window.dispatchEvent(
+      new CustomEvent(FEEDBACK_TILE_OPEN_EVENT, {
+        detail: { instanceId: tileInstanceId },
+      }),
+    );
+    setIsOpen(true);
+    void loadFeedback().catch(() => undefined);
   }
 
   async function submitFeedback(event: FormEvent<HTMLFormElement>) {

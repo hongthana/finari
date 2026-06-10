@@ -456,6 +456,71 @@ describe("FinariApp", () => {
     expect(screen.getByText("Join waitlist")).toBeInTheDocument();
   }, 10_000);
 
+  it("closes the previous feedback popup when another comment icon opens", async () => {
+    const user = userEvent.setup();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+
+        if (url.startsWith("/api/feedback?")) {
+          return Response.json({ feedback: [] });
+        }
+
+        if (url === "/api/me") {
+          return Response.json({ user: null });
+        }
+
+        if (url === "/api/sp500") {
+          return Response.json({
+            constituents: [
+              { ticker: "AAPL", name: "Apple Inc.", sector: "Information Technology" },
+            ],
+          });
+        }
+
+        if (url.startsWith("/api/company/AAPL/events")) {
+          return Response.json({
+            events: fixtureEvents,
+            generatedAt: "2026-06-05T10:00:00.000Z",
+          });
+        }
+
+        if (url.startsWith("/api/company/AAPL")) {
+          return Response.json({ snapshot: fixtureSnapshot });
+        }
+
+        if (url.startsWith("/api/search")) {
+          return Response.json({ results: [] });
+        }
+
+        return Response.json({}, { status: 404 });
+      }),
+    );
+
+    render(<FinariApp locale="en" />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Decision screen from the latest financial filing"),
+      ).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Comment on Strongest evidence" }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Feedback")).toHaveLength(1);
+    });
+
+    await user.click(screen.getByRole("button", { name: "Comment on Main risk" }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Feedback")).toHaveLength(1);
+    });
+    expect(screen.getByText("No public requests yet.")).toBeInTheDocument();
+  }, 10_000);
+
   it("renders Thai interface copy and keeps SEC company facts visible", async () => {
     vi.stubGlobal(
       "fetch",
