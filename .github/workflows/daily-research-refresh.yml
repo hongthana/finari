@@ -24,7 +24,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: pnpm
 
       - name: Refresh tracked universe
         env:
@@ -45,4 +44,10 @@ jobs:
 
           corepack enable
           pnpm install --frozen-lockfile
-          pnpm refresh:sp500 -- --base-url "${FINARI_BASE_URL}" --cron-secret "${REFRESH_CRON_SECRET}"
+          node scripts/backfill-sp500.mjs \
+            --base-url "${FINARI_BASE_URL}" \
+            --source-url "${FINARI_BASE_URL}/api/sp500" \
+            --include-events \
+            --delay-ms 2500 \
+            --timeout-ms 90000 \
+            --max-failures 25

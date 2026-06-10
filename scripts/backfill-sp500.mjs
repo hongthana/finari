@@ -154,6 +154,37 @@ function stripTags(value) {
   return decodeHtml(value.replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim();
 }
 
+function tickersFromJson(value) {
+  let parsed;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return [];
+  }
+
+  const source = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray(parsed?.constituents)
+      ? parsed.constituents
+      : Array.isArray(parsed?.tickers)
+        ? parsed.tickers
+        : [];
+
+  return source
+    .map((item) => {
+      if (typeof item === "string") {
+        return normalizeTicker(item);
+      }
+
+      if (item && typeof item === "object") {
+        return normalizeTicker(item.ticker ?? item.symbol ?? "");
+      }
+
+      return "";
+    })
+    .filter((ticker) => /^[A-Z0-9-]{1,12}$/.test(ticker));
+}
+
 async function readTickerFile(path) {
   const fs = await import("node:fs/promises");
   const text = await fs.readFile(path, "utf8");
@@ -163,11 +194,12 @@ async function readTickerFile(path) {
     .filter(Boolean);
 }
 
-async function fetchSp500Tickers(sourceUrl) {
+async function fetchSp500Tickers(sourceUrl, headers = {}) {
   const response = await fetch(sourceUrl, {
     headers: {
       "User-Agent": "Finari S&P 500 backfill (educational research; https://finari.local)",
-      Accept: "text/html",
+      Accept: "application/json, text/html",
+      ...headers,
     },
   });
 
@@ -176,6 +208,11 @@ async function fetchSp500Tickers(sourceUrl) {
   }
 
   const html = await response.text();
+  const jsonTickers = tickersFromJson(html);
+  if (jsonTickers.length) {
+    return Array.from(new Set(jsonTickers));
+  }
+
   const tableMatch = /<table[^>]+id="constituents"[\s\S]*?<\/table>/i.exec(html);
   if (!tableMatch) {
     throw new Error("Unable to find S&P 500 constituents table");
@@ -313,11 +350,14 @@ async function warmTicker(ticker, args) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const output = args.output || defaultOutputPath();
+  const requestHeaders = args.cronSecret
+    ? { Authorization: `Bearer ${args.cronSecret}` }
+    : {};
   const sourceTickers = args.tickers
     ? args.tickers
     : args.tickerFile
       ? await readTickerFile(args.tickerFile)
-      : await fetchSp500Tickers(args.sourceUrl);
+      : await fetchSp500Tickers(args.sourceUrl, requestHeaders);
   const tickers = applyTickerWindow(Array.from(new Set(sourceTickers)), args);
 
   console.log(
