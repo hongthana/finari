@@ -43,6 +43,7 @@ jobs:
           fi
 
           corepack enable
+          corepack prepare pnpm@9 --activate
           pnpm install --frozen-lockfile
           node scripts/backfill-sp500.mjs \
             --base-url "${FINARI_BASE_URL}" \
