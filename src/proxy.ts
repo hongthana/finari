@@ -8,6 +8,10 @@ import {
 } from "@/lib/i18n";
 
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
+const SESSION_COOKIE_PREFIXES = [
+  "next-auth.session-token",
+  "__Secure-next-auth.session-token",
+] as const;
 
 function withLocaleCookie(response: NextResponse, locale: string): NextResponse {
   response.cookies.set(LOCALE_COOKIE, locale, {
@@ -16,6 +20,15 @@ function withLocaleCookie(response: NextResponse, locale: string): NextResponse 
     sameSite: "lax",
   });
   return response;
+}
+
+function hasSessionCookie(request: NextRequest): boolean {
+  return request.cookies.getAll().some((cookie) =>
+    Boolean(cookie.value) &&
+    SESSION_COOKIE_PREFIXES.some((prefix) =>
+      cookie.name === prefix || cookie.name.startsWith(`${prefix}.`),
+    ),
+  );
 }
 
 export function proxy(request: NextRequest) {
@@ -41,9 +54,24 @@ export function proxy(request: NextRequest) {
       cookieLocale: request.cookies.get(LOCALE_COOKIE)?.value,
       acceptLanguage: request.headers.get("accept-language"),
     });
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set(LOCALE_HEADER, locale);
+
+    if (hasSessionCookie(request)) {
+      const url = request.nextUrl.clone();
+      url.pathname = `/${locale}`;
+      return withLocaleCookie(NextResponse.redirect(url), locale);
+    }
+
     const url = request.nextUrl.clone();
-    url.pathname = `/${locale}`;
-    return withLocaleCookie(NextResponse.redirect(url), locale);
+    url.pathname = "/auth/signin";
+    url.searchParams.set("callbackUrl", `/${locale}?ticker=AAPL`);
+
+    return NextResponse.rewrite(url, {
+      request: {
+        headers: requestHeaders,
+      },
+    });
   }
 
   return NextResponse.next();

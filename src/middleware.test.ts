@@ -8,15 +8,31 @@ function request(url: string, headers?: HeadersInit) {
 }
 
 describe("locale middleware", () => {
-  it("redirects the root path from browser language preference", () => {
+  it("sets the root request locale from browser language preference", () => {
     const response = proxy(
       request("https://finari.test/", {
         "accept-language": "th-TH,th;q=0.9,en;q=0.7",
       }),
     );
 
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-middleware-rewrite")).toBe(
+      "https://finari.test/auth/signin?callbackUrl=%2Fth%3Fticker%3DAAPL",
+    );
+    expect(response.headers.getSetCookie().join("; ")).not.toContain(
+      "finari_locale",
+    );
+  });
+
+  it("redirects signed-in root requests to the preferred localized app", () => {
+    const response = proxy(
+      request("https://finari.test/", {
+        cookie: "next-auth.session-token=token",
+      }),
+    );
+
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("https://finari.test/th");
+    expect(response.headers.get("location")).toBe("https://finari.test/en");
   });
 
   it("sets the active locale cookie for localized paths", () => {

@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth";
 
+import { hasSessionCookie } from "@/lib/auth-cookies";
 import { getAuthOptions } from "@/lib/auth";
 import { isAdminEmail } from "@/lib/env";
 
@@ -10,6 +11,10 @@ export type CurrentUser = {
 };
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
+  if (!(await hasSessionCookie())) {
+    return null;
+  }
+
   const session = await getServerSession(getAuthOptions());
   const user = session?.user;
 

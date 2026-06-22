@@ -1,7 +1,7 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/session";
-import { listTileFeedback } from "@/lib/tile-feedback";
+import { AuthSignInPage } from "@/components/auth-signin-page";
+import { hasSessionCookie } from "@/lib/auth-cookies";
 
 type FeedbackPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -24,9 +24,11 @@ function dateTime(value: Date | string | null): string {
 }
 
 export default async function FeedbackPage({ searchParams }: FeedbackPageProps) {
-  const user = await getCurrentUser();
+  const user = (await hasSessionCookie())
+    ? await (await import("@/lib/session")).getCurrentUser()
+    : null;
   if (!user) {
-    redirect("/api/auth/signin?callbackUrl=/admin/feedback");
+    return <AuthSignInPage callbackUrl="/admin/feedback" />;
   }
   if (!user.isAdmin) {
     notFound();
@@ -35,6 +37,7 @@ export default async function FeedbackPage({ searchParams }: FeedbackPageProps) 
   const resolvedSearchParams = await searchParams ?? {};
   const ticker = firstParam(resolvedSearchParams, "ticker") || undefined;
   const tileId = firstParam(resolvedSearchParams, "tileId") || undefined;
+  const { listTileFeedback } = await import("@/lib/tile-feedback");
   const feedback = await listTileFeedback({ ticker, tileId, limit: 200 });
 
   return (

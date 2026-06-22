@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
-import { FinariApp } from "@/components/finari-app";
+import { AuthSignInPage } from "@/components/auth-signin-page";
+import { hasSessionCookie } from "@/lib/auth-cookies";
 import { getDictionary, isLocale, type Locale } from "@/lib/i18n";
-import { getCurrentUser } from "@/lib/session";
 
 type PageProps = {
   params: Promise<{ locale: string }>;
@@ -33,15 +33,19 @@ export default async function LocalizedHome({ params, searchParams }: PageProps)
   const locale = await getLocale(params);
   const resolvedSearchParams = await searchParams;
   const ticker = normalizeTicker(resolvedSearchParams?.ticker);
-  const viewer = await getCurrentUser();
+  const viewer = (await hasSessionCookie())
+    ? await (await import("@/lib/session")).getCurrentUser()
+    : null;
 
   if (!viewer) {
-    redirect(
-      `/api/auth/signin?callbackUrl=${encodeURIComponent(
-        `/${locale}?ticker=${encodeURIComponent(ticker)}`,
-      )}`,
+    return (
+      <AuthSignInPage
+        callbackUrl={`/${locale}?ticker=${encodeURIComponent(ticker)}`}
+      />
     );
   }
+
+  const { FinariApp } = await import("@/components/finari-app");
 
   return (
     <FinariApp

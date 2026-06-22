@@ -1,13 +1,9 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
-import {
-  countActivityEvents,
-  listActivityEvents,
-  summarizeActivityEvents,
-  type ActivityFilters,
-} from "@/lib/activity";
-import { getCurrentUser } from "@/lib/session";
+import { AuthSignInPage } from "@/components/auth-signin-page";
+import { hasSessionCookie } from "@/lib/auth-cookies";
+import type { ActivityFilters } from "@/lib/activity";
 
 type ActivityPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -97,9 +93,11 @@ function dateTime(value: Date | string | null): string {
 }
 
 export default async function ActivityPage({ searchParams }: ActivityPageProps) {
-  const user = await getCurrentUser();
+  const user = (await hasSessionCookie())
+    ? await (await import("@/lib/session")).getCurrentUser()
+    : null;
   if (!user) {
-    redirect("/api/auth/signin?callbackUrl=/admin/activity");
+    return <AuthSignInPage callbackUrl="/admin/activity" />;
   }
   if (!user.isAdmin) {
     notFound();
@@ -111,6 +109,11 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
     Number.parseInt(firstParam(resolvedSearchParams, "page") || "1", 10),
     1,
   );
+  const {
+    countActivityEvents,
+    listActivityEvents,
+    summarizeActivityEvents,
+  } = await import("@/lib/activity");
   const [events, total, summary] = await Promise.all([
     listActivityEvents(filters),
     countActivityEvents(filters),
