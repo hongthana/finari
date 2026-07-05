@@ -25,13 +25,13 @@ jobs:
           set -euo pipefail
 
           if [ -z "${FINARI_BASE_URL:-}" ]; then
-            echo "FINARI_BASE_URL is required"
-            exit 1
+            echo "::warning::FINARI_BASE_URL is not configured; skipping alert delivery"
+            exit 0
           fi
 
           if [ -z "${ALERTS_CRON_SECRET:-}" ]; then
-            echo "ALERTS_CRON_SECRET is required"
-            exit 1
+            echo "::warning::ALERTS_CRON_SECRET is not configured; skipping alert delivery"
+            exit 0
           fi
 
           curl --fail --silent --show-error \

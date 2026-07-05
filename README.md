@@ -314,6 +314,7 @@ For the scheduled alert-delivery workflow:
 
 - Set the repository variable `FINARI_BASE_URL` to the deployed app URL.
 - Set the repository secret `ALERTS_CRON_SECRET` to the same value used by the app runtime.
+- If either value is missing, the workflow logs a warning and skips delivery instead of failing the scheduled run.
 
 For the scheduled research-refresh workflow:
 
