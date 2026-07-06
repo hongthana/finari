@@ -145,6 +145,55 @@ describe("financial analysis", () => {
     });
   });
 
+  it("uses period-derived quarterly filing anchors when recent filings are crowded", () => {
+    const form4Filings = Array.from({ length: 39 }, (_, index) => {
+      const suffix = String(index + 1).padStart(6, "0");
+      return {
+        accessionNumber: `0000320193-26-${suffix}`,
+        filingDate: "2026-01-05",
+        reportDate: "2026-01-04",
+        form: "4",
+        primaryDocument: `form4-${suffix}.xml`,
+      };
+    });
+    const crowdedSubmissions = structuredClone(fixtureSubmissions);
+    crowdedSubmissions.filings!.recent = {
+      accessionNumber: [
+        ...form4Filings.map((filing) => filing.accessionNumber),
+        "0000320193-25-000079",
+        "0000320193-25-000050",
+      ],
+      filingDate: [
+        ...form4Filings.map((filing) => filing.filingDate),
+        "2025-07-01",
+        "2025-08-01",
+      ],
+      reportDate: [
+        ...form4Filings.map((filing) => filing.reportDate),
+        "2025-09-27",
+        "2025-06-28",
+      ],
+      form: [...form4Filings.map((filing) => filing.form), "10-K", "10-Q"],
+      primaryDocument: [
+        ...form4Filings.map((filing) => filing.primaryDocument),
+        "aapl-20250927.htm",
+        "aapl-20250628.htm",
+      ],
+    };
+
+    const snapshot = normalizeCompanySnapshot(
+      fixtureIdentity,
+      crowdedSubmissions,
+      fixtureFacts,
+    );
+
+    expect(snapshot.latestFinancialFiling).toMatchObject({
+      form: "10-Q",
+      accessionNumber: "0000320193-25-Q3",
+      filingDate: "2025-08-01",
+    });
+  });
+
   it("surfaces caveats when required facts are missing", () => {
     const snapshot = normalizeCompanySnapshot(fixtureIdentity, fixtureSubmissions, {
       cik: 320193,

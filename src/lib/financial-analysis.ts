@@ -1579,6 +1579,14 @@ function filingFromPeriod(
   };
 }
 
+function newestFiling(
+  filings: Array<FilingSummary | undefined>,
+): FilingSummary | undefined {
+  return filings
+    .filter((filing): filing is FilingSummary => Boolean(filing?.filingDate))
+    .sort((a, b) => Date.parse(b.filingDate) - Date.parse(a.filingDate))[0];
+}
+
 function emptyPeerComparison(identity: CompanyIdentity): PeerComparison {
   return {
     status: "limited",
@@ -1936,10 +1944,11 @@ export function normalizeCompanySnapshot(
   const latestQuarterlyFiling =
     latestQuarterlyFromFilings ??
     filingFromPeriod(enrichedIdentity, latestQuarterlyFromPeriods);
-  const latestFinancialFiling =
-    filings.find((filing) => FINANCIAL_FORMS.has(filing.form)) ??
-    latestAnnualFiling ??
-    latestQuarterlyFiling;
+  const latestFinancialFiling = newestFiling([
+    filings.find((filing) => FINANCIAL_FORMS.has(filing.form)),
+    latestAnnualFiling,
+    latestQuarterlyFiling,
+  ]);
   const metrics = buildMetrics(normalizedPeriods, ttmPeriod);
   const balanceSheetAnalysis = buildBalanceSheetAnalysis(
     normalizedPeriods,
