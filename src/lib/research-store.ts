@@ -727,12 +727,13 @@ export async function persistSnapshot(snapshot: CompanySnapshot): Promise<Stored
   }
 
   const expiresAt = new Date(Date.now() + SNAPSHOT_TTL_MS);
+  const generatedAt = new Date(snapshot.generatedAt);
   const [stored] = await db
     .insert(researchSnapshots)
     .values({
       companyId,
       sourceHash,
-      generatedAt: new Date(snapshot.generatedAt),
+      generatedAt,
       expiresAt,
       snapshotJson: snapshot as unknown as Record<string, unknown>,
       citationsJson: citationJson(snapshot.citations),
@@ -741,6 +742,7 @@ export async function persistSnapshot(snapshot: CompanySnapshot): Promise<Stored
     .onConflictDoUpdate({
       target: [researchSnapshots.companyId, researchSnapshots.sourceHash],
       set: {
+        generatedAt,
         expiresAt,
         snapshotJson: snapshot as unknown as Record<string, unknown>,
         citationsJson: citationJson(snapshot.citations),
