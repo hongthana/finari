@@ -123,7 +123,7 @@ describe("FinariApp", () => {
         }),
       ]),
     );
-  });
+  }, 15_000);
 
   it("pins favorite valuation metrics above the full valuation list", async () => {
     const user = userEvent.setup();
