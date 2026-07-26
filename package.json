@@ -37,7 +37,7 @@
     "ioredis": "^5.11.1",
     "lucide-react": "^1.17.0",
     "next": "16.2.10",
-    "next-auth": "^4.24.14",
+    "next-auth": "^4.24.15",
     "nodemailer": "^9.0.3",
     "postgres": "^3.4.9",
     "react": "19.2.7",
